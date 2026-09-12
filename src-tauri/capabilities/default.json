@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimal capability for the main Kairo window. Core IPC only — no filesystem, shell or net plugins until a feature needs them.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
