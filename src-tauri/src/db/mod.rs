@@ -11,6 +11,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 
+pub mod jobs;
 pub mod trust;
 pub mod vault;
 
@@ -20,6 +21,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ("0001_init", include_str!("../../migrations/0001_init.sql")),
     ("0002_career_vault", include_str!("../../migrations/0002_career_vault.sql")),
     ("0003_evidence_trust", include_str!("../../migrations/0003_evidence_trust.sql")),
+    ("0004_jobs", include_str!("../../migrations/0004_jobs.sql")),
 ];
 
 pub fn open_and_migrate(path: &Path) -> Result<Connection, Box<dyn Error>> {
@@ -77,7 +79,8 @@ mod tests {
             vec![
                 "0001_init".to_string(),
                 "0002_career_vault".to_string(),
-                "0003_evidence_trust".to_string()
+                "0003_evidence_trust".to_string(),
+                "0004_jobs".to_string()
             ]
         );
     }
@@ -88,7 +91,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
-        assert_eq!(names.len(), 3);
+        assert_eq!(names.len(), 4);
     }
 
     #[test]

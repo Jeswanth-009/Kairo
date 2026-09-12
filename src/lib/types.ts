@@ -264,6 +264,57 @@ export interface ResumeImport {
   skills: string[];
 }
 
+// --- Job Workspace (Phase 4) ----------------------------------------------
+
+export type JobRequirementKind = "required_skill" | "preferred_skill" | "responsibility";
+
+export const JOB_REQUIREMENT_KINDS: { value: JobRequirementKind; label: string }[] = [
+  { value: "required_skill", label: "Required skill" },
+  { value: "preferred_skill", label: "Preferred skill" },
+  { value: "responsibility", label: "Responsibility" },
+];
+
+export interface Job {
+  id: number;
+  company: string;
+  roleTitle: string;
+  url: string;
+  rawJd: string;
+  seniority: string;
+  domain: string;
+  requirementCount: number;
+}
+
+export interface JobRequirement {
+  id: number;
+  jobId: number;
+  kind: JobRequirementKind;
+  rawText: string;
+  normalizedKey: string;
+  importance: number;
+  userConfirmed: boolean;
+}
+
+export interface JobRequirementDraft {
+  kind: JobRequirementKind;
+  rawText: string;
+  importance: number;
+}
+
+export interface JobExtraction {
+  role: string;
+  company: string;
+  url: string;
+  seniority: string;
+  domain: string;
+  requirements: JobRequirementDraft[];
+}
+
+export interface JobWithRequirements {
+  job: Job;
+  requirements: JobRequirement[];
+}
+
 export const CONFIDENCE_LEVELS = [
   "Mentioned only",
   "Studied",

@@ -23,7 +23,7 @@ pub enum FieldVal {
 }
 
 impl FieldVal {
-    fn to_value(&self) -> Value {
+    pub(crate) fn to_value(&self) -> Value {
         match self {
             FieldVal::Text(s) => Value::Text(s.clone()),
             FieldVal::OptText(v) => match v {
@@ -65,7 +65,7 @@ pub trait VaultEntity: Sized {
     }
 }
 
-fn sql_err<T>(r: rusqlite::Result<T>) -> Result<T, String> {
+pub(crate) fn sql_err<T>(r: rusqlite::Result<T>) -> Result<T, String> {
     r.map_err(|e| e.to_string())
 }
 

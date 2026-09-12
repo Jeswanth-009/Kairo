@@ -10,6 +10,10 @@ import type {
   Evidence,
   Experience,
   GithubRepoCandidate,
+  Job,
+  JobExtraction,
+  JobRequirement,
+  JobWithRequirements,
   Profile,
   Project,
   ResumeImport,
@@ -110,4 +114,20 @@ export const ipc = {
     invoke<CertificateCandidate>("parse_certificate_text", { text }),
   githubRepoCandidate: (owner: string, repo: string): Promise<GithubRepoCandidate> =>
     invoke<GithubRepoCandidate>("github_repo_candidate", { owner, repo }),
+
+  // Job Workspace (Phase 4)
+  parseJd: (text: string): Promise<JobExtraction> => invoke<JobExtraction>("parse_jd", { text }),
+  listJobs: (): Promise<Job[]> => invoke<Job[]>("list_jobs"),
+  getJob: (id: number): Promise<Job> => invoke<Job>("get_job", { id }),
+  updateJob: (job: Job): Promise<Job> => invoke<Job>("update_job", { job }),
+  deleteJob: (id: number): Promise<void> => invoke("delete_job", { id }),
+  createJobWithRequirements: (job: Job, requirements: JobRequirement[]): Promise<JobWithRequirements> =>
+    invoke<JobWithRequirements>("create_job_with_requirements", { job, requirements }),
+  listRequirements: (jobId: number): Promise<JobRequirement[]> =>
+    invoke<JobRequirement[]>("list_requirements", { jobId }),
+  addRequirement: (requirement: JobRequirement): Promise<JobRequirement> =>
+    invoke<JobRequirement>("add_requirement", { requirement }),
+  updateRequirement: (requirement: JobRequirement): Promise<JobRequirement> =>
+    invoke<JobRequirement>("update_requirement", { requirement }),
+  deleteRequirement: (id: number): Promise<void> => invoke("delete_requirement", { id }),
 };
