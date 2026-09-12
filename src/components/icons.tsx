@@ -76,6 +76,14 @@ export function IconInterview(props: IconProps) {
   );
 }
 
+export function IconSpark(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 3l1.9 5.6a2 2 0 0 0 1.3 1.3L21 12l-5.8 2.1a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.6a2 2 0 0 0-1.3-1.3L3 12l5.8-2.1a2 2 0 0 0 1.3-1.3L12 3z" />
+    </svg>
+  );
+}
+
 export function IconSettings(props: IconProps) {
   return (
     <svg {...base(props)}>

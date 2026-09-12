@@ -11,9 +11,14 @@ use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 
+pub mod vault;
+
 pub struct DbState(pub Mutex<Connection>);
 
-const MIGRATIONS: &[(&str, &str)] = &[("0001_init", include_str!("../../migrations/0001_init.sql"))];
+const MIGRATIONS: &[(&str, &str)] = &[
+    ("0001_init", include_str!("../../migrations/0001_init.sql")),
+    ("0002_career_vault", include_str!("../../migrations/0002_career_vault.sql")),
+];
 
 pub fn open_and_migrate(path: &Path) -> Result<Connection, Box<dyn Error>> {
     if let Some(parent) = path.parent() {
@@ -65,7 +70,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
-        assert_eq!(names, vec!["0001_init".to_string()]);
+        assert_eq!(names, vec!["0001_init".to_string(), "0002_career_vault".to_string()]);
     }
 
     #[test]
@@ -74,7 +79,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
-        assert_eq!(names.len(), 1);
+        assert_eq!(names.len(), 2);
     }
 
     #[test]

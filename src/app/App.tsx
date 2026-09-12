@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "./shell/Sidebar";
 import { TopBar } from "./shell/TopBar";
+import { ToastHost } from "../components/ui/Toast";
 import { useAppStore } from "../stores/appStore";
 import DashboardPage from "../features/dashboard/DashboardPage";
 import VaultPage from "../features/vault/VaultPage";
@@ -46,6 +47,7 @@ export default function App() {
           </Routes>
         </main>
       </div>
+      <ToastHost />
     </div>
   );
 }
