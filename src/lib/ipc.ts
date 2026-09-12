@@ -1,9 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Achievement,
+  CanonicalBullet,
   Certification,
+  ClaimRule,
   Diagnostics,
   Education,
+  Evidence,
   Experience,
   Profile,
   Project,
@@ -73,4 +76,27 @@ export const ipc = {
   getProfile: (): Promise<Profile | null> => invoke<Profile | null>("get_profile"),
   upsertProfile: (profile: Profile): Promise<Profile> =>
     invoke<Profile>("upsert_profile", { profile }),
+
+  // Evidence & trust (Phase 2)
+  listEvidence: (entityType: string, entityId: number): Promise<Evidence[]> =>
+    invoke<Evidence[]>("list_evidence", { entityType, entityId }),
+  createEvidence: (evidence: Evidence): Promise<Evidence> =>
+    invoke<Evidence>("create_evidence", { evidence }),
+  updateEvidence: (evidence: Evidence): Promise<Evidence> =>
+    invoke<Evidence>("update_evidence", { evidence }),
+  deleteEvidence: (id: number): Promise<void> => invoke("delete_evidence", { id }),
+  listBullets: (entityType: string, entityId: number): Promise<CanonicalBullet[]> =>
+    invoke<CanonicalBullet[]>("list_bullets", { entityType, entityId }),
+  createBullet: (bullet: CanonicalBullet): Promise<CanonicalBullet> =>
+    invoke<CanonicalBullet>("create_bullet", { bullet }),
+  updateBullet: (bullet: CanonicalBullet): Promise<CanonicalBullet> =>
+    invoke<CanonicalBullet>("update_bullet", { bullet }),
+  deleteBullet: (id: number): Promise<void> => invoke("delete_bullet", { id }),
+  listClaimRules: (entityType: string | null, entityId: number | null): Promise<ClaimRule[]> =>
+    invoke<ClaimRule[]>("list_claim_rules", { entityType, entityId }),
+  createClaimRule: (rule: ClaimRule): Promise<ClaimRule> =>
+    invoke<ClaimRule>("create_claim_rule", { rule }),
+  updateClaimRule: (rule: ClaimRule): Promise<ClaimRule> =>
+    invoke<ClaimRule>("update_claim_rule", { rule }),
+  deleteClaimRule: (id: number): Promise<void> => invoke("delete_claim_rule", { id }),
 };

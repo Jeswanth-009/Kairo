@@ -272,13 +272,31 @@ fn load_links<T: HasSkillLinks>(
     Ok(())
 }
 
+/// Applies per-row evidence counts from the trust layer onto enriched rows.
+fn apply_evidence_counts<T, G>(
+    conn: &Connection,
+    entity_type: &str,
+    rows: &mut [T],
+    access: G,
+) -> rusqlite::Result<()>
+where
+    G: Fn(&mut T) -> (&mut i64, i64),
+{
+    let ids: Vec<i64> = rows.iter_mut().map(|row| access(row).1).collect();
+    let counts = crate::db::trust::evidence_count_map(conn, entity_type, &ids)?;
+    for row in rows.iter_mut() {
+        let (slot, id) = access(row);
+        *slot = counts.get(&id).copied().unwrap_or(0);
+    }
+    Ok(())
+}
+
 fn write_links(
     conn: &Connection,
     entity_type: &str,
     entity_id: i64,
     skills: &[SkillRef],
-) -> Result<(), String> {
-    for skill in skills {
+) -> Result<(), String> {    for skill in skills {
         if !(0..=5).contains(&skill.confidence) {
             return Err("Skill confidence must be between 0 and 5".to_string());
         }
@@ -316,6 +334,9 @@ pub struct Project {
     pub repo_url: String,
     #[serde(default)]
     pub skills: Vec<SkillRef>,
+    /// Enriched on read: how many evidence records back this project.
+    #[serde(default)]
+    pub evidence_count: i64,
 }
 
 impl HasSkillLinks for Project {
@@ -349,6 +370,7 @@ impl VaultEntity for Project {
             url: row.get(6)?,
             repo_url: row.get(7)?,
             skills: Vec::new(),
+            evidence_count: 0,
         })
     }
 
@@ -377,7 +399,8 @@ impl VaultEntity for Project {
     }
 
     fn enrich(conn: &Connection, rows: &mut [Self]) -> rusqlite::Result<()> {
-        load_links(conn, "project", rows)
+        load_links(conn, "project", rows)?;
+        apply_evidence_counts(conn, "project", rows, |p| (&mut p.evidence_count, p.id))
     }
 
     fn after_write(conn: &Connection, id: i64, value: &Self) -> Result<(), String> {
@@ -402,6 +425,9 @@ pub struct Experience {
     pub location: String,
     #[serde(default)]
     pub skills: Vec<SkillRef>,
+    /// Enriched on read: how many evidence records back this experience.
+    #[serde(default)]
+    pub evidence_count: i64,
 }
 
 impl HasSkillLinks for Experience {
@@ -442,6 +468,7 @@ impl VaultEntity for Experience {
             is_current: row.get::<_, i64>(6)? != 0,
             location: row.get(7)?,
             skills: Vec::new(),
+            evidence_count: 0,
         })
     }
 
@@ -469,7 +496,8 @@ impl VaultEntity for Experience {
     }
 
     fn enrich(conn: &Connection, rows: &mut [Self]) -> rusqlite::Result<()> {
-        load_links(conn, "experience", rows)
+        load_links(conn, "experience", rows)?;
+        apply_evidence_counts(conn, "experience", rows, |e| (&mut e.evidence_count, e.id))
     }
 
     fn after_write(conn: &Connection, id: i64, value: &Self) -> Result<(), String> {
@@ -934,6 +962,7 @@ mod tests {
                     SkillRef { skill_id: python.id, canonical_name: String::new(), confidence: 4 },
                     SkillRef { skill_id: sql_skill.id, canonical_name: String::new(), confidence: 2 },
                 ],
+                evidence_count: 0,
             },
         )
         .unwrap();
@@ -977,6 +1006,7 @@ mod tests {
             url: String::new(),
             repo_url: String::new(),
             skills: vec![],
+            evidence_count: 0,
         };
 
         assert!(vault_create(&conn, &base("", Some("2025-01".into()), None)).is_err());
@@ -1017,6 +1047,7 @@ mod tests {
             url: String::new(),
             repo_url: String::new(),
             skills: vec![SkillRef { skill_id: s.id, canonical_name: String::new(), confidence: 9 }],
+            evidence_count: 0,
         };
         assert!(vault_create(&conn, &p).is_err());
         p.skills[0].confidence = 3;
@@ -1079,6 +1110,7 @@ mod tests {
                 is_current: false,
                 location: "Remote".to_string(),
                 skills: vec![],
+                evidence_count: 0,
             },
         )
         .unwrap();
