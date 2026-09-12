@@ -137,11 +137,11 @@ export default function DashboardPage() {
           </Card>
 
           <Card className="p-6">
-            <CardTitle>Next up · Phase 1 Career Vault</CardTitle>
+            <CardTitle>Next up · Phase 2 Evidence &amp; Trust</CardTitle>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              The Vault is the source of truth: projects, experience, education, certifications,
-              achievements and skills. Everything downstream depends on it, so it ships before any
-              AI feature.
+              The Vault stores real records. Next, every claim gets traceable proof: evidence
+              records, canonical bullets and claim rules — so nothing reaches a resume without
+              support.
             </p>
             <div className="mt-4 flex gap-3">
               <Link to="/vault">
