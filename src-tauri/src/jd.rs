@@ -173,7 +173,7 @@ const DOMAINS: &[(&str, &[&str])] = &[
     ("Gaming", &["gaming", "game development", "game studio"]),
 ];
 
-fn detect_domain(text: &str) -> String {
+pub(crate) fn detect_domain(text: &str) -> String {
     let lower = format!(" {} ", text.to_lowercase());
     for (domain, terms) in DOMAINS {
         if terms.iter().any(|t| lower.contains(&format!(" {t}")) || lower.contains(&format!("{t} "))) {

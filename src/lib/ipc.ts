@@ -14,6 +14,7 @@ import type {
   JobExtraction,
   JobRequirement,
   JobWithRequirements,
+  MatchReport,
   Profile,
   Project,
   ResumeImport,
@@ -130,4 +131,10 @@ export const ipc = {
   updateRequirement: (requirement: JobRequirement): Promise<JobRequirement> =>
     invoke<JobRequirement>("update_requirement", { requirement }),
   deleteRequirement: (id: number): Promise<void> => invoke("delete_requirement", { id }),
+
+  // Matching (Phase 5)
+  runJobMatch: (jobId: number): Promise<MatchReport> =>
+    invoke<MatchReport>("run_job_match", { jobId }),
+  getMatch: (jobId: number): Promise<MatchReport | null> =>
+    invoke<MatchReport | null>("get_match", { jobId }),
 };

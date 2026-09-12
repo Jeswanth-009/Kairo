@@ -7,6 +7,7 @@ import { JOB_REQUIREMENT_KINDS } from "../../lib/types";
 import type { Job, JobRequirement, JobRequirementKind } from "../../lib/types";
 import { useJobsStore } from "../../stores/jobsStore";
 import { toast } from "../../stores/toastStore";
+import { MatchTab } from "./MatchTab";
 
 const KIND_LABELS: Record<JobRequirementKind, string> = {
   required_skill: "Required skills",
@@ -21,7 +22,7 @@ type WorkspaceTab = "overview" | "requirements" | "match" | "plan" | "tailor" | 
 const TAB_META: { key: WorkspaceTab; label: string; phase: string | null }[] = [
   { key: "overview", label: "Overview", phase: null },
   { key: "requirements", label: "Requirements", phase: null },
-  { key: "match", label: "Match", phase: "Phase 5" },
+  { key: "match", label: "Match", phase: null },
   { key: "plan", label: "Plan", phase: "Phase 6" },
   { key: "tailor", label: "Tailor", phase: "Phase 7" },
   { key: "resume", label: "Resume", phase: "Phase 8" },
@@ -134,7 +135,8 @@ export default function JobWorkspacePage() {
 
       {tab === "overview" ? <OverviewTab job={job} counts={counts} /> : null}
       {tab === "requirements" ? <RequirementsTab job={job} /> : null}
-      {tab === "match" || tab === "plan" || tab === "tailor" || tab === "resume" ? (
+      {tab === "match" ? <MatchTab jobId={job.id} domain={job.domain} /> : null}
+      {tab === "plan" || tab === "tailor" || tab === "resume" ? (
         <Card className="p-8 text-center">
           <p className="text-sm text-muted">
             This tab activates in {TAB_META.find((t) => t.key === tab)?.phase} — it needs the
