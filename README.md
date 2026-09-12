@@ -37,17 +37,19 @@ cargo test            # in src-tauri/ — db migration + smoke tests
 
 ## Toolchain note (this machine)
 
-MSVC Build Tools could not be installed (UAC elevation declined), so Rust uses the
-`x86_64-pc-windows-gnu` toolchain with a portable [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)
-extracted to `~/.kairo-dev/llvm-mingw-20260908-ucrt-x86_64` (no admin required). Every shell that
-runs cargo/tauri needs:
+No admin-elevated MSVC install was possible, so Rust uses the official `stable-msvc` toolchain with a
+**portable MSVC + Windows SDK** (official Microsoft packages, extracted to the user profile by
+[mmozeiko/portable-msvc.py](https://gist.github.com/mmozeiko/7f3162ec2988e81e56d5c4e22cde9977)) at
+`~/.kairo-dev/msvc`. Every shell that runs cargo/tauri must first activate it:
 
 ```bash
-export PATH="$HOME/.cargo/bin:$HOME/.kairo-dev/llvm-mingw-20260908-ucrt-x86_64/bin:$PATH"
+. ~/.kairo-dev/msvc-env.sh   # sets PATH, INCLUDE, LIB, and CC/CXX=cl.exe
+npm run tauri dev
 ```
 
-If MSVC becomes available later: `rustup default stable-msvc`, install VS Build Tools with the
-"C++ desktop" workload, and drop the PATH override — nothing in the repo changes.
+The `CC=cl.exe` override matters: without it the `cc` crate falls back to msys64's `gcc` (on the
+system PATH) for bundled SQLite. If a normal admin VS Build Tools install happens later, this env
+file can simply be deleted — nothing in the repo depends on it.
 
 ## Phase plan
 
