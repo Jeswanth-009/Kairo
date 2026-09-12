@@ -315,6 +315,63 @@ export interface JobWithRequirements {
   requirements: JobRequirement[];
 }
 
+// --- Matching (Phase 5) ----------------------------------------------------
+
+export type Coverage = "covered" | "partial" | "missing";
+
+export interface EntityRef {
+  entityType: string;
+  id: number;
+  title: string;
+  contribution: string;
+}
+
+export interface RequirementResult {
+  requirementId: number;
+  kind: JobRequirementKind;
+  rawText: string;
+  importance: number;
+  coverage: Coverage;
+  explanation: string;
+  matchedSkills: string[];
+  entityRefs: EntityRef[];
+}
+
+export interface RankedEntity {
+  entityType: string;
+  id: number;
+  title: string;
+  relevance: number;
+  reasons: string[];
+}
+
+export interface ScoreComponents {
+  requiredSkills: number;
+  preferredSkills: number;
+  responsibilities: number;
+  domain: number;
+  recency: number;
+  evidenceStrength: number;
+}
+
+export interface Weights {
+  requiredSkills: number;
+  preferredSkills: number;
+  responsibilities: number;
+  domain: number;
+  recency: number;
+  evidenceStrength: number;
+}
+
+export interface MatchReport {
+  matchingVersion: number;
+  weights: Weights;
+  overallScore: number;
+  components: ScoreComponents;
+  results: RequirementResult[];
+  entityRanking: RankedEntity[];
+}
+
 export const CONFIDENCE_LEVELS = [
   "Mentioned only",
   "Studied",

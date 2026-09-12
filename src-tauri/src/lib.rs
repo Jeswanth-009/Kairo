@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod imports;
 mod jd;
+mod matching;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -70,6 +71,8 @@ pub fn run() {
             commands::job_commands::update_requirement,
             commands::job_commands::delete_requirement,
             commands::job_commands::parse_jd,
+            commands::match_commands::run_job_match,
+            commands::match_commands::get_match,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");
