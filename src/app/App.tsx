@@ -7,6 +7,7 @@ import { useAppStore } from "../stores/appStore";
 import DashboardPage from "../features/dashboard/DashboardPage";
 import VaultPage from "../features/vault/VaultPage";
 import JobsPage from "../features/jobs/JobsPage";
+import JobWorkspacePage from "../features/jobs/JobWorkspacePage";
 import ResumeStudioPage from "../features/resume-studio/ResumeStudioPage";
 import ApplicationsPage from "../features/applications/ApplicationsPage";
 import InterviewPrepPage from "../features/interview/InterviewPrepPage";
@@ -22,6 +23,11 @@ const TITLES: Record<string, string> = {
   "/settings": "Settings",
 };
 
+function titleFor(pathname: string): string {
+  if (/^\/jobs\/\d+$/.test(pathname)) return "Job Workspace";
+  return TITLES[pathname] ?? "Kairo";
+}
+
 export default function App() {
   const location = useLocation();
   const loadDiagnostics = useAppStore((s) => s.loadDiagnostics);
@@ -34,12 +40,13 @@ export default function App() {
     <div className="flex h-screen overflow-hidden bg-surface text-ink">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar title={TITLES[location.pathname] ?? "Kairo"} />
+        <TopBar title={titleFor(location.pathname)} />
         <main className="flex-1 overflow-y-auto">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/vault" element={<VaultPage />} />
             <Route path="/jobs" element={<JobsPage />} />
+            <Route path="/jobs/:jobId" element={<JobWorkspacePage />} />
             <Route path="/resume-studio" element={<ResumeStudioPage />} />
             <Route path="/applications" element={<ApplicationsPage />} />
             <Route path="/interview" element={<InterviewPrepPage />} />

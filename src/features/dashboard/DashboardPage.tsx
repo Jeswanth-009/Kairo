@@ -137,18 +137,19 @@ export default function DashboardPage() {
           </Card>
 
           <Card className="p-6">
-            <CardTitle>Next up · Phase 3 Imports</CardTitle>
+            <CardTitle>Next up · Phase 5 Matching</CardTitle>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              Speed up data entry safely: resume, GitHub and certificate imports produce candidate
-              records that enter the Vault only after you approve them.
+              Job requirements are ready. Matching will compare them against your verified Vault
+              evidence and explain every Covered / Partial / Missing verdict — deterministically,
+              with no fake ATS scores.
             </p>
             <div className="mt-4 flex gap-3">
-              <Link to="/vault">
-                <Button size="sm">Open Career Vault</Button>
-              </Link>
               <Link to="/jobs">
+                <Button size="sm">Open Jobs</Button>
+              </Link>
+              <Link to="/vault">
                 <Button size="sm" variant="secondary">
-                  Jobs workspace
+                  Career Vault
                 </Button>
               </Link>
             </div>
