@@ -208,6 +208,62 @@ export interface ClaimRule {
   note: string;
 }
 
+// --- Imports (Phase 3) — candidates only, never auto-saved ----------------
+
+export interface ImportProfile {
+  fullName: string;
+  email: string;
+  github: string;
+  website: string;
+}
+
+export interface ProjectDraft {
+  title: string;
+  description: string;
+  skills: string[];
+  sourceSnippet: string;
+}
+
+export interface ExperienceDraft {
+  organization: string;
+  role: string;
+  description: string;
+  sourceSnippet: string;
+}
+
+export interface EducationDraft {
+  institution: string;
+  degree: string;
+  fieldOfStudy: string;
+  sourceSnippet: string;
+}
+
+export interface CertificateCandidate {
+  title: string;
+  issuer: string;
+  issueDate: string | null;
+  email: string;
+  sourceSnippet: string;
+}
+
+export interface GithubRepoCandidate {
+  title: string;
+  description: string;
+  url: string;
+  repoUrl: string;
+  startDate: string | null;
+  skills: string[];
+  sourcePreview: string;
+}
+
+export interface ResumeImport {
+  profile: ImportProfile | null;
+  projects: ProjectDraft[];
+  experiences: ExperienceDraft[];
+  education: EducationDraft[];
+  skills: string[];
+}
+
 export const CONFIDENCE_LEVELS = [
   "Mentioned only",
   "Studied",

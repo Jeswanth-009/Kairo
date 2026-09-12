@@ -1,5 +1,6 @@
 mod commands;
 mod db;
+mod imports;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -55,6 +56,9 @@ pub fn run() {
             commands::trust_commands::create_claim_rule,
             commands::trust_commands::update_claim_rule,
             commands::trust_commands::delete_claim_rule,
+            commands::import_commands::parse_resume_text,
+            commands::import_commands::parse_certificate_text,
+            commands::import_commands::github_repo_candidate,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");
