@@ -6,13 +6,15 @@ import { Input } from "../../components/ui/inputs";
 import { IconSpark, IconVault } from "../../components/icons";
 import { useVaultStore } from "../../stores/vaultStore";
 import { toast } from "../../stores/toastStore";
-import type { AnyVaultRecord, EntityKey } from "../../lib/types";
+import type { AnyVaultRecord } from "../../lib/types";
+import { ImportDialog } from "../imports/ImportDialog";
 import { ProfileCard } from "./ProfileCard";
 import { RecordInspector } from "./RecordInspector";
 import { RecordDialog } from "./RecordDialog";
 import { SkillsTab } from "./SkillsTab";
 import { VaultCard } from "./VaultCard";
 import { ENTITY_CONFIGS } from "./vaultConfig";
+import type { EntityKey } from "./vaultConfig";
 
 type TabKey = EntityKey | "skills";
 
@@ -32,6 +34,7 @@ export default function VaultPage() {
   const [tab, setTab] = useState<TabKey>("projects");
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<AnyVaultRecord | null>(null);
   const [detail, setDetail] = useState<{ key: EntityKey; record: AnyVaultRecord } | null>(null);
   const [deleting, setDeleting] = useState<AnyVaultRecord | null>(null);
@@ -103,7 +106,7 @@ export default function VaultPage() {
           >
             Add project
           </Button>
-          <Button variant="secondary" disabled title="Arrives in Phase 3 · Imports">
+          <Button variant="secondary" onClick={() => setImportOpen(true)}>
             Import resume
           </Button>
         </EmptyState>
@@ -154,7 +157,10 @@ export default function VaultPage() {
                   onChange={(e) => setQuery(e.target.value)}
                   className="h-9 w-64"
                 />
-                <Button size="sm" className="ml-auto" onClick={() => setCreating(true)}>
+                <Button size="sm" variant="secondary" className="ml-auto" onClick={() => setImportOpen(true)}>
+                  Import
+                </Button>
+                <Button size="sm" onClick={() => setCreating(true)}>
                   {config.addLabel}
                 </Button>
               </div>
@@ -191,6 +197,7 @@ export default function VaultPage() {
       {tab !== "skills" && creating ? (
         <RecordDialog open onClose={() => setCreating(false)} entityKey={tab} record={null} />
       ) : null}
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
       {tab !== "skills" && editing ? (
         <RecordDialog open onClose={() => setEditing(null)} entityKey={tab} record={editing} />
       ) : null}

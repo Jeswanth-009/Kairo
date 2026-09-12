@@ -3,13 +3,16 @@ import type {
   Achievement,
   CanonicalBullet,
   Certification,
+  CertificateCandidate,
   ClaimRule,
   Diagnostics,
   Education,
   Evidence,
   Experience,
+  GithubRepoCandidate,
   Profile,
   Project,
+  ResumeImport,
   Skill,
   SmokeTestResult,
 } from "./types";
@@ -99,4 +102,12 @@ export const ipc = {
   updateClaimRule: (rule: ClaimRule): Promise<ClaimRule> =>
     invoke<ClaimRule>("update_claim_rule", { rule }),
   deleteClaimRule: (id: number): Promise<void> => invoke("delete_claim_rule", { id }),
+
+  // Imports (Phase 3) — extraction only; candidates never touch the DB here
+  parseResumeText: (text: string): Promise<ResumeImport> =>
+    invoke<ResumeImport>("parse_resume_text", { text }),
+  parseCertificateText: (text: string): Promise<CertificateCandidate> =>
+    invoke<CertificateCandidate>("parse_certificate_text", { text }),
+  githubRepoCandidate: (owner: string, repo: string): Promise<GithubRepoCandidate> =>
+    invoke<GithubRepoCandidate>("github_repo_candidate", { owner, repo }),
 };
