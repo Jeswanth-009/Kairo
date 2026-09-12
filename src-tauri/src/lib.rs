@@ -43,6 +43,18 @@ pub fn run() {
             commands::vault_commands::upsert_profile,
             commands::vault_commands::add_skill_alias,
             commands::vault_commands::delete_skill_alias,
+            commands::trust_commands::list_evidence,
+            commands::trust_commands::create_evidence,
+            commands::trust_commands::update_evidence,
+            commands::trust_commands::delete_evidence,
+            commands::trust_commands::list_bullets,
+            commands::trust_commands::create_bullet,
+            commands::trust_commands::update_bullet,
+            commands::trust_commands::delete_bullet,
+            commands::trust_commands::list_claim_rules,
+            commands::trust_commands::create_claim_rule,
+            commands::trust_commands::update_claim_rule,
+            commands::trust_commands::delete_claim_rule,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

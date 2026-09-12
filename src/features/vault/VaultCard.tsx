@@ -24,6 +24,8 @@ export function VaultCard({
   const description = descriptionOf(record);
   const links = linksOf(record);
   const skills = "skills" in record ? record.skills : [];
+  const evidenceCount =
+    "evidenceCount" in record ? (record.evidenceCount as number) : null;
 
   return (
     <Card className="flex flex-col p-5">
@@ -53,6 +55,23 @@ export function VaultCard({
               {ref.canonicalName} · {ref.confidence}
             </span>
           ))}
+        </div>
+      ) : null}
+
+      {evidenceCount !== null ? (
+        <div className="mt-3">
+          <span
+            title={
+              evidenceCount > 0
+                ? `${evidenceCount} evidence record${evidenceCount === 1 ? "" : "s"} attached`
+                : "No evidence attached yet — open the record to add proof"
+            }
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              evidenceCount > 0 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+            }`}
+          >
+            {evidenceCount > 0 ? "✓" : "…"} {evidenceCount} evidence
+          </span>
         </div>
       ) : null}
 

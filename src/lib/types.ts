@@ -35,6 +35,7 @@ export interface Project {
   url: string;
   repoUrl: string;
   skills: SkillRef[];
+  evidenceCount: number;
 }
 
 export interface Experience {
@@ -47,6 +48,7 @@ export interface Experience {
   isCurrent: boolean;
   location: string;
   skills: SkillRef[];
+  evidenceCount: number;
 }
 
 export interface Education {
@@ -142,6 +144,69 @@ export type VaultRecords = {
 
 export type VaultRecord = Project | Experience | Education | Certification | Achievement | Skill;
 export type AnyVaultRecord = VaultRecord;
+
+// --- Evidence & Trust (Phase 2) ------------------------------------------
+
+export type TrustEntityType = "project" | "experience" | "education" | "certification" | "achievement";
+
+export const EVIDENCE_KINDS: { value: EvidenceKind; label: string }[] = [
+  { value: "repository", label: "Repository" },
+  { value: "document", label: "Document" },
+  { value: "certificate", label: "Certificate" },
+  { value: "metric", label: "Measured metric" },
+  { value: "note", label: "Note" },
+  { value: "link", label: "Link" },
+  { value: "other", label: "Other" },
+];
+
+export type EvidenceKind =
+  | "repository"
+  | "document"
+  | "certificate"
+  | "metric"
+  | "note"
+  | "link"
+  | "other";
+
+export interface Evidence {
+  id: number;
+  entityType: TrustEntityType;
+  entityId: number;
+  kind: EvidenceKind;
+  title: string;
+  reference: string;
+  note: string;
+  verified: boolean;
+}
+
+export interface BulletEvidenceRef {
+  id: number;
+  title: string;
+  kind: EvidenceKind;
+  verified: boolean;
+}
+
+export interface CanonicalBullet {
+  id: number;
+  entityType: "project" | "experience";
+  entityId: number;
+  text: string;
+  approved: boolean;
+  sortOrder: number;
+  evidence: BulletEvidenceRef[];
+  evidenceIds: number[];
+}
+
+export type ClaimRuleType = "forbidden_claim" | "allowed_claim";
+
+export interface ClaimRule {
+  id: number;
+  entityType: string | null;
+  entityId: number | null;
+  ruleType: ClaimRuleType;
+  pattern: string;
+  note: string;
+}
 
 export const CONFIDENCE_LEVELS = [
   "Mentioned only",

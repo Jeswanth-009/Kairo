@@ -137,11 +137,10 @@ export default function DashboardPage() {
           </Card>
 
           <Card className="p-6">
-            <CardTitle>Next up · Phase 2 Evidence &amp; Trust</CardTitle>
+            <CardTitle>Next up · Phase 3 Imports</CardTitle>
             <p className="mt-2 text-sm leading-relaxed text-muted">
-              The Vault stores real records. Next, every claim gets traceable proof: evidence
-              records, canonical bullets and claim rules — so nothing reaches a resume without
-              support.
+              Speed up data entry safely: resume, GitHub and certificate imports produce candidate
+              records that enter the Vault only after you approve them.
             </p>
             <div className="mt-4 flex gap-3">
               <Link to="/vault">

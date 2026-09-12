@@ -8,7 +8,7 @@ import { useVaultStore } from "../../stores/vaultStore";
 import { toast } from "../../stores/toastStore";
 import type { AnyVaultRecord, EntityKey } from "../../lib/types";
 import { ProfileCard } from "./ProfileCard";
-import { RecordDetail } from "./RecordDetail";
+import { RecordInspector } from "./RecordInspector";
 import { RecordDialog } from "./RecordDialog";
 import { SkillsTab } from "./SkillsTab";
 import { VaultCard } from "./VaultCard";
@@ -33,7 +33,7 @@ export default function VaultPage() {
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AnyVaultRecord | null>(null);
-  const [detail, setDetail] = useState<AnyVaultRecord | null>(null);
+  const [detail, setDetail] = useState<{ key: EntityKey; record: AnyVaultRecord } | null>(null);
   const [deleting, setDeleting] = useState<AnyVaultRecord | null>(null);
 
   useEffect(() => {
@@ -176,7 +176,7 @@ export default function VaultPage() {
                       key={record.id}
                       entityKey={tab}
                       record={record}
-                      onOpen={() => setDetail(record)}
+                      onOpen={() => setDetail({ key: tab, record })}
                       onEdit={() => setEditing(record)}
                       onDelete={() => setDeleting(record)}
                     />
@@ -194,12 +194,9 @@ export default function VaultPage() {
       {tab !== "skills" && editing ? (
         <RecordDialog open onClose={() => setEditing(null)} entityKey={tab} record={editing} />
       ) : null}
-      <RecordDetail
-        open={!!detail}
-        onClose={() => setDetail(null)}
-        entityKey={tab === "skills" ? "projects" : tab}
-        record={detail}
-      />
+      {detail ? (
+        <RecordInspector onClose={() => setDetail(null)} entityKey={detail.key} record={detail.record} />
+      ) : null}
       <ConfirmDialog
         open={!!deleting}
         title={`Delete ${tabLabel.toLowerCase()}`}
