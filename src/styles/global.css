@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+/*
+  Kairo brand tokens — see spec §1.2.
+  Meaning: midnight = trust/depth, blue = primary action/progress,
+  violet = intelligence accent, sky = soft highlights, dawn = opportunity (use sparingly).
+*/
+@theme {
+  --color-kairo-midnight: #0b1020;
+  --color-kairo-midnight-raised: #111a33;
+  --color-kairo-blue: #2563eb;
+  --color-kairo-violet: #8b5cf6;
+  --color-kairo-sky: #93c5fd;
+  --color-kairo-dawn: #f6c177;
+  --color-surface: #f8fafc;
+  --color-ink: #182238;
+  --color-muted: #64748b;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-family:
+      "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-kairo-sky) 45%, transparent);
+  }
+}
+
+/* Motion policy: 160-220ms normal, 350-500ms major; respect OS reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
