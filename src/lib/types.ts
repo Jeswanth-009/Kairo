@@ -434,6 +434,7 @@ export interface ResumePlan {
   experience: PlanItem[];
   projects: PlanItem[];
   skills: string[];
+  excludedSkills?: string[];
   estimatedLines: number;
   fitsOnePage: boolean;
   warnings: string[];

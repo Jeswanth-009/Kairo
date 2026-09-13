@@ -159,6 +159,56 @@ pub fn delete_suggestion(conn: &Connection, id: i64) -> Result<(), String> {
     Ok(())
 }
 
+/// Detected claim changes for a proposed wording of an existing bullet
+/// (used by the Resume Studio editor on manual edits). Manual edits inherit
+/// the record's evidence, so only metric/tech/forbidden diffs are reported.
+pub fn claim_change_report(
+    conn: &Connection,
+    job_id: i64,
+    bullet_id: i64,
+    new_text: &str,
+) -> Result<crate::tailor::ValidationResult, String> {
+    let grounding = assemble_grounding(conn, job_id, bullet_id)?;
+    let output = crate::tailor::RewriteOutput {
+        text: new_text.to_string(),
+        facts_used: grounding.context.allowed_fact_ids.clone(),
+    };
+    Ok(crate::tailor::validate(&grounding.context, &output))
+}
+
+/// Saves a manual studio edit as the accepted wording for a bullet
+/// (model = "manual"). Any previously accepted suggestion for the bullet
+/// is replaced.
+pub fn save_manual_edit(
+    conn: &Connection,
+    job_id: i64,
+    bullet_id: i64,
+    text: &str,
+) -> Result<TailorSuggestion, String> {
+    let grounding = assemble_grounding(conn, job_id, bullet_id)?;
+    let report = claim_change_report(conn, job_id, bullet_id, text)?;
+    sql_err(conn.execute(
+        "DELETE FROM tailor_suggestions WHERE job_id = ?1 AND bullet_id = ?2 AND status = 'accepted'",
+        params![job_id, bullet_id],
+    ))?;
+    sql_err(conn.execute(
+        "INSERT INTO tailor_suggestions (job_id, bullet_id, original_text, suggested_text, status, validation, model)          VALUES (?1, ?2, ?3, ?4, 'accepted', ?5, 'manual')",
+        params![
+            job_id,
+            bullet_id,
+            grounding.bullet_text,
+            text,
+            serde_json::to_string(&report).map_err(|e| e.to_string())?
+        ],
+    ))?;
+    let id = conn.last_insert_rowid();
+    let mut stmt = sql_err(conn.prepare(&format!(
+        "SELECT {SUGGESTION_COLS} FROM tailor_suggestions WHERE id = ?1"
+    )))?;
+    let (_, suggestion) = sql_err(stmt.query_row([id], suggestion_from_row))?;
+    Ok(suggestion)
+}
+
 // ---------------------------------------------------------------------------
 // Grounding assembly: everything the prompt needs for one bullet
 // ---------------------------------------------------------------------------
