@@ -553,3 +553,33 @@ export const CONFIDENCE_LEVELS = [
   "Repeatedly used",
   "Production-like evidence",
 ] as const;
+
+// --- Interview Prep (Phase 12) ----------------------------------------------
+
+export type InterviewCategory =
+  | "project_deep_dive"
+  | "technical_skill"
+  | "responsibility"
+  | "weak_area"
+  | "resume_question";
+
+export interface InterviewQuestion {
+  category: InterviewCategory;
+  question: string;
+  why: string;
+  evidenceRefs: string[];
+}
+
+export interface PrepInputsSummary {
+  rawJdChars: number;
+  requirementCount: number;
+  planBulletCount: number;
+  gapCount: number;
+  evidenceCount: number;
+}
+
+export interface InterviewPrep {
+  jobLabel: string;
+  questions: InterviewQuestion[];
+  inputs: PrepInputsSummary;
+}

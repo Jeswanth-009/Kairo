@@ -13,6 +13,7 @@ use std::sync::Mutex;
 
 pub mod applications;
 pub mod composer;
+pub mod interview;
 pub mod jobs;
 pub mod matching;
 pub mod pdf;

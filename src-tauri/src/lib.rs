@@ -3,6 +3,7 @@ mod commands;
 pub mod composer;
 pub mod db;
 mod imports;
+mod interview;
 mod jd;
 pub mod latex;
 mod matching;
@@ -101,6 +102,7 @@ pub fn run() {
             commands::applications_commands::update_application,
             commands::applications_commands::set_application_status,
             commands::applications_commands::delete_application,
+            commands::interview_commands::generate_interview_prep,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");
