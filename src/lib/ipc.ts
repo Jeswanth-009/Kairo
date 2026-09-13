@@ -30,6 +30,8 @@ import type {
   InterviewPrep,
   ValidationResult,
   DashboardOverview,
+  BackupInfo,
+  RestoreOk,
 } from "./types";
 
 /**
@@ -184,6 +186,12 @@ export const ipc = {
 
   // Dashboard (Phase 13)
   getDashboard: (): Promise<DashboardOverview> => invoke<DashboardOverview>("get_dashboard"),
+
+  // Backup & restore (Phase 14)
+  listBackups: (): Promise<BackupInfo[]> => invoke<BackupInfo[]>("list_backups"),
+  createBackup: (): Promise<BackupInfo> => invoke<BackupInfo>("create_backup"),
+  restoreBackup: (fileName: string): Promise<RestoreOk> =>
+    invoke<RestoreOk>("restore_backup", { fileName }),
 
   // PDF (Phase 9)
   exportPdf: (jobId: number): Promise<{ artifact: PdfArtifact; logTail: string }> =>

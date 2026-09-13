@@ -636,3 +636,17 @@ export interface DashboardOverview {
   evidenceNeedingReview: EvidenceReviewItem[];
   recentActivity: ActivityItem[];
 }
+
+// --- Backup & restore (Phase 14) ----------------------------------------------
+
+export interface BackupInfo {
+  fileName: string;
+  path: string;
+  bytes: number;
+  createdAt: string;
+}
+
+export interface RestoreOk {
+  ok: boolean;
+  appliedMigrations: number;
+}
