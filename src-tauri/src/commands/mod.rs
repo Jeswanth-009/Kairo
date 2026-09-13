@@ -1,4 +1,5 @@
 pub mod ai_commands;
+pub mod applications_commands;
 pub mod composer_commands;
 pub mod db_commands;
 pub mod import_commands;

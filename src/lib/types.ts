@@ -471,6 +471,56 @@ export interface ResumeVersion {
   };
 }
 
+// --- Applications (Phase 11) ---------------------------------------------------
+
+export type ApplicationStatus =
+  | "wishlist"
+  | "preparing"
+  | "applied"
+  | "oa"
+  | "interview"
+  | "final"
+  | "offer"
+  | "rejected"
+  | "withdrawn";
+
+export const APPLICATION_STATUSES: { value: ApplicationStatus; label: string }[] = [
+  { value: "wishlist", label: "Wishlist" },
+  { value: "preparing", label: "Preparing" },
+  { value: "applied", label: "Applied" },
+  { value: "oa", label: "OA" },
+  { value: "interview", label: "Interview" },
+  { value: "final", label: "Final round" },
+  { value: "offer", label: "Offer" },
+  { value: "rejected", label: "Rejected" },
+  { value: "withdrawn", label: "Withdrawn" },
+];
+
+export const STATUS_COLORS: Record<ApplicationStatus, string> = {
+  wishlist: "bg-slate-100 text-slate-600",
+  preparing: "bg-kairo-sky/20 text-sky-700",
+  applied: "bg-kairo-blue/10 text-kairo-blue",
+  oa: "bg-kairo-violet/10 text-kairo-violet",
+  interview: "bg-amber-100 text-amber-700",
+  final: "bg-orange-100 text-orange-700",
+  offer: "bg-emerald-100 text-emerald-700",
+  rejected: "bg-red-100 text-red-700",
+  withdrawn: "bg-slate-200 text-slate-500",
+};
+
+export interface Application {
+  id: number;
+  jobId: number | null;
+  resumeVersionId: number | null;
+  company: string;
+  role: string;
+  url: string;
+  status: ApplicationStatus;
+  appliedDate: string | null;
+  nextAction: string;
+  notes: string;
+}
+
 // --- Grounded AI tailoring (Phase 7) ----------------------------------------
 
 export interface ValidationResult {
