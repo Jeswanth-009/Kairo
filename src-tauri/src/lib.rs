@@ -1,4 +1,5 @@
 mod commands;
+mod composer;
 mod db;
 mod imports;
 mod jd;
@@ -73,6 +74,8 @@ pub fn run() {
             commands::job_commands::parse_jd,
             commands::match_commands::run_job_match,
             commands::match_commands::get_match,
+            commands::composer_commands::run_composer,
+            commands::composer_commands::get_plan,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

@@ -372,6 +372,71 @@ export interface MatchReport {
   entityRanking: RankedEntity[];
 }
 
+// --- Composer (Phase 6) -----------------------------------------------------
+
+export interface ComposerConfig {
+  targetPages: number;
+  maxProjects: number;
+  maxExperienceItems: number;
+  maxBulletsPerItem: number;
+  minFontSizePt: number;
+}
+
+export interface PlanBullet {
+  id: number;
+  text: string;
+  supports: string[];
+}
+
+export interface PlanItem {
+  entityType: string;
+  id: number;
+  title: string;
+  subtitle: string;
+  startDate: string | null;
+  endDate: string | null;
+  isCurrent: boolean;
+  description: string;
+  bullets: PlanBullet[];
+  skills: string[];
+  relevance: number;
+  evidenceCount: number;
+}
+
+export interface PlanEducation {
+  id: number;
+  institution: string;
+  degree: string;
+  fieldOfStudy: string;
+  startDate: string | null;
+  endDate: string | null;
+  isCurrent: boolean;
+}
+
+export interface PlanHeader {
+  fullName: string;
+  headline: string;
+  email: string;
+  phone: string;
+  location: string;
+  website: string;
+  github: string;
+  linkedin: string;
+}
+
+export interface ResumePlan {
+  composerVersion: number;
+  config: ComposerConfig;
+  header: PlanHeader;
+  education: PlanEducation[];
+  experience: PlanItem[];
+  projects: PlanItem[];
+  skills: string[];
+  estimatedLines: number;
+  fitsOnePage: boolean;
+  warnings: string[];
+}
+
 export const CONFIDENCE_LEVELS = [
   "Mentioned only",
   "Studied",
