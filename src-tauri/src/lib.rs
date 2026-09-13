@@ -96,6 +96,11 @@ pub fn run() {
             commands::version_commands::save_resume_version,
             commands::version_commands::list_resume_versions,
             commands::version_commands::get_resume_version,
+            commands::applications_commands::list_applications,
+            commands::applications_commands::create_application,
+            commands::applications_commands::update_application,
+            commands::applications_commands::set_application_status,
+            commands::applications_commands::delete_application,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

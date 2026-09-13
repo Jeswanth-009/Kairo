@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   Achievement,
   AiConfigView,
+  Application,
   CanonicalBullet,
   Certification,
   CertificateCandidate,
@@ -180,6 +181,16 @@ export const ipc = {
     invoke<{ artifact: PdfArtifact; logTail: string }>("export_pdf", { jobId }),
   getPdfArtifact: (jobId: number): Promise<PdfArtifact | null> =>
     invoke<PdfArtifact | null>("get_pdf_artifact", { jobId }),
+
+  // Applications (Phase 11)
+  listApplications: (): Promise<Application[]> => invoke<Application[]>("list_applications"),
+  createApplication: (application: Application): Promise<Application> =>
+    invoke<Application>("create_application", { application }),
+  updateApplication: (application: Application): Promise<Application> =>
+    invoke<Application>("update_application", { application }),
+  setApplicationStatus: (id: number, status: string): Promise<Application> =>
+    invoke<Application>("set_application_status", { id, status }),
+  deleteApplication: (id: number): Promise<void> => invoke("delete_application", { id }),
 
   // Versions (Phase 10)
   saveResumeVersion: (jobId: number): Promise<ResumeVersion> =>
