@@ -149,6 +149,11 @@ export const ipc = {
   ): Promise<ResumePlan> => invoke<ResumePlan>("run_composer", { jobId, config }),
   getPlan: (jobId: number): Promise<{ config: ComposerConfig; plan: ResumePlan } | null> =>
     invoke<{ config: ComposerConfig; plan: ResumePlan } | null>("get_plan", { jobId }),
+  savePlan: (jobId: number, plan: ResumePlan): Promise<void> =>
+    invoke("save_plan", { jobId, plan }),
+  estimatePlanLines: (plan: ResumePlan): Promise<number> =>
+    invoke<number>("estimate_plan_lines", { plan }),
+
 
   // Grounded AI tailoring (Phase 7)
   aiGetConfig: (): Promise<AiConfigView> => invoke<AiConfigView>("ai_get_config"),

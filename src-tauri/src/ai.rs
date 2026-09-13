@@ -103,7 +103,7 @@ pub fn chat(config: &AiConfig, api_key: &str, system: &str, user: &str) -> Resul
     });
 
     let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(90))
         .user_agent("kairo-tailor")
         .build();
 

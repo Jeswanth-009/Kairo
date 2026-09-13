@@ -104,6 +104,9 @@ pub struct PlanBullet {
     pub id: i64,
     pub text: String,
     pub supports: Vec<String>,
+    /// Studio-only toggle: excluded bullets stay in the plan but don't render.
+    #[serde(default)]
+    pub excluded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,6 +124,9 @@ pub struct PlanItem {
     pub skills: Vec<String>,
     pub relevance: f64,
     pub evidence_count: i64,
+    /// Studio-only toggle: excluded items stay in the plan but don't render.
+    #[serde(default)]
+    pub excluded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,8 +192,28 @@ fn item_lines(item: &PlanItem) -> u32 {
     if !item.description.is_empty() {
         lines += wrapped_lines(&item.description);
     }
-    for bullet in &item.bullets {
+    for bullet in item.bullets.iter().filter(|b| !b.excluded) {
         lines += wrapped_lines(&bullet.text);
+    }
+    lines
+}
+
+/// Line estimate for a whole plan (studio re-estimates after manual edits).
+pub fn estimate_plan_lines(plan: &ResumePlan) -> u32 {
+    let mut lines = 4; // header block
+    lines += plan.education.len() as u32 * 2;
+    for item in plan.experience.iter().chain(plan.projects.iter()) {
+        if !item.excluded {
+            lines += item_lines(item);
+        }
+    }
+    let skills: Vec<&String> = plan.skills.iter().collect();
+    if !skills.is_empty() {
+        lines += 1;
+        let chars: usize = skills.len();
+        let _ = chars;
+        let total: usize = plan.skills.iter().map(|s| s.len() + 2).sum();
+        lines += (total as f64 / CHARS_PER_LINE).ceil() as u32;
     }
     lines
 }
@@ -299,6 +325,7 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             skills: entity.skill_names.clone(),
             relevance: entity.relevance,
             evidence_count: entity.evidence_count,
+            excluded: false,
         });
     }
     let dropped_count = candidates.len() - (experience.len() + projects.len());
@@ -334,7 +361,15 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             .map(|b| {
                 let supports = bullet_supports(&b.text, &input.requirement_texts);
                 let support_count = supports.len();
-                (PlanBullet { id: b.id, text: b.text.clone(), supports }, support_count)
+                (
+                    PlanBullet {
+                        id: b.id,
+                        text: b.text.clone(),
+                        supports,
+                        excluded: false,
+                    },
+                    support_count,
+                )
             })
             .collect();
         scored.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.id.cmp(&b.0.id)));
@@ -415,6 +450,7 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
                 let item_id = item.id;
                 item.bullets
                     .iter()
+                    .filter(|b| !b.excluded)
                     .map(move |b| (entity_type.clone(), item_id, b.id, b.supports.len()))
             })
             .collect();

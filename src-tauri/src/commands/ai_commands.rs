@@ -60,13 +60,26 @@ pub fn tailor_suggest(
     job_id: i64,
     bullet_id: i64,
 ) -> Result<tailor::TailorSuggestion, String> {
-    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    let grounding = tailor::assemble_grounding(&conn, job_id, bullet_id)?;
-    let (config, _) = tailor::get_ai_config(&conn)?;
-    let key = crate::ai::load_api_key()?.unwrap_or_default();
-    let raw = crate::ai::chat(&config, &key, crate::tailor::SYSTEM_PROMPT, &crate::tailor::build_user_prompt(&grounding.context))?;
+    // Gather grounding while holding the DB lock, then DROP the lock before the
+    // network call — a 60s HTTP request must never freeze the rest of the app.
+    let (grounding, config, key) = {
+        let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+        let grounding = tailor::assemble_grounding(&conn, job_id, bullet_id)?;
+        let (config, _) = tailor::get_ai_config(&conn)?;
+        let key = crate::ai::load_api_key()?.unwrap_or_default();
+        (grounding, config, key)
+    };
+
+    let raw = crate::ai::chat(
+        &config,
+        &key,
+        crate::tailor::SYSTEM_PROMPT,
+        &crate::tailor::build_user_prompt(&grounding.context),
+    )?;
     let output = crate::tailor::check(&raw, &grounding.context)?;
     let validation = crate::tailor::validate(&grounding.context, &output);
+
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     tailor::insert_suggestion(
         &conn,
         job_id,

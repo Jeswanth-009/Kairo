@@ -386,6 +386,7 @@ export interface PlanBullet {
   id: number;
   text: string;
   supports: string[];
+  excluded?: boolean;
 }
 
 export interface PlanItem {
@@ -401,6 +402,7 @@ export interface PlanItem {
   skills: string[];
   relevance: number;
   evidenceCount: number;
+  excluded?: boolean;
 }
 
 export interface PlanEducation {
