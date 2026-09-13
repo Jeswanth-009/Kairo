@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/inputs";
 import { IconInterview } from "../../components/icons";
 import { ipc } from "../../lib/ipc";
@@ -60,37 +61,34 @@ export default function InterviewPrepPage() {
 
   return (
     <div className="mx-auto max-w-4xl p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">Interview Prep</h2>
-          <p className="max-w-xl text-xs text-muted">
-            Questions generated only from the exact JD, your submitted resume, your evidence and the
-            match gaps — no invented company-specific patterns.
-          </p>
-        </div>
-        {jobs.length > 0 ? (
-          <div className="flex items-center gap-2">
-            <Select
-              value={jobId ?? undefined}
-              onChange={(e) => {
-                setJobId(Number(e.target.value));
-                setPrep(null);
-              }}
-              className="w-64"
-            >
-              {jobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.roleTitle || "Untitled role"}
-                  {job.company ? ` · ${job.company}` : ""}
-                </option>
-              ))}
-            </Select>
-            <Button onClick={() => void generate()} disabled={loading}>
-              {loading ? "Generating…" : prep ? "Regenerate" : "Generate prep"}
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Interview Prep"
+        description="Questions generated only from the exact JD, your submitted resume, your evidence and the match gaps — no invented company-specific patterns."
+        actions={
+          jobs.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <Select
+                value={jobId ?? undefined}
+                onChange={(e) => {
+                  setJobId(Number(e.target.value));
+                  setPrep(null);
+                }}
+                className="w-64"
+              >
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.roleTitle || "Untitled role"}
+                    {job.company ? ` · ${job.company}` : ""}
+                  </option>
+                ))}
+              </Select>
+              <Button onClick={() => void generate()} disabled={loading}>
+                {loading ? "Generating…" : prep ? "Regenerate" : "Generate prep"}
+              </Button>
+            </div>
+          ) : null
+        }
+      />
 
       {!loaded ? (
         <p className="py-16 text-center text-sm text-muted">Loading…</p>

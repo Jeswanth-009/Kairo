@@ -42,16 +42,19 @@ export default function App() {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar title={titleFor(location.pathname)} />
         <main className="flex-1 overflow-y-auto">
-          <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/vault" element={<VaultPage />} />
-            <Route path="/jobs" element={<JobsPage />} />
-            <Route path="/jobs/:jobId" element={<JobWorkspacePage />} />
-            <Route path="/resume-studio" element={<ResumeStudioPage />} />
-            <Route path="/applications" element={<ApplicationsPage />} />
-            <Route path="/interview" element={<InterviewPrepPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
+          {/* Keyed by path so each page plays the enter animation on navigation. */}
+          <div key={location.pathname} className="page-enter h-full">
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/vault" element={<VaultPage />} />
+              <Route path="/jobs" element={<JobsPage />} />
+              <Route path="/jobs/:jobId" element={<JobWorkspacePage />} />
+              <Route path="/resume-studio" element={<ResumeStudioPage />} />
+              <Route path="/applications" element={<ApplicationsPage />} />
+              <Route path="/interview" element={<InterviewPrepPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </div>
         </main>
       </div>
       <ToastHost />
