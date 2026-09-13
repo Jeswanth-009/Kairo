@@ -5,6 +5,7 @@ import type {
   Certification,
   CertificateCandidate,
   ClaimRule,
+  ComposerConfig,
   Diagnostics,
   Education,
   Evidence,
@@ -18,6 +19,7 @@ import type {
   Profile,
   Project,
   ResumeImport,
+  ResumePlan,
   Skill,
   SmokeTestResult,
 } from "./types";
@@ -137,4 +139,12 @@ export const ipc = {
     invoke<MatchReport>("run_job_match", { jobId }),
   getMatch: (jobId: number): Promise<MatchReport | null> =>
     invoke<MatchReport | null>("get_match", { jobId }),
+
+  // Composer (Phase 6)
+  runComposer: (
+    jobId: number,
+    config?: Partial<ComposerConfig>,
+  ): Promise<ResumePlan> => invoke<ResumePlan>("run_composer", { jobId, config }),
+  getPlan: (jobId: number): Promise<{ config: ComposerConfig; plan: ResumePlan } | null> =>
+    invoke<{ config: ComposerConfig; plan: ResumePlan } | null>("get_plan", { jobId }),
 };
