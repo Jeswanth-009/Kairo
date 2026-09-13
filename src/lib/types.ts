@@ -440,6 +440,16 @@ export interface ResumePlan {
   warnings: string[];
 }
 
+// --- PDF (Phase 9) ------------------------------------------------------------
+
+export interface PdfArtifact {
+  jobId: number;
+  texPath: string;
+  pdfPath: string;
+  pageCount: number | null;
+  compiledAt: string | null;
+}
+
 // --- Grounded AI tailoring (Phase 7) ----------------------------------------
 
 export interface ValidationResult {

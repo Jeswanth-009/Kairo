@@ -5,7 +5,7 @@ import { Card, CardTitle } from "../../components/ui/Card";
 import { Select, Textarea } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
 import { fmtRange } from "../../lib/dateFmt";
-import type { Job, PlanItem, ResumePlan, TailorSuggestion, ValidationResult } from "../../lib/types";
+import type { Job, PdfArtifact, PlanItem, ResumePlan, TailorSuggestion, ValidationResult } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
 const CAPACITY = 56; // one letter page at 9.5-10pt (mirrors composer.rs)
@@ -367,6 +367,8 @@ export default function ResumeStudioPage() {
   const [selected, setSelected] = useState<{ entityType: string; itemId: number; bulletId: number } | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [estimatedLines, setEstimatedLines] = useState<number | null>(null);
+  const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -394,6 +396,7 @@ export default function ResumeStudioPage() {
         } else {
           setEstimatedLines(null);
         }
+        setArtifact(await ipc.getPdfArtifact(jobId));
       } catch (e) {
         toast.error(String(e));
       }
@@ -470,6 +473,20 @@ export default function ResumeStudioPage() {
         plan.excludedSkills.push(name);
       }
     });
+  };
+
+  const exportPdf = async () => {
+    if (jobId === null) return;
+    setExporting(true);
+    try {
+      const result = await ipc.exportPdf(jobId);
+      setArtifact(result.artifact);
+      toast.ok(`PDF compiled — ${result.artifact.pageCount ?? "?"} page(s)`);
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const acceptSuggestion = (suggestion: TailorSuggestion) => {
@@ -883,11 +900,28 @@ export default function ResumeStudioPage() {
               <p className="mt-2 text-[11px] text-slate-400">{excludedCount} excluded element(s)</p>
             ) : null}
             <div className="mt-3">
-              <Button size="sm" disabled title="LaTeX + Tectonic compile arrives in Phase 9">
-                Export PDF
+              <Button
+                size="sm"
+                onClick={() => void exportPdf()}
+                disabled={exporting || !plan.fitsOnePage}
+                title={
+                  !plan.fitsOnePage
+                    ? "Resolve the overflow before exporting"
+                    : "Compile the plan to PDF with Tectonic (first run downloads the TeX bundle)"
+                }
+              >
+                {exporting ? "Compiling… (first run may take minutes)" : "Export PDF"}
               </Button>
-              <span className="ml-2 text-[11px] text-slate-400">Phase 9</span>
             </div>
+            {artifact ? (
+              <div className="mt-3 rounded-lg bg-surface p-2.5 text-[11px] leading-relaxed">
+                <p className={exporting ? "text-slate-400" : "text-emerald-600"}>
+                  ✓ Compiled{artifact.pageCount ? ` · ${artifact.pageCount} page(s)` : ""}
+                  {artifact.compiledAt ? ` · ${artifact.compiledAt.replace("T", " ").slice(0, 16)}` : ""}
+                </p>
+                <p className="mt-0.5 break-all text-slate-400">{artifact.pdfPath}</p>
+              </div>
+            ) : null}
           </Card>
           <div className="mx-auto w-full max-w-[420px]">
             <PreviewPane plan={plan} excludedCount={excludedCount} suggestions={suggestions} />
