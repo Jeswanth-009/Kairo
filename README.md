@@ -8,8 +8,8 @@ A local-first Windows career intelligence workspace. Store verified career evide
 opportunity, select the strongest relevant proof, improve the wording without changing the facts,
 review every change, and produce a reproducible application artifact.
 
-![status](https://img.shields.io/badge/status-phases%200--13%20complete-2563EB)
-![tests](https://img.shields.io/badge/tests-67%20passing-10B981)
+![status](https://img.shields.io/badge/status-v1%20feature%20complete%20%28phases%200--14%29-2563EB)
+![tests](https://img.shields.io/badge/tests-77%20passing-10B981)
 ![migrations](https://img.shields.io/badge/migrations-10%20applied-8B5CF6)
 ![platform](https://img.shields.io/badge/platform-Windows-64748B)
 
@@ -36,10 +36,11 @@ review every change, and produce a reproducible application artifact.
 7. [Frontend](#frontend)
 8. [Security model](#security-model)
 9. [Testing](#testing)
-10. [Run](#run)
-11. [Toolchain on this machine](#toolchain-on-this-machine)
-12. [Engineering rules](#engineering-rules)
-13. [Roadmap](#roadmap)
+10. [Hardening](#hardening)
+11. [Run](#run)
+12. [Toolchain on this machine](#toolchain-on-this-machine)
+13. [Engineering rules](#engineering-rules)
+14. [Roadmap](#roadmap)
 
 ---
 
@@ -363,7 +364,7 @@ need connectivity — each degrades with a clear error.
 
 ## Testing
 
-67 Rust tests across the domain modules + integration tests:
+77 Rust tests across the domain modules + integration tests:
 
 - **Unit** — escaping, section extraction, tokenization, score components, date ordering, alias
   handling, validation gates.
@@ -376,6 +377,32 @@ need connectivity — each degrades with a clear error.
   of the live DB (numbering, PDF copy, listing).
 
 Frontend: strict TypeScript (`tsc -b`) + production Vite build as the pre-commit gate.
+
+## Hardening
+
+Phase 14 — the v1 ship pass. Four additions, no schema change:
+
+- **Backup & restore** (`db/backup.rs`). *Create backup* snapshots the whole database through
+  SQLite's online backup API (WAL-consistent) into `AppData/backups/kairo-backup-<UTC stamp>.db`,
+  verified with `PRAGMA quick_check` before it counts, pruned to the ten most recent. *Restore*
+  copies a snapshot back into the live connection — but only after validating the file is a
+  healthy SQLite database that actually carries the Kairo schema; garbage or foreign files are
+  refused with the live data untouched. Restores re-run migrations, so an older backup upgrades
+  transparently. The UI lives in Settings; restore asks for confirmation and reloads the app.
+- **Structured logs with redaction** (`logging.rs`). JSON lines in `AppData/logs/kairo.log`,
+  rotated to `kairo.log.1` at 1 MB. Any field whose key contains *key/token/secret/password/
+  authorization* is redacted before it reaches disk. Long-running commands log ids, model and
+  duration — never bullet text, JD content, or API keys.
+- **Windows installer.** `npm run tauri build` produces the NSIS setup exe
+  (`target/release/bundle/nsis/`).
+- **Upgrade tests.** A database migrated only through an earlier release's schema (e.g. 0009)
+  upgrades in place: remaining migrations apply in order and pre-upgrade data survives — the same
+  contract a restore of an old backup relies on.
+
+Security pass re-verified: all SQL parameterized (dynamic fragments are compile-time column
+constants only), full LaTeX escaping, artifacts under the app-owned data dir, restore names
+pattern-checked and resolved strictly under `backups/`, API key only in Windows Credential
+Manager, Tauri capabilities still `core:default` only, CSP set.
 
 ## Run
 
@@ -431,10 +458,8 @@ Notes:
 
 ## Roadmap
 
-Done: phases 0–13 (Foundation → Dashboard). Remaining for v1:
-
-- **Phase 14 · Hardening** — backup/restore, Windows installer (NSIS), structured logs with
-  redaction, security pass, upgrade tests.
+**v1 feature-complete: phases 0–14 done** (Foundation → Dashboard → Hardening). The installer
+is produced by `npm run tauri build`; backups and structured logs ship enabled.
 
 Deliberately out of scope for v1 (per spec): cloud sync, template marketplace, email tracking,
 vector databases, salary/hiring predictions.

@@ -12,6 +12,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 pub mod applications;
+pub mod backup;
 pub mod composer;
 pub mod dashboard;
 pub mod interview;
@@ -128,5 +129,78 @@ mod tests {
             .query_row("SELECT value FROM meta WHERE key = 't'", [], |row| row.get(0))
             .unwrap();
         assert_eq!(value, "abc");
+    }
+
+    /// Build a database carrying only the first `count` migrations (the
+    /// upgrade-test fixture: an app data file from an older release).
+    fn old_schema_db(count: usize) -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS _migrations (
+                 name       TEXT PRIMARY KEY,
+                 applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );",
+        )
+        .unwrap();
+        for (name, sql) in MIGRATIONS.iter().take(count) {
+            conn.execute_batch(sql).unwrap();
+            conn.execute("INSERT INTO _migrations (name) VALUES (?1)", [name])
+                .unwrap();
+        }
+        conn
+    }
+
+    #[test]
+    fn upgrade_from_previous_release_applies_new_migrations_and_keeps_data() {
+        // A database migrated only through 0009 (the phase-10 release).
+        let conn = old_schema_db(MIGRATIONS.len() - 1);
+        conn.execute(
+            "INSERT INTO projects (title, description) VALUES ('Kept', 'written pre-upgrade')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Acme', 'Dev', 'jd')",
+            [],
+        )
+        .unwrap();
+
+        apply_migrations(&conn).unwrap();
+        let names = applied_migrations(&conn).unwrap();
+        assert_eq!(names.len(), MIGRATIONS.len());
+        assert_eq!(names.last().unwrap(), "0010_applications");
+
+        // Pre-upgrade data survives byte-for-byte.
+        let title: String = conn
+            .query_row("SELECT title FROM projects WHERE title = 'Kept'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "Kept");
+        let jobs: i64 = conn.query_row("SELECT COUNT(*) FROM jobs", [], |r| r.get(0)).unwrap();
+        assert_eq!(jobs, 1);
+
+        // The new schema is usable immediately.
+        conn.execute(
+            "INSERT INTO applications (company, role, status) VALUES ('Acme', 'Dev', 'applied')",
+            [],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn upgrade_from_very_old_release_applies_everything_in_order() {
+        // A database migrated only through 0003 (phase-2 era).
+        let conn = old_schema_db(3);
+        conn.execute(
+            "INSERT INTO projects (title) VALUES ('Ancient')",
+            [],
+        )
+        .unwrap();
+        apply_migrations(&conn).unwrap();
+        let names = applied_migrations(&conn).unwrap();
+        assert_eq!(names.len(), MIGRATIONS.len());
+        let title: String = conn
+            .query_row("SELECT title FROM projects LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "Ancient");
     }
 }

@@ -6,6 +6,7 @@ mod imports;
 mod interview;
 mod jd;
 pub mod latex;
+mod logging;
 mod matching;
 mod tailor;
 
@@ -15,10 +16,22 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let db_path = app.path().app_data_dir()?.join("kairo.db");
-            let conn = db::open_and_migrate(&db_path)?;
+            let data_dir = app.path().app_data_dir()?;
+            let conn = db::open_and_migrate(&data_dir.join("kairo.db"))?;
+            if let Err(e) = logging::init(&data_dir.join("logs")) {
+                eprintln!("logging disabled: {e}");
+            }
+            let schema_version = db::applied_migrations(&conn).map(|m| m.len()).unwrap_or(0);
+            logging::log_event(
+                "info",
+                "app_start",
+                &[
+                    ("schema_migrations", schema_version.to_string()),
+                    ("db_path", data_dir.join("kairo.db").to_string_lossy().to_string()),
+                ],
+            );
             app.manage(db::DbState(Mutex::new(conn)));
-            app.manage(commands::pdf_commands::AppDataDir(app.path().app_data_dir()?));
+            app.manage(commands::pdf_commands::AppDataDir(data_dir));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -104,6 +117,9 @@ pub fn run() {
             commands::applications_commands::delete_application,
             commands::interview_commands::generate_interview_prep,
             commands::dashboard_commands::get_dashboard,
+            commands::backup_commands::list_backups,
+            commands::backup_commands::create_backup,
+            commands::backup_commands::restore_backup,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

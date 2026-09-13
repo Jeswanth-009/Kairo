@@ -19,6 +19,7 @@ pub fn export_pdf(
     job_id: i64,
     app_data_dir: State<'_, AppDataDir>,
 ) -> Result<ExportResult, String> {
+    let started = std::time::Instant::now();
     // 1. Lock: load the plan and locate the compiler.
     let (plan, tectonic) = {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
@@ -33,11 +34,36 @@ pub fn export_pdf(
     }; // DB lock dropped — the compile can take minutes on first run.
 
     // 2. Write .tex + run Tectonic (no lock held).
-    let out = pdf::compile_locked(plan, job_id, &tectonic, &app_data_dir.0)?;
+    let out = match pdf::compile_locked(plan, job_id, &tectonic, &app_data_dir.0) {
+        Ok(out) => out,
+        Err(e) => {
+            crate::logging::log_event(
+                "error",
+                "pdf_export_failed",
+                &[
+                    ("job_id", job_id.to_string()),
+                    ("duration_ms", started.elapsed().as_millis().to_string()),
+                    ("error", e.clone()),
+                ],
+            );
+            return Err(e);
+        }
+    };
 
     // 3. Re-lock: persist the artifact.
-    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    pdf::save_artifact(&conn, &out.artifact)?;
+    {
+        let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+        pdf::save_artifact(&conn, &out.artifact)?;
+    }
+    crate::logging::log_event(
+        "info",
+        "pdf_exported",
+        &[
+            ("job_id", job_id.to_string()),
+            ("pages", out.artifact.page_count.unwrap_or(0).to_string()),
+            ("duration_ms", started.elapsed().as_millis().to_string()),
+        ],
+    );
     Ok(ExportResult { artifact: out.artifact, log_tail: out.log_tail })
 }
 

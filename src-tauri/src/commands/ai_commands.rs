@@ -62,6 +62,7 @@ pub fn tailor_suggest(
 ) -> Result<tailor::TailorSuggestion, String> {
     // Gather grounding while holding the DB lock, then DROP the lock before the
     // network call — a 60s HTTP request must never freeze the rest of the app.
+    let started = std::time::Instant::now();
     let (grounding, config, key) = {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
         let grounding = tailor::assemble_grounding(&conn, job_id, bullet_id)?;
@@ -70,12 +71,36 @@ pub fn tailor_suggest(
         (grounding, config, key)
     };
 
-    let raw = crate::ai::chat(
+    let result = crate::ai::chat(
         &config,
         &key,
         crate::tailor::SYSTEM_PROMPT,
         &crate::tailor::build_user_prompt(&grounding.context),
-    )?;
+    );
+    // Structured log without content: ids, model, duration, outcome only.
+    match &result {
+        Ok(_) => crate::logging::log_event(
+            "info",
+            "tailor_suggest",
+            &[
+                ("job_id", job_id.to_string()),
+                ("bullet_id", bullet_id.to_string()),
+                ("model", config.model.clone()),
+                ("duration_ms", started.elapsed().as_millis().to_string()),
+            ],
+        ),
+        Err(e) => crate::logging::log_event(
+            "error",
+            "tailor_suggest_failed",
+            &[
+                ("job_id", job_id.to_string()),
+                ("bullet_id", bullet_id.to_string()),
+                ("duration_ms", started.elapsed().as_millis().to_string()),
+                ("error", e.clone()),
+            ],
+        ),
+    }
+    let raw = result?;
     let output = crate::tailor::check(&raw, &grounding.context)?;
     let validation = crate::tailor::validate(&grounding.context, &output);
 
