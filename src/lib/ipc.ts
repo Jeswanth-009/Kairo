@@ -29,6 +29,7 @@ import type {
   ResumeVersion,
   InterviewPrep,
   ValidationResult,
+  DashboardOverview,
 } from "./types";
 
 /**
@@ -180,6 +181,9 @@ export const ipc = {
   // Interview Prep (Phase 12)
   generateInterviewPrep: (jobId: number): Promise<InterviewPrep> =>
     invoke<InterviewPrep>("generate_interview_prep", { jobId }),
+
+  // Dashboard (Phase 13)
+  getDashboard: (): Promise<DashboardOverview> => invoke<DashboardOverview>("get_dashboard"),
 
   // PDF (Phase 9)
   exportPdf: (jobId: number): Promise<{ artifact: PdfArtifact; logTail: string }> =>

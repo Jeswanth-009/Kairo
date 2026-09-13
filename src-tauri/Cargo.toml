@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Kairo — local-first career intelligence workspace"
 authors = ["Kairo"]
 edition = "2021"
+default-run = "kairo"
 
 [lib]
 name = "kairo_lib"

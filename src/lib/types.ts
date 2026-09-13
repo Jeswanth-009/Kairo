@@ -583,3 +583,56 @@ export interface InterviewPrep {
   questions: InterviewQuestion[];
   inputs: PrepInputsSummary;
 }
+
+// --- Dashboard (Phase 13) ----------------------------------------------------
+
+export interface DashboardCounts {
+  projects: number;
+  experiences: number;
+  education: number;
+  certifications: number;
+  achievements: number;
+  skills: number;
+  evidenceTotal: number;
+  evidenceVerified: number;
+  evidenceUnverified: number;
+  canonicalBullets: number;
+  bulletsApproved: number;
+  claimRules: number;
+  jobs: number;
+  jobsWithMatch: number;
+  jobsWithPlan: number;
+  pdfsCompiled: number;
+  resumeVersions: number;
+  suggestionsPending: number;
+  applications: number;
+  applicationsActive: number;
+}
+
+export interface EvidenceReviewItem {
+  id: number;
+  entityType: TrustEntityType;
+  entityId: number;
+  entityLabel: string;
+  kind: EvidenceKind;
+  title: string;
+  reference: string;
+  createdAt: string;
+}
+
+export type ActivityRefType = "job" | "application" | "vault";
+
+export interface ActivityItem {
+  kind: string;
+  refType: ActivityRefType;
+  refId: number;
+  label: string;
+  detail: string;
+  at: string;
+}
+
+export interface DashboardOverview {
+  counts: DashboardCounts;
+  evidenceNeedingReview: EvidenceReviewItem[];
+  recentActivity: ActivityItem[];
+}
