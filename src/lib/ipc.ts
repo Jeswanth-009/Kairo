@@ -27,6 +27,7 @@ import type {
   TailorSuggestion,
   PdfArtifact,
   ResumeVersion,
+  InterviewPrep,
   ValidationResult,
 } from "./types";
 
@@ -175,6 +176,10 @@ export const ipc = {
   ): Promise<TailorSuggestion> =>
     invoke<TailorSuggestion>("tailor_set_status", { id, status, text }),
   tailorDelete: (id: number): Promise<void> => invoke("tailor_delete", { id }),
+
+  // Interview Prep (Phase 12)
+  generateInterviewPrep: (jobId: number): Promise<InterviewPrep> =>
+    invoke<InterviewPrep>("generate_interview_prep", { jobId }),
 
   // PDF (Phase 9)
   exportPdf: (jobId: number): Promise<{ artifact: PdfArtifact; logTail: string }> =>
