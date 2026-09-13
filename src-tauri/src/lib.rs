@@ -103,6 +103,7 @@ pub fn run() {
             commands::applications_commands::set_application_status,
             commands::applications_commands::delete_application,
             commands::interview_commands::generate_interview_prep,
+            commands::dashboard_commands::get_dashboard,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

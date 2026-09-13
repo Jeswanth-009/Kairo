@@ -60,7 +60,7 @@ export function Sidebar() {
           <IconSettings className="shrink-0" />
           <span>Settings</span>
         </NavLink>
-        <div className="px-3 pt-2 text-[11px] text-slate-600">v0.1.0 · Phase 0 · Foundation</div>
+        <div className="px-3 pt-2 text-[11px] text-slate-600">v0.1.0 · Local-first</div>
       </div>
     </aside>
   );

@@ -8,8 +8,8 @@ A local-first Windows career intelligence workspace. Store verified career evide
 opportunity, select the strongest relevant proof, improve the wording without changing the facts,
 review every change, and produce a reproducible application artifact.
 
-![status](https://img.shields.io/badge/status-phases%200--12%20complete-2563EB)
-![tests](https://img.shields.io/badge/tests-62%20passing-10B981)
+![status](https://img.shields.io/badge/status-phases%200--13%20complete-2563EB)
+![tests](https://img.shields.io/badge/tests-67%20passing-10B981)
 ![migrations](https://img.shields.io/badge/migrations-10%20applied-8B5CF6)
 ![platform](https://img.shields.io/badge/platform-Windows-64748B)
 
@@ -319,6 +319,13 @@ Pages (sidebar): Dashboard · Career Vault · Jobs · Resume Studio · Applicati
 Settings. Job workspaces live at `/jobs/:id` with the spec §8.2 tab set: Overview · Requirements ·
 Match · Plan · Tailor · Resume.
 
+- **Dashboard** — the Phase 13 front page, backed by one read-only `get_dashboard` command:
+  live count tiles (records, evidence verified vs awaiting review, job workspaces with/without a
+  plan, applications in flight, compiled PDFs, versions, pending suggestions), the unverified
+  evidence list with parent-record labels, and a recent-activity feed merged across
+  jobs, applications, versions, evidence, bullets and Vault records. No derived scores — every
+  number is a query result; a first-run workspace gets a three-step getting-started card instead.
+
 - **Career Vault** — profile card, section tabs with counts, config-driven record dialogs, record
   inspector (Overview / Evidence / Bullets / Claim rules), skills vocabulary with aliases.
 - **Job Workspace** — Overview (verbatim raw JD on demand), Requirements (full editing),
@@ -356,7 +363,7 @@ need connectivity — each degrades with a clear error.
 
 ## Testing
 
-62 Rust tests across the domain modules + integration tests:
+67 Rust tests across the domain modules + integration tests:
 
 - **Unit** — escaping, section extraction, tokenization, score components, date ordering, alias
   handling, validation gates.
@@ -424,9 +431,8 @@ Notes:
 
 ## Roadmap
 
-Done: phases 0–12 (Foundation → Interview Prep). Remaining for v1:
+Done: phases 0–13 (Foundation → Dashboard). Remaining for v1:
 
-- **Phase 13 · Dashboard** — real counts, recent activity, evidence needing review. No fake scores.
 - **Phase 14 · Hardening** — backup/restore, Windows installer (NSIS), structured logs with
   redaction, security pass, upgrade tests.
 

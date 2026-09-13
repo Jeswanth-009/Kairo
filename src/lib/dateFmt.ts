@@ -21,3 +21,24 @@ export function fmtRange({ startDate, endDate, isCurrent }: DateRangeInput): str
   if (start && end) return `${start} – ${end}`;
   return start || end || "";
 }
+
+/**
+ * SQLite UTC "YYYY-MM-DD HH:MM:SS" → relative age ("just now", "3 h ago"),
+ * falling back to a calendar date beyond a month.
+ */
+export function fmtAgo(sqliteUtc: string | null | undefined): string {
+  if (!sqliteUtc) return "";
+  const iso = sqliteUtc.includes("T") ? sqliteUtc : `${sqliteUtc.replace(" ", "T")}Z`;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return sqliteUtc;
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 31) return `${days} d ago`;
+  const date = new Date(then);
+  return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}
