@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Achievement,
+  AiConfigView,
   CanonicalBullet,
   Certification,
   CertificateCandidate,
@@ -22,6 +23,7 @@ import type {
   ResumePlan,
   Skill,
   SmokeTestResult,
+  TailorSuggestion,
 } from "./types";
 
 /**
@@ -147,4 +149,21 @@ export const ipc = {
   ): Promise<ResumePlan> => invoke<ResumePlan>("run_composer", { jobId, config }),
   getPlan: (jobId: number): Promise<{ config: ComposerConfig; plan: ResumePlan } | null> =>
     invoke<{ config: ComposerConfig; plan: ResumePlan } | null>("get_plan", { jobId }),
+
+  // Grounded AI tailoring (Phase 7)
+  aiGetConfig: (): Promise<AiConfigView> => invoke<AiConfigView>("ai_get_config"),
+  aiSaveConfig: (baseUrl: string, model: string, apiKey?: string): Promise<AiConfigView> =>
+    invoke<AiConfigView>("ai_save_config", { baseUrl, model, apiKey }),
+  aiTestConnection: (): Promise<string> => invoke("ai_test_connection"),
+  tailorSuggest: (jobId: number, bulletId: number): Promise<TailorSuggestion> =>
+    invoke<TailorSuggestion>("tailor_suggest", { jobId, bulletId }),
+  tailorList: (jobId: number): Promise<TailorSuggestion[]> =>
+    invoke<TailorSuggestion[]>("tailor_list", { jobId }),
+  tailorSetStatus: (
+    id: number,
+    status: "accepted" | "rejected",
+    text?: string,
+  ): Promise<TailorSuggestion> =>
+    invoke<TailorSuggestion>("tailor_set_status", { id, status, text }),
+  tailorDelete: (id: number): Promise<void> => invoke("tailor_delete", { id }),
 };

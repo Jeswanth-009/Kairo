@@ -9,6 +9,7 @@ import { useJobsStore } from "../../stores/jobsStore";
 import { toast } from "../../stores/toastStore";
 import { MatchTab } from "./MatchTab";
 import { PlanTab } from "./PlanTab";
+import { TailorTab } from "./TailorTab";
 
 const KIND_LABELS: Record<JobRequirementKind, string> = {
   required_skill: "Required skills",
@@ -25,7 +26,7 @@ const TAB_META: { key: WorkspaceTab; label: string; phase: string | null }[] = [
   { key: "requirements", label: "Requirements", phase: null },
   { key: "match", label: "Match", phase: null },
   { key: "plan", label: "Plan", phase: null },
-  { key: "tailor", label: "Tailor", phase: "Phase 7" },
+  { key: "tailor", label: "Tailor", phase: null },
   { key: "resume", label: "Resume", phase: "Phase 8" },
 ];
 
@@ -138,11 +139,11 @@ export default function JobWorkspacePage() {
       {tab === "requirements" ? <RequirementsTab job={job} /> : null}
       {tab === "match" ? <MatchTab jobId={job.id} domain={job.domain} /> : null}
       {tab === "plan" ? <PlanTab jobId={job.id} /> : null}
-      {tab === "tailor" || tab === "resume" ? (
+      {tab === "tailor" ? <TailorTab jobId={job.id} onComposePlan={() => setTab("plan")} /> : null}
+      {tab === "resume" ? (
         <Card className="p-8 text-center">
           <p className="text-sm text-muted">
-            This tab activates in {TAB_META.find((t) => t.key === tab)?.phase} — it needs the
-            reviewed requirement model you build here.
+            The Resume Studio (Phase 8) renders this plan into the final document.
           </p>
         </Card>
       ) : null}

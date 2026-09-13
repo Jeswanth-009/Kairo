@@ -4,7 +4,7 @@ import { Card, CardTitle } from "../../components/ui/Card";
 import { Field, Input } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
 import { fmtRange } from "../../lib/dateFmt";
-import type { ComposerConfig, PlanItem, ResumePlan } from "../../lib/types";
+import type { ComposerConfig, PlanItem, ResumePlan, TailorSuggestion } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
 const DEFAULT_CONFIG: ComposerConfig = {
@@ -15,7 +15,9 @@ const DEFAULT_CONFIG: ComposerConfig = {
   minFontSizePt: 9.5,
 };
 
-function PlanItemCard({ item }: { item: PlanItem }) {
+function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: TailorSuggestion[] }) {
+  const acceptedFor = (bulletId: number) =>
+    suggestions.find((s) => s.bulletId === bulletId && s.status === "accepted");
   return (
     <li className="rounded-lg border border-slate-200 p-3.5">
       <div className="flex items-start justify-between gap-3">
@@ -40,23 +42,38 @@ function PlanItemCard({ item }: { item: PlanItem }) {
 
       {item.bullets.length > 0 ? (
         <ul className="mt-2 space-y-1">
-          {item.bullets.map((bullet) => (
-            <li key={bullet.id} className="flex items-start gap-2 text-xs text-ink">
-              <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-kairo-blue" />
-              <span>
-                {bullet.text}
-                {bullet.supports.length > 0 ? (
-                  <span
-                    className="ml-1.5 text-[10px] text-emerald-600"
-                    title={`Backs: ${bullet.supports.join(" · ")}`}
-                  >
-                    ✓ supports {bullet.supports.length} requirement
-                    {bullet.supports.length === 1 ? "" : "s"}
-                  </span>
-                ) : null}
-              </span>
-            </li>
-          ))}
+          {item.bullets.map((bullet) => {
+            const accepted = acceptedFor(bullet.id);
+            return (
+              <li key={bullet.id} className="flex items-start gap-2 text-xs text-ink">
+                <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-kairo-blue" />
+                <span>
+                  {accepted ? (
+                    <>
+                      <span
+                        className="mr-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700"
+                        title="Accepted AI wording — canonical bullet unchanged"
+                      >
+                        tailored
+                      </span>
+                      {accepted.suggestedText}
+                    </>
+                  ) : (
+                    bullet.text
+                  )}
+                  {bullet.supports.length > 0 ? (
+                    <span
+                      className="ml-1.5 text-[10px] text-emerald-600"
+                      title={`Backs: ${bullet.supports.join(" · ")}`}
+                    >
+                      ✓ supports {bullet.supports.length} requirement
+                      {bullet.supports.length === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="mt-2 text-[11px] text-amber-600">
@@ -80,6 +97,7 @@ function PlanItemCard({ item }: { item: PlanItem }) {
 export function PlanTab({ jobId }: { jobId: number }) {
   const [plan, setPlan] = useState<ResumePlan | null>(null);
   const [config, setConfig] = useState<ComposerConfig>(DEFAULT_CONFIG);
+  const [suggestions, setSuggestions] = useState<TailorSuggestion[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -91,6 +109,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
           setPlan(stored.plan);
           setConfig(stored.config);
         }
+        setSuggestions(await ipc.tailorList(jobId));
       } catch (e) {
         toast.error(String(e));
       } finally {
@@ -245,7 +264,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
                 <CardTitle>{label}</CardTitle>
                 <ul className="mt-3 space-y-3">
                   {items.map((item) => (
-                    <PlanItemCard key={`${item.entityType}-${item.id}`} item={item} />
+                    <PlanItemCard key={`${item.entityType}-${item.id}`} item={item} suggestions={suggestions} />
                   ))}
                 </ul>
               </Card>

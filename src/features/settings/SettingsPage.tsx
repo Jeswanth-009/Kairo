@@ -1,7 +1,11 @@
+import { useEffect, useState } from "react";
 import { BrandMark } from "../../components/BrandMark";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
+import { Field, Input } from "../../components/ui/inputs";
+import { ipc } from "../../lib/ipc";
 import { useAppStore } from "../../stores/appStore";
+import { toast } from "../../stores/toastStore";
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -60,6 +64,8 @@ export default function SettingsPage() {
         </div>
       </Card>
 
+      <AiProviderCard />
+
       <Card className="p-6">
         <CardTitle>Data &amp; backups</CardTitle>
         <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -68,5 +74,106 @@ export default function SettingsPage() {
         </p>
       </Card>
     </div>
+  );
+}
+
+
+function AiProviderCard() {
+  const [baseUrl, setBaseUrl] = useState("");
+  const [model, setModel] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [hasKey, setHasKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const config = await ipc.aiGetConfig();
+        setBaseUrl(config.baseUrl);
+        setModel(config.model);
+        setHasKey(config.hasApiKey);
+      } catch (e) {
+        toast.error(String(e));
+      }
+    })();
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const saved = await ipc.aiSaveConfig(baseUrl, model, apiKey.trim() ? apiKey : undefined);
+      setHasKey(saved.hasApiKey);
+      setApiKey("");
+      toast.ok("AI provider settings saved");
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const test = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const answer = await ipc.aiTestConnection();
+      setTestResult({ ok: true, message: `Provider replied: ${answer}` });
+    } catch (e) {
+      setTestResult({ ok: false, message: String(e) });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <CardTitle>AI provider &middot; grounded tailoring</CardTitle>
+      <p className="mt-1 text-xs leading-relaxed text-muted">
+        Any OpenAI-compatible endpoint (OpenAI, Groq, OpenRouter, a local Ollama server). The API
+        key is stored in the Windows Credential Manager &mdash; never in the database or plan
+        files. Tailoring is optional; everything else in Kairo works without it.
+      </p>
+      <div className="mt-4 space-y-4">
+        <Field label="Base URL">
+          <Input
+            value={baseUrl}
+            placeholder="https://api.openai.com/v1"
+            onChange={(e) => setBaseUrl(e.target.value)}
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Model">
+            <Input value={model} placeholder="gpt-4o-mini" onChange={(e) => setModel(e.target.value)} />
+          </Field>
+          <Field
+            label="API key"
+            hint={hasKey ? "a key is stored &mdash; leave blank to keep it" : "not set"}
+          >
+            <Input
+              type="password"
+              value={apiKey}
+              placeholder={hasKey ? "••••••••" : "sk-…"}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+          </Field>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button size="sm" onClick={() => void save()} disabled={saving || !baseUrl.trim() || !model.trim()}>
+            {saving ? "Saving…" : "Save settings"}
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => void test()} disabled={testing}>
+            {testing ? "Testing…" : "Test connection"}
+          </Button>
+          {testResult ? (
+            <span className={testResult.ok ? "text-xs text-emerald-600" : "text-xs text-red-600"}>
+              {testResult.ok ? "✓ " : "✕ "}
+              {testResult.message}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </Card>
   );
 }
