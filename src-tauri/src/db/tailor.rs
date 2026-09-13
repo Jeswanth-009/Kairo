@@ -47,7 +47,7 @@ pub fn save_ai_config(conn: &Connection, config: &AiConfig, api_key: Option<&str
 // Suggestions
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TailorSuggestion {
     pub id: i64,

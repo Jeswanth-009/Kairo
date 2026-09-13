@@ -5,7 +5,7 @@ import { Card, CardTitle } from "../../components/ui/Card";
 import { Select, Textarea } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
 import { fmtRange } from "../../lib/dateFmt";
-import type { Job, PdfArtifact, PlanItem, ResumePlan, TailorSuggestion, ValidationResult } from "../../lib/types";
+import type { Job, PdfArtifact, PlanItem, ResumePlan, ResumeVersion, TailorSuggestion, ValidationResult } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
 const CAPACITY = 56; // one letter page at 9.5-10pt (mirrors composer.rs)
@@ -369,6 +369,8 @@ export default function ResumeStudioPage() {
   const [estimatedLines, setEstimatedLines] = useState<number | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [versions, setVersions] = useState<ResumeVersion[]>([]);
+  const [savingVersion, setSavingVersion] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -397,6 +399,7 @@ export default function ResumeStudioPage() {
           setEstimatedLines(null);
         }
         setArtifact(await ipc.getPdfArtifact(jobId));
+        setVersions(await ipc.listResumeVersions(jobId));
       } catch (e) {
         toast.error(String(e));
       }
@@ -473,6 +476,20 @@ export default function ResumeStudioPage() {
         plan.excludedSkills.push(name);
       }
     });
+  };
+
+  const saveVersion = async () => {
+    if (jobId === null) return;
+    setSavingVersion(true);
+    try {
+      const version = await ipc.saveResumeVersion(jobId);
+      setVersions((prev) => [version, ...prev]);
+      toast.ok(`Version ${version.versionNumber} saved — reproducible forever`);
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setSavingVersion(false);
+    }
   };
 
   const exportPdf = async () => {
@@ -922,6 +939,41 @@ export default function ResumeStudioPage() {
                 <p className="mt-0.5 break-all text-slate-400">{artifact.pdfPath}</p>
               </div>
             ) : null}
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => void saveVersion()}
+                disabled={savingVersion || !artifact}
+                title={!artifact ? "Export the PDF first" : "Freeze plan + JD + match + tailoring + PDF"}
+              >
+                {savingVersion ? "Saving…" : "Save version"}
+              </Button>
+              {versions.length > 0 ? (
+                <ul className="mt-2.5 space-y-1">
+                  {versions.map((v) => (
+                    <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-ink">
+                        v{v.versionNumber}
+                        <span className="ml-1.5 text-slate-400">
+                          {v.createdAt.replace("T", " ").slice(0, 16)}
+                        </span>
+                      </span>
+                      <a
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          toast.error("PDF viewer opens in Phase 14 — file at " + v.pdfPath);
+                        }}
+                        className="text-kairo-blue hover:underline"
+                      >
+                        open
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           </Card>
           <div className="mx-auto w-full max-w-[420px]">
             <PreviewPane plan={plan} excludedCount={excludedCount} suggestions={suggestions} />

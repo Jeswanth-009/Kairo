@@ -93,6 +93,9 @@ pub fn run() {
             commands::ai_commands::tailor_save_manual_edit,
             commands::pdf_commands::export_pdf,
             commands::pdf_commands::get_pdf_artifact,
+            commands::version_commands::save_resume_version,
+            commands::version_commands::list_resume_versions,
+            commands::version_commands::get_resume_version,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

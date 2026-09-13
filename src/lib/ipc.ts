@@ -25,6 +25,7 @@ import type {
   SmokeTestResult,
   TailorSuggestion,
   PdfArtifact,
+  ResumeVersion,
   ValidationResult,
 } from "./types";
 
@@ -179,6 +180,14 @@ export const ipc = {
     invoke<{ artifact: PdfArtifact; logTail: string }>("export_pdf", { jobId }),
   getPdfArtifact: (jobId: number): Promise<PdfArtifact | null> =>
     invoke<PdfArtifact | null>("get_pdf_artifact", { jobId }),
+
+  // Versions (Phase 10)
+  saveResumeVersion: (jobId: number): Promise<ResumeVersion> =>
+    invoke<ResumeVersion>("save_resume_version", { jobId }),
+  listResumeVersions: (jobId: number): Promise<ResumeVersion[]> =>
+    invoke<ResumeVersion[]>("list_resume_versions", { jobId }),
+  getResumeVersion: (id: number): Promise<ResumeVersion> =>
+    invoke<ResumeVersion>("get_resume_version", { id }),
   claimChanges: (
     jobId: number,
     bulletId: number,

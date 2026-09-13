@@ -450,6 +450,27 @@ export interface PdfArtifact {
   compiledAt: string | null;
 }
 
+// --- Versions (Phase 10) -------------------------------------------------------
+
+export interface ResumeVersion {
+  id: number;
+  jobId: number;
+  versionNumber: number;
+  createdAt: string;
+  pdfPath: string;
+  snapshot: {
+    versionNumber: number;
+    job: Job;
+    requirements: JobRequirement[];
+    plan: ResumePlan;
+    acceptedTailorings: TailorSuggestion[];
+    matchingVersion: number;
+    composerVersion: number;
+    templateVersion: number;
+    pdfPath: string;
+  };
+}
+
 // --- Grounded AI tailoring (Phase 7) ----------------------------------------
 
 export interface ValidationResult {
