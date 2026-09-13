@@ -437,6 +437,30 @@ export interface ResumePlan {
   warnings: string[];
 }
 
+// --- Grounded AI tailoring (Phase 7) ----------------------------------------
+
+export interface ValidationResult {
+  ok: boolean;
+  violations: string[];
+}
+
+export interface TailorSuggestion {
+  id: number;
+  jobId: number;
+  bulletId: number;
+  originalText: string;
+  suggestedText: string;
+  status: "pending" | "accepted" | "rejected";
+  validation: ValidationResult;
+  model: string;
+}
+
+export interface AiConfigView {
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+}
+
 export const CONFIDENCE_LEVELS = [
   "Mentioned only",
   "Studied",

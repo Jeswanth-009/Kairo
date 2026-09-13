@@ -1,9 +1,11 @@
+mod ai;
 mod commands;
 mod composer;
 mod db;
 mod imports;
 mod jd;
 mod matching;
+mod tailor;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -76,6 +78,13 @@ pub fn run() {
             commands::match_commands::get_match,
             commands::composer_commands::run_composer,
             commands::composer_commands::get_plan,
+            commands::ai_commands::ai_get_config,
+            commands::ai_commands::ai_save_config,
+            commands::ai_commands::ai_test_connection,
+            commands::ai_commands::tailor_suggest,
+            commands::ai_commands::tailor_list,
+            commands::ai_commands::tailor_set_status,
+            commands::ai_commands::tailor_delete,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

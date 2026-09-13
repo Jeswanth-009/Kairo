@@ -193,7 +193,7 @@ fn item_lines(item: &PlanItem) -> u32 {
 }
 
 /// How many requirement texts does this bullet support (token overlap ≥ 0.5)?
-fn bullet_supports(text: &str, requirement_texts: &[String]) -> Vec<String> {
+pub fn bullet_supports(text: &str, requirement_texts: &[String]) -> Vec<String> {
     let tokenize = |t: &str| -> std::collections::HashSet<String> {
         t.to_lowercase()
             .split(|c: char| !c.is_ascii_alphanumeric())
