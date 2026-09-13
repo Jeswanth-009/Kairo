@@ -3,6 +3,7 @@ import { Button } from "../../components/ui/Button";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Input } from "../../components/ui/inputs";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { IconSpark, IconVault } from "../../components/icons";
 import { useVaultStore } from "../../stores/vaultStore";
 import { toast } from "../../stores/toastStore";
@@ -88,6 +89,10 @@ export default function VaultPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-8">
+      <PageHeader
+        title="Career Vault"
+        description="Your verified history — every record here is the source material the rest of Kairo builds on."
+      />
       <ProfileCard />
 
       {loading && !loaded ? <p className="py-16 text-center text-sm text-muted">Loading vault…</p> : null}
@@ -114,7 +119,7 @@ export default function VaultPage() {
 
       {loaded || loading ? (
         <>
-          <div className="mb-6 flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-white p-1.5">
+          <div className="mb-6 flex flex-wrap gap-1.5 rounded-xl border border-slate-200/80 bg-white p-1.5 shadow-card">
             {TABS.map((t) => (
               <button
                 key={t.key}
@@ -124,8 +129,10 @@ export default function VaultPage() {
                   setQuery("");
                 }}
                 className={[
-                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200",
-                  tab === t.key ? "bg-kairo-midnight text-white" : "text-muted hover:bg-slate-100",
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200",
+                  tab === t.key
+                    ? "bg-kairo-midnight text-white shadow-sm"
+                    : "text-muted hover:bg-slate-100 hover:text-ink",
                 ].join(" ")}
               >
                 {t.label}

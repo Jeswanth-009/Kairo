@@ -255,7 +255,7 @@ function AiProviderCard() {
           </Field>
           <Field
             label="API key"
-            hint={hasKey ? "a key is stored &mdash; leave blank to keep it" : "not set"}
+            hint={hasKey ? "a key is stored — leave blank to keep it" : "not set"}
           >
             <Input
               type="password"

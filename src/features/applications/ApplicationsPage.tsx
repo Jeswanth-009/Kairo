@@ -4,6 +4,7 @@ import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Dialog } from "../../components/ui/Dialog";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Field, Input, Select } from "../../components/ui/inputs";
 import { IconApplications } from "../../components/icons";
 import { ipc } from "../../lib/ipc";
@@ -195,13 +196,11 @@ export default function ApplicationsPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-8">
-      <div className="mb-6">
-        <h2 className="text-sm font-semibold text-ink">Applications</h2>
-        <p className="text-xs text-muted">
-          Manual by design — you record every application and update every status. Each entry links
-          the exact resume version submitted.
-        </p>
-      </div>
+      <PageHeader
+        title="Applications"
+        description="Manual by design — you record every application and update every status. Each entry links the exact resume version submitted."
+        actions={<Button onClick={() => setCreating(true)}>New application</Button>}
+      />
 
       {/* Status pipeline summary */}
       <div className="mb-6 flex flex-wrap gap-2">
@@ -236,10 +235,8 @@ export default function ApplicationsPage() {
         <EmptyState
           icon={<IconApplications width={24} height={24} />}
           title="Track applications manually"
-          description="Record each application, link the exact resume version submitted, and move it through the pipeline by hand. No email scraping, no auto-detection."
-        >
-          <Button onClick={() => setCreating(true)}>New application</Button>
-        </EmptyState>
+          description="Use “New application” above to record your first one — link the exact resume version submitted, then move it through the pipeline by hand. No email scraping, no auto-detection."
+        />
       ) : filtered.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted">
           {apps.length === 0 ? "" : "No applications with this status."}

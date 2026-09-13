@@ -5,11 +5,17 @@ import type {
   TextareaHTMLAttributes,
 } from "react";
 
-const BASE =
-  "w-full rounded-lg border bg-white px-3 py-2 text-sm text-ink placeholder:text-slate-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-kairo-blue/20";
+const BASE = [
+  "w-full rounded-lg border bg-white px-3 py-2 text-sm text-ink shadow-sm",
+  "placeholder:text-slate-400",
+  "transition-colors duration-200",
+  "focus:outline-none focus:ring-4 focus:ring-kairo-blue/10",
+].join(" ");
 
 function borderFor(error?: boolean) {
-  return error ? "border-red-400 focus:border-red-400" : "border-slate-200 focus:border-kairo-blue";
+  return error
+    ? "border-red-300 hover:border-red-400 focus:border-red-400"
+    : "border-slate-200 hover:border-slate-300 focus:border-kairo-blue";
 }
 
 interface FieldProps {
@@ -59,7 +65,10 @@ export function Select({
   ...rest
 }: SelectHTMLAttributes<HTMLSelectElement> & { error?: boolean }) {
   return (
-    <select className={`${BASE} ${borderFor(error)} ${className}`} {...rest}>
+    <select
+      className={`${BASE} ${borderFor(error)} cursor-pointer appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")] bg-[length:12px] bg-[position:right_0.65rem_center] bg-no-repeat pr-8 ${className}`}
+      {...rest}
+    >
       {children}
     </select>
   );

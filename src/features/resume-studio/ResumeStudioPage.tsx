@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { Select, Textarea } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
 import { fmtRange } from "../../lib/dateFmt";
@@ -623,33 +624,31 @@ export default function ResumeStudioPage() {
 
   return (
     <div className="flex h-full flex-col p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">Resume Studio</h2>
-          <p className="text-xs text-muted">
-            Content · Editor · Preview — changes to the plan save automatically.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {jobs.length > 0 ? (
-            <Select
-              value={jobId ?? undefined}
-              onChange={(e) => setJobId(Number(e.target.value))}
-              className="w-64"
-            >
-              {jobs.map((job) => (
-                <option key={job.id} value={job.id}>
-                  {job.roleTitle || "Untitled role"}
-                  {job.company ? ` · ${job.company}` : ""}
-                </option>
-              ))}
-            </Select>
-          ) : null}
-          <Button variant="secondary" size="sm" onClick={() => navigate("/jobs")}>
-            Jobs
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Resume Studio"
+        description="Content · Editor · Preview — changes to the plan save automatically."
+        actions={
+          <>
+            {jobs.length > 0 ? (
+              <Select
+                value={jobId ?? undefined}
+                onChange={(e) => setJobId(Number(e.target.value))}
+                className="w-64"
+              >
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.roleTitle || "Untitled role"}
+                    {job.company ? ` · ${job.company}` : ""}
+                  </option>
+                ))}
+              </Select>
+            ) : null}
+            <Button variant="secondary" size="sm" onClick={() => navigate("/jobs")}>
+              Jobs
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-12 gap-4">
         {/* Column 1 · Content */}

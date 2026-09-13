@@ -4,6 +4,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { PageHeader } from "../../components/ui/PageHeader";
 import { IconJobs } from "../../components/icons";
 import type { Job } from "../../lib/types";
 import { useJobsStore } from "../../stores/jobsStore";
@@ -81,16 +82,11 @@ export default function JobsPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">Job workspaces</h2>
-          <p className="text-xs text-muted">
-            The exact job description is stored verbatim; requirements are only saved after your
-            review.
-          </p>
-        </div>
-        <Button onClick={() => setCreating(true)}>New workspace</Button>
-      </div>
+      <PageHeader
+        title="Job workspaces"
+        description="The exact job description is stored verbatim; requirements are only saved after your review."
+        actions={<Button onClick={() => setCreating(true)}>New workspace</Button>}
+      />
 
       {loading && !loaded ? (
         <p className="py-16 text-center text-sm text-muted">Loading jobs…</p>
