@@ -1,9 +1,10 @@
 mod ai;
 mod commands;
-mod composer;
-mod db;
+pub mod composer;
+pub mod db;
 mod imports;
 mod jd;
+pub mod latex;
 mod matching;
 mod tailor;
 
@@ -16,6 +17,7 @@ pub fn run() {
             let db_path = app.path().app_data_dir()?.join("kairo.db");
             let conn = db::open_and_migrate(&db_path)?;
             app.manage(db::DbState(Mutex::new(conn)));
+            app.manage(commands::pdf_commands::AppDataDir(app.path().app_data_dir()?));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -89,6 +91,8 @@ pub fn run() {
             commands::ai_commands::tailor_delete,
             commands::ai_commands::claim_changes,
             commands::ai_commands::tailor_save_manual_edit,
+            commands::pdf_commands::export_pdf,
+            commands::pdf_commands::get_pdf_artifact,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

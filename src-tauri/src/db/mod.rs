@@ -14,6 +14,7 @@ use std::sync::Mutex;
 pub mod composer;
 pub mod jobs;
 pub mod matching;
+pub mod pdf;
 pub mod tailor;
 pub mod trust;
 pub mod vault;
@@ -28,6 +29,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ("0005_match", include_str!("../../migrations/0005_match.sql")),
     ("0006_composer", include_str!("../../migrations/0006_composer.sql")),
     ("0007_tailor", include_str!("../../migrations/0007_tailor.sql")),
+    ("0008_pdf", include_str!("../../migrations/0008_pdf.sql")),
 ];
 
 pub fn open_and_migrate(path: &Path) -> Result<Connection, Box<dyn Error>> {
@@ -89,7 +91,8 @@ mod tests {
                 "0004_jobs".to_string(),
                 "0005_match".to_string(),
                 "0006_composer".to_string(),
-                "0007_tailor".to_string()
+                "0007_tailor".to_string(),
+                "0008_pdf".to_string()
             ]
         );
     }
@@ -100,7 +103,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
-        assert_eq!(names.len(), 7);
+        assert_eq!(names.len(), 8);
     }
 
     #[test]

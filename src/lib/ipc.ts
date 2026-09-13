@@ -24,6 +24,7 @@ import type {
   Skill,
   SmokeTestResult,
   TailorSuggestion,
+  PdfArtifact,
   ValidationResult,
 } from "./types";
 
@@ -172,6 +173,12 @@ export const ipc = {
   ): Promise<TailorSuggestion> =>
     invoke<TailorSuggestion>("tailor_set_status", { id, status, text }),
   tailorDelete: (id: number): Promise<void> => invoke("tailor_delete", { id }),
+
+  // PDF (Phase 9)
+  exportPdf: (jobId: number): Promise<{ artifact: PdfArtifact; logTail: string }> =>
+    invoke<{ artifact: PdfArtifact; logTail: string }>("export_pdf", { jobId }),
+  getPdfArtifact: (jobId: number): Promise<PdfArtifact | null> =>
+    invoke<PdfArtifact | null>("get_pdf_artifact", { jobId }),
   claimChanges: (
     jobId: number,
     bulletId: number,
