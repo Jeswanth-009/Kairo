@@ -24,6 +24,7 @@ import type {
   Skill,
   SmokeTestResult,
   TailorSuggestion,
+  ValidationResult,
 } from "./types";
 
 /**
@@ -171,4 +172,16 @@ export const ipc = {
   ): Promise<TailorSuggestion> =>
     invoke<TailorSuggestion>("tailor_set_status", { id, status, text }),
   tailorDelete: (id: number): Promise<void> => invoke("tailor_delete", { id }),
+  claimChanges: (
+    jobId: number,
+    bulletId: number,
+    newText: string,
+  ): Promise<ValidationResult> =>
+    invoke<ValidationResult>("claim_changes", { jobId, bulletId, newText }),
+  tailorSaveManualEdit: (
+    jobId: number,
+    bulletId: number,
+    text: string,
+  ): Promise<TailorSuggestion> =>
+    invoke<TailorSuggestion>("tailor_save_manual_edit", { jobId, bulletId, text }),
 };

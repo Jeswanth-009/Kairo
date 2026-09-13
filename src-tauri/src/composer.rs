@@ -164,6 +164,9 @@ pub struct ResumePlan {
     pub experience: Vec<PlanItem>,
     pub projects: Vec<PlanItem>,
     pub skills: Vec<String>,
+    /// Studio-only: skills hidden from the resume but kept in the plan.
+    #[serde(default)]
+    pub excluded_skills: Vec<String>,
     pub estimated_lines: u32,
     pub fits_one_page: bool,
     pub warnings: Vec<String>,
@@ -207,12 +210,14 @@ pub fn estimate_plan_lines(plan: &ResumePlan) -> u32 {
             lines += item_lines(item);
         }
     }
-    let skills: Vec<&String> = plan.skills.iter().collect();
-    if !skills.is_empty() {
-        lines += 1;
-        let chars: usize = skills.len();
-        let _ = chars;
-        let total: usize = plan.skills.iter().map(|s| s.len() + 2).sum();
+    let included: Vec<&String> = plan
+        .skills
+        .iter()
+        .filter(|s| !plan.excluded_skills.contains(s))
+        .collect();
+    if !included.is_empty() {
+        lines += 1; // section heading
+        let total: usize = included.iter().map(|s| s.len() + 2).sum();
         lines += (total as f64 / CHARS_PER_LINE).ceil() as u32;
     }
     lines
@@ -508,6 +513,7 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         experience,
         projects,
         skills,
+        excluded_skills: Vec::new(),
         estimated_lines,
         fits_one_page,
         warnings,

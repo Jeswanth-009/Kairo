@@ -112,6 +112,28 @@ pub fn tailor_set_status(
 }
 
 #[tauri::command]
+pub fn claim_changes(
+    state: State<'_, DbState>,
+    job_id: i64,
+    bullet_id: i64,
+    new_text: String,
+) -> Result<crate::tailor::ValidationResult, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    tailor::claim_change_report(&conn, job_id, bullet_id, &new_text)
+}
+
+#[tauri::command]
+pub fn tailor_save_manual_edit(
+    state: State<'_, DbState>,
+    job_id: i64,
+    bullet_id: i64,
+    text: String,
+) -> Result<tailor::TailorSuggestion, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    tailor::save_manual_edit(&conn, job_id, bullet_id, &text)
+}
+
+#[tauri::command]
 pub fn tailor_delete(state: State<'_, DbState>, id: i64) -> Result<MutationOk, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     tailor::delete_suggestion(&conn, id)?;
