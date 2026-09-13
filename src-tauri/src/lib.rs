@@ -78,6 +78,8 @@ pub fn run() {
             commands::match_commands::get_match,
             commands::composer_commands::run_composer,
             commands::composer_commands::get_plan,
+            commands::composer_commands::save_plan,
+            commands::composer_commands::estimate_plan_lines,
             commands::ai_commands::ai_get_config,
             commands::ai_commands::ai_save_config,
             commands::ai_commands::ai_test_connection,
