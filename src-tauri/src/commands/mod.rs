@@ -6,4 +6,5 @@ pub mod job_commands;
 pub mod match_commands;
 pub mod pdf_commands;
 pub mod trust_commands;
+pub mod version_commands;
 pub mod vault_commands;
