@@ -74,12 +74,58 @@ export default function VaultPage() {
   }, [records, tab, query]);
 
   const deleteRecord = useVaultStore((s) => s.deleteRecord);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [tab]);
+
+  const toggleSelect = (id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(filtered.map((item) => item.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
 
   const confirmDelete = async () => {
     if (!deleting) return;
     try {
       await deleteRecord(tab === "skills" ? "skills" : tab, deleting.id);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleting.id);
+        return next;
+      });
       toast.ok("Deleted");
+    } catch (e) {
+      toast.error(String(e));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0 || tab === "skills") return;
+    try {
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        await deleteRecord(tab, id);
+      }
+      toast.ok(`Deleted ${ids.length} ${ids.length === 1 ? config?.singular.toLowerCase() : config?.label.toLowerCase()}`);
+      setSelectedIds(new Set());
+      setConfirmBatchDelete(false);
     } catch (e) {
       toast.error(String(e));
     }
@@ -172,6 +218,46 @@ export default function VaultPage() {
                 </Button>
               </div>
 
+              {filtered.length > 0 ? (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-2">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-xs font-medium text-ink cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={filtered.length > 0 && filtered.every((item) => selectedIds.has(item.id))}
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-kairo-blue focus:ring-kairo-blue cursor-pointer"
+                      />
+                      Select all ({filtered.length})
+                    </label>
+                    {selectedIds.size > 0 ? (
+                      <span className="rounded-full bg-kairo-blue/10 px-2.5 py-0.5 text-xs font-semibold text-kairo-blue">
+                        {selectedIds.size} selected
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {selectedIds.size > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSelectedIds(new Set())}
+                      >
+                        Deselect
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => setConfirmBatchDelete(true)}
+                      >
+                        Delete {selectedIds.size} selected
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               {records[tab].length === 0 ? (
                 <EmptyState
                   icon={<IconSpark width={24} height={24} />}
@@ -189,6 +275,8 @@ export default function VaultPage() {
                       key={record.id}
                       entityKey={tab}
                       record={record}
+                      selected={selectedIds.has(record.id)}
+                      onToggleSelect={(checked) => toggleSelect(record.id, checked)}
                       onOpen={() => setDetail({ key: tab, record })}
                       onEdit={() => setEditing(record)}
                       onDelete={() => setDeleting(record)}
@@ -217,6 +305,13 @@ export default function VaultPage() {
         message="This permanently removes the record from your Vault. Evidence attachments that reference it will need review."
         onConfirm={() => void confirmDelete()}
         onClose={() => setDeleting(null)}
+      />
+      <ConfirmDialog
+        open={confirmBatchDelete}
+        title={`Delete ${selectedIds.size} ${selectedIds.size === 1 ? config?.singular.toLowerCase() : config?.label.toLowerCase()}`}
+        message={`This will permanently remove ${selectedIds.size} record${selectedIds.size === 1 ? "" : "s"} from your Career Vault. This cannot be undone.`}
+        onConfirm={() => void handleBatchDelete()}
+        onClose={() => setConfirmBatchDelete(false)}
       />
     </div>
   );
