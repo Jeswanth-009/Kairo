@@ -6,12 +6,32 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Select, Textarea } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
 import { fmtRange } from "../../lib/dateFmt";
-import type { Job, PdfArtifact, PlanItem, ResumePlan, ResumeVersion, TailorSuggestion, ValidationResult } from "../../lib/types";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import type {
+  Job,
+  PdfArtifact,
+  PlanItem,
+  ResumePlan,
+  ResumeVersion,
+  TailorSuggestion,
+  ValidationResult,
+} from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
 const CAPACITY = 56; // one letter page at 9.5-10pt (mirrors composer.rs)
 
-/** One canonical bullet + its tailoring state, as shown in the editor column. */
+const TEMPLATES = [
+  { id: "classic", name: "Classic", desc: "Traditional ATS-friendly layout" },
+  { id: "minimal", name: "Minimal", desc: "Clean modern sans-serif" },
+  { id: "modern", name: "Modern", desc: "Elegant serif with accented headers" },
+] as const;
+
+type TemplateId = (typeof TEMPLATES)[number]["id"];
+
+// ---------------------------------------------------------------------------
+// EditorPanel
+// ---------------------------------------------------------------------------
+
 function EditorPanel({
   jobId,
   bullet,
@@ -51,14 +71,12 @@ function EditorPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity.entityType, entity.id]);
 
-  // Reset edit state when a different bullet is selected.
   useEffect(() => {
     setEditing(false);
     setEditText("");
     setClaimReport(null);
   }, [bullet.id]);
 
-  // Live "detected claim changes" while editing (debounced).
   useEffect(() => {
     if (!editing) return;
     const handle = setTimeout(() => {
@@ -155,7 +173,6 @@ function EditorPanel({
         </p>
       )}
 
-      {/* Manual edit — the "edit" of accept/edit/reset. */}
       {editing ? (
         <div className="rounded-lg border border-kairo-blue/30 bg-kairo-blue/5 p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -245,7 +262,10 @@ function EditorPanel({
   );
 }
 
-/** Paper-like preview of the plan as the final resume would be laid out. */
+// ---------------------------------------------------------------------------
+// HTML Plan Preview (shown before PDF is compiled)
+// ---------------------------------------------------------------------------
+
 function PreviewPane({
   plan,
   excludedCount,
@@ -359,6 +379,10 @@ function PreviewPane({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
+
 export default function ResumeStudioPage() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -369,7 +393,9 @@ export default function ResumeStudioPage() {
   const [loaded, setLoaded] = useState(false);
   const [estimatedLines, setEstimatedLines] = useState<number | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [templateId, setTemplateId] = useState<TemplateId>("classic");
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [savingVersion, setSavingVersion] = useState(false);
 
@@ -389,6 +415,8 @@ export default function ResumeStudioPage() {
 
   useEffect(() => {
     if (jobId === null) return;
+    // Reset PDF preview when switching jobs
+    setPdfUrl(null);
     void (async () => {
       try {
         const stored = await ipc.getPlan(jobId);
@@ -399,7 +427,11 @@ export default function ResumeStudioPage() {
         } else {
           setEstimatedLines(null);
         }
-        setArtifact(await ipc.getPdfArtifact(jobId));
+        const existingArtifact = await ipc.getPdfArtifact(jobId);
+        setArtifact(existingArtifact);
+        if (existingArtifact) {
+          setPdfUrl(convertFileSrc(existingArtifact.pdfPath));
+        }
         setVersions(await ipc.listResumeVersions(jobId));
       } catch (e) {
         toast.error(String(e));
@@ -459,7 +491,6 @@ export default function ResumeStudioPage() {
     });
   };
 
-  // Skills management: reorder + exclude (persisted in the plan).
   const moveSkill = (index: number, direction: -1 | 1) => {
     mutatePlan((plan) => {
       const target = index + direction;
@@ -497,14 +528,19 @@ export default function ResumeStudioPage() {
     if (jobId === null) return;
     setExporting(true);
     try {
-      const result = await ipc.exportPdf(jobId, "classic");
+      const result = await ipc.exportPdf(jobId, templateId);
       setArtifact(result.artifact);
+      setPdfUrl(convertFileSrc(result.artifact.pdfPath));
       toast.ok(`PDF compiled — ${result.artifact.pageCount ?? "?"} page(s)`);
     } catch (e) {
       toast.error(String(e));
     } finally {
       setExporting(false);
     }
+  };
+
+  const openVersion = (v: ResumeVersion) => {
+    void ipc.openFile(v.pdfPath).catch((e: unknown) => toast.error(String(e)));
   };
 
   const acceptSuggestion = (suggestion: TailorSuggestion) => {
@@ -893,11 +929,12 @@ export default function ResumeStudioPage() {
           </Card>
         </div>
 
-        {/* Column 3 · Preview */}
+        {/* Column 3 · Preview & Export */}
         <div className="col-span-4 flex min-h-0 flex-col gap-3 overflow-y-auto">
+          {/* Export card */}
           <Card className="p-4">
             <div className="flex items-center justify-between">
-              <CardTitle>Preview</CardTitle>
+              <CardTitle>Export PDF</CardTitle>
               <span
                 className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
                   estimatedLines === null
@@ -915,9 +952,41 @@ export default function ResumeStudioPage() {
             {excludedCount > 0 ? (
               <p className="mt-2 text-[11px] text-slate-400">{excludedCount} excluded element(s)</p>
             ) : null}
+
+            {/* Template picker */}
+            <div className="mt-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Template</p>
+              <div className="flex flex-col gap-1.5">
+                {TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTemplateId(t.id)}
+                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${
+                      templateId === t.id
+                        ? "border-kairo-blue bg-kairo-blue/5 ring-1 ring-kairo-blue"
+                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span
+                      className={`h-3 w-3 shrink-0 rounded-full border-2 ${
+                        templateId === t.id
+                          ? "border-kairo-blue bg-kairo-blue"
+                          : "border-slate-300"
+                      }`}
+                    />
+                    <span>
+                      <span className="block text-xs font-medium text-ink">{t.name}</span>
+                      <span className="block text-[11px] text-slate-400">{t.desc}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="mt-3">
               <Button
-                size="sm"
+                className="w-full justify-center"
                 onClick={() => void exportPdf()}
                 disabled={exporting || !plan.fitsOnePage}
                 title={
@@ -929,15 +998,27 @@ export default function ResumeStudioPage() {
                 {exporting ? "Compiling… (first run may take minutes)" : "Export PDF"}
               </Button>
             </div>
+
             {artifact ? (
               <div className="mt-3 rounded-lg bg-surface p-2.5 text-[11px] leading-relaxed">
                 <p className={exporting ? "text-slate-400" : "text-emerald-600"}>
                   ✓ Compiled{artifact.pageCount ? ` · ${artifact.pageCount} page(s)` : ""}
                   {artifact.compiledAt ? ` · ${artifact.compiledAt.replace("T", " ").slice(0, 16)}` : ""}
                 </p>
-                <p className="mt-0.5 break-all text-slate-400">{artifact.pdfPath}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="min-w-0 flex-1 truncate break-all text-slate-400">{artifact.pdfPath}</p>
+                  <button
+                    type="button"
+                    onClick={() => void ipc.openFile(artifact.pdfPath).catch((e: unknown) => toast.error(String(e)))}
+                    className="shrink-0 text-kairo-blue hover:underline"
+                  >
+                    Open ↗
+                  </button>
+                </div>
               </div>
             ) : null}
+
+            {/* Versions */}
             <div className="mt-3 border-t border-slate-100 pt-3">
               <Button
                 size="sm"
@@ -958,25 +1039,56 @@ export default function ResumeStudioPage() {
                           {v.createdAt.replace("T", " ").slice(0, 16)}
                         </span>
                       </span>
-                      <a
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          toast.error("PDF viewer opens in Phase 14 — file at " + v.pdfPath);
-                        }}
+                      <button
+                        type="button"
+                        onClick={() => openVersion(v)}
                         className="text-kairo-blue hover:underline"
                       >
-                        open
-                      </a>
+                        open ↗
+                      </button>
                     </li>
                   ))}
                 </ul>
               ) : null}
             </div>
           </Card>
-          <div className="mx-auto w-full max-w-[420px]">
-            <PreviewPane plan={plan} excludedCount={excludedCount} suggestions={suggestions} />
-          </div>
+
+          {/* PDF preview or HTML plan preview */}
+          {pdfUrl ? (
+            <Card className="overflow-hidden p-0">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
+                <p className="text-xs font-medium text-ink">PDF Preview</p>
+                <button
+                  type="button"
+                  onClick={() => setPdfUrl(null)}
+                  className="text-[11px] text-slate-400 hover:text-ink"
+                >
+                  Show plan view
+                </button>
+              </div>
+              <iframe
+                src={`${pdfUrl}#toolbar=0`}
+                className="h-[700px] w-full border-0"
+                title="Resume PDF Preview"
+              />
+            </Card>
+          ) : (
+            <div className="mx-auto w-full max-w-[420px]">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Plan preview</p>
+                {artifact && (
+                  <button
+                    type="button"
+                    onClick={() => setPdfUrl(convertFileSrc(artifact.pdfPath))}
+                    className="text-[11px] text-kairo-blue hover:underline"
+                  >
+                    Show PDF ↗
+                  </button>
+                )}
+              </div>
+              <PreviewPane plan={plan} excludedCount={excludedCount} suggestions={suggestions} />
+            </div>
+          )}
         </div>
       </div>
     </div>

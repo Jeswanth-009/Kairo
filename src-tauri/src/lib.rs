@@ -121,6 +121,7 @@ pub fn run() {
             commands::backup_commands::list_backups,
             commands::backup_commands::create_backup,
             commands::backup_commands::restore_backup,
+            commands::pdf_commands::open_file,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

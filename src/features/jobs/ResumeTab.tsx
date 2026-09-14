@@ -6,6 +6,12 @@ import { toast } from "../../stores/toastStore";
 import type { PdfArtifact } from "../../lib/types";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
+const TEMPLATES = [
+  { id: "classic", name: "Classic", desc: "Traditional ATS-friendly layout" },
+  { id: "minimal", name: "Minimal", desc: "Clean modern sans-serif" },
+  { id: "modern", name: "Modern", desc: "Elegant serif with accented headers" },
+];
+
 export function ResumeTab({ jobId }: { jobId: number }) {
   const [templateId, setTemplateId] = useState<string>("classic");
   const [busy, setBusy] = useState(false);
@@ -14,7 +20,6 @@ export function ResumeTab({ jobId }: { jobId: number }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load existing artifact on mount if available
     ipc
       .getPdfArtifact(jobId)
       .then((a) => {
@@ -42,45 +47,67 @@ export function ResumeTab({ jobId }: { jobId: number }) {
     }
   };
 
-  const templates = [
-    { id: "classic", name: "Classic", desc: "Traditional ATS-friendly layout" },
-    { id: "minimal", name: "Minimal", desc: "Clean and modern sans-serif" },
-    { id: "modern", name: "Modern", desc: "Elegant serif with accented headers" },
-  ];
+  const openPdf = () => {
+    if (!artifact) return;
+    void ipc.openFile(artifact.pdfPath).catch((e: unknown) => toast.error(String(e)));
+  };
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      {/* Left column — settings */}
       <div className="flex w-full flex-col gap-4 lg:w-1/3">
         <Card className="p-6">
-          <h3 className="mb-4 text-sm font-semibold text-ink">Resume Settings</h3>
+          <h3 className="mb-4 text-sm font-semibold text-ink">Generate Resume</h3>
           <div className="space-y-4">
+            {/* Template picker */}
             <div>
-              <label className="mb-2 block text-xs font-medium text-slate-700">Template</label>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Template
+              </label>
               <div className="flex flex-col gap-2">
-                {templates.map((t) => (
+                {TEMPLATES.map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => setTemplateId(t.id)}
-                    className={`flex flex-col items-start rounded-lg border p-3 text-left transition-colors ${
+                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                       templateId === t.id
-                        ? "border-kairo-blue bg-blue-50/50 ring-1 ring-kairo-blue"
+                        ? "border-kairo-blue bg-kairo-blue/5 ring-1 ring-kairo-blue"
                         : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    <span className="text-sm font-medium text-ink">{t.name}</span>
-                    <span className="text-xs text-muted">{t.desc}</span>
+                    <span
+                      className={`h-3 w-3 shrink-0 rounded-full border-2 transition-colors ${
+                        templateId === t.id
+                          ? "border-kairo-blue bg-kairo-blue"
+                          : "border-slate-300"
+                      }`}
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-ink">{t.name}</span>
+                      <span className="block text-xs text-muted">{t.desc}</span>
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
 
             <Button className="w-full justify-center" onClick={compile} disabled={busy}>
-              {busy ? "Compiling PDF..." : "Generate Resume"}
+              {busy ? (
+                <span className="flex items-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Compiling PDF…
+                </span>
+              ) : (
+                "Generate Resume"
+              )}
             </Button>
 
             {error && (
-              <div className="rounded bg-red-50 p-3 text-xs text-red-700 whitespace-pre-wrap font-mono">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 whitespace-pre-wrap font-mono">
                 {error}
               </div>
             )}
@@ -89,26 +116,55 @@ export function ResumeTab({ jobId }: { jobId: number }) {
 
         {artifact && (
           <Card className="p-6">
-            <h3 className="mb-2 text-sm font-semibold text-ink">Artifact Details</h3>
-            <div className="space-y-1 text-xs text-muted">
-              <p>Pages: {artifact.pageCount ?? "Unknown"}</p>
-              <p>Compiled: {artifact.compiledAt ? new Date(artifact.compiledAt + "Z").toLocaleString() : "Unknown"}</p>
-              <p className="mt-4 truncate" title={artifact.pdfPath}>
-                Path: {artifact.pdfPath}
-              </p>
+            <h3 className="mb-3 text-sm font-semibold text-ink">Last Compiled PDF</h3>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Pages</span>
+                <span className="font-medium text-ink">{artifact.pageCount ?? "Unknown"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Compiled</span>
+                <span className="font-medium text-ink">
+                  {artifact.compiledAt
+                    ? new Date(artifact.compiledAt + "Z").toLocaleString()
+                    : "Unknown"}
+                </span>
+              </div>
             </div>
+            <div className="mt-4 flex gap-2">
+              <Button size="sm" variant="secondary" onClick={openPdf} className="flex-1 justify-center">
+                Open in viewer ↗
+              </Button>
+            </div>
+            <p className="mt-2 truncate text-[10px] text-slate-400" title={artifact.pdfPath}>
+              {artifact.pdfPath}
+            </p>
           </Card>
         )}
       </div>
 
+      {/* Right column — PDF preview */}
       <div className="w-full lg:w-2/3">
-        <Card className="flex min-h-[800px] items-center justify-center overflow-hidden bg-slate-100 p-0 shadow-inner">
+        <Card className="flex min-h-[800px] items-center justify-center overflow-hidden bg-slate-50 p-0 shadow-inner">
           {pdfUrl ? (
-            <iframe src={`${pdfUrl}#toolbar=0`} className="h-[800px] w-full border-0" title="Resume PDF Preview" />
+            <iframe
+              src={`${pdfUrl}#toolbar=0`}
+              className="h-[800px] w-full border-0"
+              title="Resume PDF Preview"
+            />
           ) : (
-            <div className="text-center text-slate-400">
-              <p className="mb-2 text-sm">No PDF generated yet</p>
-              <p className="text-xs">Select a template and click Generate Resume</p>
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+                <svg className="h-8 w-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-600">No PDF generated yet</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Select a template and click <span className="font-medium">Generate Resume</span>
+                </p>
+              </div>
             </div>
           )}
         </Card>
