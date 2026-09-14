@@ -8,12 +8,16 @@ import type { EntityKey } from "./vaultConfig";
 export function VaultCard({
   entityKey,
   record,
+  selected = false,
+  onToggleSelect,
   onOpen,
   onEdit,
   onDelete,
 }: {
   entityKey: EntityKey;
   record: AnyVaultRecord;
+  selected?: boolean;
+  onToggleSelect?: (selected: boolean) => void;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -28,17 +32,28 @@ export function VaultCard({
     "evidenceCount" in record ? (record.evidenceCount as number) : null;
 
   return (
-    <Card className="flex flex-col p-5">
-      <button type="button" onClick={onOpen} className="text-left">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="text-sm font-semibold text-ink hover:text-kairo-blue">{title}</h3>
-          {range ? <span className="shrink-0 text-xs text-slate-400">{range}</span> : null}
-        </div>
-        {subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}
-        {description ? (
-          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted">{description}</p>
+    <Card className={`flex flex-col p-5 transition-all ${selected ? "ring-2 ring-kairo-blue/70 bg-kairo-blue/[0.02]" : ""}`}>
+      <div className="flex items-start gap-2.5">
+        {onToggleSelect ? (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(e) => onToggleSelect(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-kairo-blue focus:ring-kairo-blue cursor-pointer shrink-0"
+            title="Select item"
+          />
         ) : null}
-      </button>
+        <button type="button" onClick={onOpen} className="text-left flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="text-sm font-semibold text-ink hover:text-kairo-blue truncate">{title}</h3>
+            {range ? <span className="shrink-0 text-xs text-slate-400">{range}</span> : null}
+          </div>
+          {subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}
+          {description ? (
+            <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted">{description}</p>
+          ) : null}
+        </button>
+      </div>
 
       {skills.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
