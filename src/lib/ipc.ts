@@ -194,7 +194,7 @@ export const ipc = {
     invoke<RestoreOk>("restore_backup", { fileName }),
 
   // PDF (Phase 9)
-  exportPdf: (jobId: number, templateId: string): Promise<{ artifact: PdfArtifact; logTail: string }> =>
+  exportPdf: (jobId: number, templateId: string = "classic"): Promise<{ artifact: PdfArtifact; logTail: string }> =>
     invoke<{ artifact: PdfArtifact; logTail: string }>("export_pdf", { jobId, templateId }),
   getPdfArtifact: (jobId: number): Promise<PdfArtifact | null> =>
     invoke<PdfArtifact | null>("get_pdf_artifact", { jobId }),

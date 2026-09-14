@@ -497,7 +497,7 @@ export default function ResumeStudioPage() {
     if (jobId === null) return;
     setExporting(true);
     try {
-      const result = await ipc.exportPdf(jobId);
+      const result = await ipc.exportPdf(jobId, "classic");
       setArtifact(result.artifact);
       toast.ok(`PDF compiled — ${result.artifact.pageCount ?? "?"} page(s)`);
     } catch (e) {
