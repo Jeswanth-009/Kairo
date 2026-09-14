@@ -227,11 +227,12 @@ pub fn assemble_grounding(
     bullet_id: i64,
 ) -> Result<BulletGrounding, String> {
     // Locate the bullet across projects and experiences.
-    let mut found: Option<(String, i64, String)> = None;
+    let mut found: Option<(String, i64, String, String, Vec<String>)> = None;
     for project in super::vault::vault_list::<super::vault::Project>(conn)? {
         for bullet in super::trust::list_bullets(conn, "project", project.id)? {
             if bullet.id == bullet_id {
-                found = Some(("project".to_string(), project.id, bullet.text));
+                let skills = project.skills.iter().map(|s| s.canonical_name.clone()).collect();
+                found = Some(("project".to_string(), project.id, bullet.text, project.title.clone(), skills));
             }
         }
         if found.is_some() {
@@ -242,7 +243,8 @@ pub fn assemble_grounding(
         for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
             for bullet in super::trust::list_bullets(conn, "experience", experience.id)? {
                 if bullet.id == bullet_id {
-                    found = Some(("experience".to_string(), experience.id, bullet.text));
+                    let skills = experience.skills.iter().map(|s| s.canonical_name.clone()).collect();
+                    found = Some(("experience".to_string(), experience.id, bullet.text, format!("{} at {}", experience.role, experience.organization), skills));
                 }
                 if found.is_some() {
                     break;
@@ -253,10 +255,10 @@ pub fn assemble_grounding(
             }
         }
     }
-    let (entity_type, entity_id, bullet_text) =
+    let (entity_type, entity_id, bullet_text, entity_title, entity_skills) =
         found.ok_or_else(|| "Bullet not found in the Vault".to_string())?;
 
-    let evidence_notes: Vec<String> =
+    let mut evidence_notes: Vec<String> =
         super::trust::list_evidence(conn, &entity_type, entity_id)?
             .into_iter()
             .map(|e| {
@@ -267,6 +269,14 @@ pub fn assemble_grounding(
                 }
             })
             .collect();
+
+    if evidence_notes.is_empty() {
+        evidence_notes.push(format!("Record context: {}", entity_title));
+        if !entity_skills.is_empty() {
+            evidence_notes.push(format!("Verified technologies for this record: {}", entity_skills.join(", ")));
+        }
+    }
+
     let allowed_fact_ids: Vec<i64> =
         super::trust::list_evidence(conn, &entity_type, entity_id)?
             .into_iter()
@@ -290,38 +300,49 @@ pub fn assemble_grounding(
         .collect();
 
     // Target requirements: the ones this bullet supports per the composer's
-    // overlap heuristic, falling back to the job's required skills.
+    // overlap heuristic, falling back to the job's most relevant requirements.
     let requirement_texts: Vec<String> = {
         let job = super::jobs::get_job_enriched(conn, job_id)?;
         let requirements = super::jobs::list_requirements(conn, job_id)?;
-        let supports = |text: &str| -> bool {
-            !crate::composer::bullet_supports(
-                text,
-                &requirements.iter().map(|r| r.raw_text.clone()).collect::<Vec<_>>(),
-            )
-            .into_iter()
-            .all(|s| s.is_empty())
-        };
-        let supported: Vec<String> = requirements
-            .iter()
-            .filter(|r| supports(&r.raw_text))
-            .map(|r| r.raw_text.clone())
-            .collect();
+        
+        let all_req_texts: Vec<String> = requirements.iter().map(|r| r.raw_text.clone()).collect();
+        let mut supported = crate::composer::bullet_supports(&bullet_text, &all_req_texts);
+        
         if supported.is_empty() {
-            requirements
+            // Rank requirements by token overlap against bullet_text, take top 2
+            let mut scored: Vec<(String, usize)> = requirements
+                .iter()
+                .map(|r| {
+                    let text = r.raw_text.clone();
+                    let hits = crate::composer::bullet_overlap_count(&bullet_text, &text);
+                    (text, hits)
+                })
+                .collect();
+            scored.sort_by(|a, b| b.1.cmp(&a.1));
+            supported = scored
+                .into_iter()
+                .filter(|(_, hits)| *hits > 0)
+                .take(2)
+                .map(|(text, _)| text)
+                .collect();
+        }
+
+        if supported.is_empty() {
+            supported = requirements
                 .iter()
                 .filter(|r| r.kind == "required_skill")
+                .take(2)
                 .map(|r| r.raw_text.clone())
-                .collect()
-        } else {
-            supported
+                .collect();
         }
-        .into_iter()
-        .chain(std::iter::once(format!(
-            "(role: {} at {}; seniority: {})",
-            job.role_title, job.company, job.seniority
-        )))
-        .collect()
+
+        supported
+            .into_iter()
+            .chain(std::iter::once(format!(
+                "(role: {} at {}; seniority: {})",
+                job.role_title, job.company, job.seniority
+            )))
+            .collect()
     };
 
     Ok(BulletGrounding {

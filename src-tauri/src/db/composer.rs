@@ -60,6 +60,67 @@ pub fn load_composer_input(
     assemble(conn, job_id, profile, education, relevance, Vec::new(), config)
 }
 
+fn ensure_entity_bullets(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: i64,
+    description: &str,
+) -> Result<Vec<ComposerBullet>, String> {
+    let mut bullets = super::trust::list_bullets(conn, entity_type, entity_id)?;
+    if bullets.is_empty() && !description.trim().is_empty() {
+        let mut raw_lines = Vec::new();
+        for line in description.lines() {
+            if line.contains('•') {
+                for part in line.split('•') {
+                    raw_lines.push(part.trim().to_string());
+                }
+            } else if line.contains(" - ") {
+                for part in line.split(" - ") {
+                    raw_lines.push(part.trim().to_string());
+                }
+            } else {
+                raw_lines.push(line.trim().to_string());
+            }
+        }
+        let lines: Vec<String> = raw_lines
+            .into_iter()
+            .map(|l| l.trim_start_matches(['•', '-', '*', '▪', '·']).trim().to_string())
+            .filter(|l| l.len() > 5)
+            .collect();
+        for (i, line) in lines.into_iter().enumerate() {
+            let cb = super::trust::CanonicalBullet {
+                id: 0,
+                entity_type: entity_type.to_string(),
+                entity_id,
+                text: line,
+                approved: true,
+                sort_order: (i + 1) as i64,
+                evidence: Vec::new(),
+                evidence_ids: Vec::new(),
+            };
+            let _ = super::trust::create_bullet(conn, &cb);
+        }
+        bullets = super::trust::list_bullets(conn, entity_type, entity_id)?;
+    }
+
+    if !bullets.is_empty() && bullets.iter().all(|b| !b.approved) {
+        let _ = conn.execute(
+            "UPDATE canonical_bullets SET approved = 1 WHERE entity_type = ?1 AND entity_id = ?2",
+            params![entity_type, entity_id],
+        );
+        bullets = super::trust::list_bullets(conn, entity_type, entity_id)?;
+    }
+
+    Ok(bullets
+        .into_iter()
+        .map(|b| ComposerBullet {
+            id: b.id,
+            text: b.text,
+            approved: b.approved,
+        })
+        .collect())
+}
+
 fn assemble(
     conn: &Connection,
     job_id: i64,
@@ -73,10 +134,7 @@ fn assemble(
     let mut entities: Vec<ComposerEntity> = Vec::new();
 
     for project in super::vault::vault_list::<super::vault::Project>(conn)? {
-        let bullets = super::trust::list_bullets(conn, "project", project.id)?
-            .into_iter()
-            .map(|b| ComposerBullet { id: b.id, text: b.text, approved: b.approved })
-            .collect();
+        let bullets = ensure_entity_bullets(conn, "project", project.id, &project.description)?;
         entities.push(ComposerEntity {
             entity_type: "project".to_string(),
             id: project.id,
@@ -97,10 +155,7 @@ fn assemble(
     }
 
     for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
-        let bullets = super::trust::list_bullets(conn, "experience", experience.id)?
-            .into_iter()
-            .map(|b| ComposerBullet { id: b.id, text: b.text, approved: b.approved })
-            .collect();
+        let bullets = ensure_entity_bullets(conn, "experience", experience.id, &experience.description)?;
         entities.push(ComposerEntity {
             entity_type: "experience".to_string(),
             id: experience.id,

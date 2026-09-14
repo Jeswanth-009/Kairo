@@ -223,24 +223,47 @@ pub fn estimate_plan_lines(plan: &ResumePlan) -> u32 {
     lines
 }
 
-/// How many requirement texts does this bullet support (token overlap ≥ 0.5)?
+const STOPWORDS: &[&str] = &[
+    "a", "an", "the", "and", "or", "of", "with", "for", "to", "in", "on", "at", "by", "from",
+    "as", "is", "are", "be", "been", "was", "were", "you", "your", "we", "our", "their", "will",
+    "shall", "must", "have", "has", "had", "do", "does", "using", "use", "used", "strong",
+    "good", "great", "excellent", "plus", "years", "year", "experience", "ability", "able",
+    "work", "working", "knowledge", "familiarity", "including", "such", "least", "one", "modern",
+];
+
+fn stem(token: &str) -> String {
+    if token.len() > 3 && token.ends_with('s') && !token.ends_with("ss") {
+        token[..token.len() - 1].to_string()
+    } else {
+        token.to_string()
+    }
+}
+
+pub fn tokenize_filtered(text: &str) -> std::collections::HashSet<String> {
+    text.to_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| w.len() > 1 && !STOPWORDS.contains(w))
+        .map(|w| stem(w))
+        .collect()
+}
+
+pub fn bullet_overlap_count(bullet: &str, text: &str) -> usize {
+    let bullet_tokens = tokenize_filtered(bullet);
+    let other_tokens = tokenize_filtered(text);
+    bullet_tokens.iter().filter(|t| other_tokens.contains(*t)).count()
+}
+
+/// How many requirement texts does this bullet support (calibrated token overlap)?
 pub fn bullet_supports(text: &str, requirement_texts: &[String]) -> Vec<String> {
-    let tokenize = |t: &str| -> std::collections::HashSet<String> {
-        t.to_lowercase()
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .filter(|w| w.len() > 2)
-            .map(|w| w.trim_end_matches('s').to_string())
-            .collect()
-    };
-    let bullet_tokens = tokenize(text);
+    let bullet_tokens = tokenize_filtered(text);
     let mut supports = Vec::new();
     for requirement in requirement_texts {
-        let req_tokens = tokenize(requirement);
+        let req_tokens = tokenize_filtered(requirement);
         if req_tokens.is_empty() {
             continue;
         }
         let hits = bullet_tokens.iter().filter(|t| req_tokens.contains(*t)).count();
-        if hits as f64 / req_tokens.len() as f64 >= 0.5 {
+        if hits >= 2 || (hits as f64 / req_tokens.len() as f64 >= 0.20) {
             supports.push(requirement.clone());
         }
     }
@@ -686,6 +709,23 @@ mod tests {
         e.skill_names = vec!["Docker".to_string(), "Python".to_string()];
         let plan = compose(&input(vec![e], &["Strong Python"], ComposerConfig::default()));
         assert_eq!(plan.skills[0], "Python");
+    }
+
+    #[test]
+    fn test_bullet_supports_matches_realistic_requirements() {
+        let bullet = "Developed full-stack web applications using React, TypeScript, and Python REST APIs with PostgreSQL";
+        let req1 = "Proficiency in at least one modern web development stack (e.g., React, TypeScript, JavaScript, HTML5/CSS3) and backend language (e.g., Python, Node.js, or Java).".to_string();
+        let req2 = "Experience with Kubernetes cluster orchestration, Helm charts, and Terraform IAC".to_string();
+        let supported = bullet_supports(bullet, &[req1.clone(), req2]);
+        assert_eq!(supported.len(), 1);
+        assert_eq!(supported[0], req1);
+    }
+
+    #[test]
+    fn test_bullet_overlap_count() {
+        let bullet = "Built microservices using Python and Docker";
+        let req = "Python backend developer with Docker experience";
+        assert!(bullet_overlap_count(bullet, req) >= 2);
     }
 }
 

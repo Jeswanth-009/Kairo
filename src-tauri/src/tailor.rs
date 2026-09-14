@@ -15,7 +15,7 @@ Hard rules: keep the same factual meaning; never introduce technologies, tools, 
 metrics, percentages, user counts, scale, or responsibilities that are not in the original \
 bullet or its evidence notes; never use any forbidden claim; keep it under 25 words. \
 Respond with ONLY a JSON object of shape {\"text\": string, \"factsUsed\": number[], \
-\"newClaims\": []} where factsUsed lists the evidence ids you relied on and newClaims is \
+\"newClaims\": []} where factsUsed lists the evidence ids you relied on (leave empty if no evidence ids are provided) and newClaims is \
 always an empty array.";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,10 +65,14 @@ pub fn build_user_prompt(ctx: &TailorContext) -> String {
             user.push_str(&format!("- {pattern}\n"));
         }
     }
-    user.push_str(&format!(
-        "\nEvidence ids available for factsUsed: {:?}\n",
-        ctx.allowed_fact_ids
-    ));
+    if ctx.allowed_fact_ids.is_empty() {
+        user.push_str("\nEvidence ids available for factsUsed: none (set factsUsed to [])\n");
+    } else {
+        user.push_str(&format!(
+            "\nEvidence ids available for factsUsed: {:?}\n",
+            ctx.allowed_fact_ids
+        ));
+    }
     user
 }
 
@@ -160,7 +164,7 @@ pub fn validate(
     let mut violations: Vec<String> = Vec::new();
 
     // 1. Fact reference validation: every material claim maps to allowed facts.
-    if output.facts_used.is_empty() {
+    if !ctx.allowed_fact_ids.is_empty() && output.facts_used.is_empty() {
         violations.push("factsUsed is empty — the rewrite cites no evidence".to_string());
     }
     for id in &output.facts_used {
@@ -178,9 +182,12 @@ pub fn validate(
         }
     }
 
-    // 3. Technology diff: Vault-vocabulary skills not present in the original.
+    // 3. Technology diff: Vault-vocabulary skills not present in the original or evidence notes.
     for skill in &ctx.skill_vocabulary {
-        if contains_phrase(&output.text, skill) && !contains_phrase(&ctx.bullet_text, skill) {
+        if contains_phrase(&output.text, skill)
+            && !contains_phrase(&ctx.bullet_text, skill)
+            && !ctx.evidence_notes.iter().any(|note| contains_phrase(note, skill))
+        {
             violations.push(format!("introduces a new technology ({skill})"));
         }
     }
@@ -315,6 +322,26 @@ mod tests {
         );
         let out = check(&raw, &ctx()).unwrap();
         assert!(!out.text.is_empty());
+    }
+
+    #[test]
+    fn test_validation_permits_empty_facts_when_no_evidence_ids() {
+        let mut c = ctx();
+        c.allowed_fact_ids = vec![];
+        let raw = raw_json("Reworded bullet about Python", "[]");
+        let result = validate(&c, &parse_response(&raw).unwrap());
+        assert!(result.ok);
+    }
+
+    #[test]
+    fn test_validation_allows_record_tech_stack() {
+        let mut c = ctx();
+        c.bullet_text = "Designed an in-memory database system".to_string();
+        c.evidence_notes = vec!["Implemented in Rust".to_string()];
+        c.skill_vocabulary = vec!["Rust".to_string()];
+        let raw = raw_json("Designed an in-memory database system in Rust", "[1]");
+        let result = validate(&c, &parse_response(&raw).unwrap());
+        assert!(result.ok);
     }
 
     #[test]
