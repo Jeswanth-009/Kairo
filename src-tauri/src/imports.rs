@@ -817,7 +817,10 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
             Section::Projects => {
                 let content = trimmed.trim_start_matches(BULLETS).trim();
                 let is_bullet = starts_with_bullet(trimmed);
-                let has_separator = trimmed.contains('|') || trimmed.contains('↗') || trimmed.contains('→');
+                let has_separator = trimmed.contains('|')
+                    || trimmed.contains('↗')
+                    || trimmed.contains('→')
+                    || split_pair(trimmed).is_some();
                 let is_header = has_separator || cur_project.is_none();
 
                 if is_bullet {

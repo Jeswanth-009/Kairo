@@ -198,13 +198,36 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Requirements · review every line
-              </h4>
-              <Button size="sm" variant="secondary" onClick={addReq}>
-                + Add requirement
-              </Button>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Requirements ({requirements.length})
+                </h4>
+                {requirements.length > 0 ? (
+                  <span className="text-[11px] text-slate-500">
+                    · {requirements.filter((r) => r.kind === "required_skill").length} required
+                    · {requirements.filter((r) => r.kind === "responsibility").length} responsibilities
+                    {requirements.filter((r) => r.kind === "preferred_skill").length > 0 ? (
+                      <> · {requirements.filter((r) => r.kind === "preferred_skill").length} preferred</>
+                    ) : null}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                {requirements.length > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => setRequirements([])}
+                  >
+                    Clear all
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="secondary" onClick={addReq}>
+                  + Add requirement
+                </Button>
+              </div>
             </div>
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
               {requirements.length === 0 ? (

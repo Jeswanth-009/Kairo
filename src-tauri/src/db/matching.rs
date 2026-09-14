@@ -23,11 +23,43 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
 
     let mut entities: Vec<MatchEntity> = Vec::new();
 
+    let enrich_skills = |existing: Vec<(i64, i64)>, text: &str| -> Vec<(i64, i64)> {
+        let mut result = existing;
+        let lower = text.to_lowercase();
+        let words: std::collections::HashSet<&str> = lower
+            .split(|c: char| !c.is_alphanumeric() && c != '+' && c != '#')
+            .filter(|w| !w.is_empty())
+            .collect();
+        for s in &skills {
+            if result.iter().any(|(id, _)| *id == s.id) {
+                continue;
+            }
+            let names = std::iter::once(&s.canonical_name).chain(s.aliases.iter());
+            let matched = names.into_iter().any(|name| {
+                let n_lower = name.to_lowercase();
+                if n_lower.len() <= 2 {
+                    words.contains(n_lower.as_str())
+                } else if n_lower.contains(' ') {
+                    lower.contains(&n_lower)
+                } else {
+                    words.contains(n_lower.as_str())
+                }
+            });
+            if matched {
+                result.push((s.id, 3));
+            }
+        }
+        result
+    };
+
     for project in super::vault::vault_list::<super::vault::Project>(conn)? {
         let bullets = super::trust::list_bullets(conn, "project", project.id)?
             .into_iter()
             .map(|b| b.text)
-            .collect();
+            .collect::<Vec<_>>();
+        let text = format!("{} {} {}", project.title, project.description, bullets.join(" "));
+        let existing_skills: Vec<(i64, i64)> = project.skills.into_iter().map(|r| (r.skill_id, r.confidence)).collect();
+        let entity_skills = enrich_skills(existing_skills, &text);
         entities.push(MatchEntity {
             entity_type: "project".to_string(),
             id: project.id,
@@ -36,7 +68,7 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
             start_date: project.start_date,
             end_date: project.end_date,
             is_current: project.is_current,
-            skills: project.skills.into_iter().map(|r| (r.skill_id, r.confidence)).collect(),
+            skills: entity_skills,
             evidence_count: project.evidence_count,
             bullets,
         });
@@ -46,7 +78,10 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
         let bullets = super::trust::list_bullets(conn, "experience", experience.id)?
             .into_iter()
             .map(|b| b.text)
-            .collect();
+            .collect::<Vec<_>>();
+        let text = format!("{} {} {} {}", experience.organization, experience.role, experience.description, bullets.join(" "));
+        let existing_skills: Vec<(i64, i64)> = experience.skills.into_iter().map(|r| (r.skill_id, r.confidence)).collect();
+        let entity_skills = enrich_skills(existing_skills, &text);
         entities.push(MatchEntity {
             entity_type: "experience".to_string(),
             id: experience.id,
@@ -57,9 +92,75 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
             start_date: experience.start_date,
             end_date: experience.end_date,
             is_current: experience.is_current,
-            skills: experience.skills.into_iter().map(|r| (r.skill_id, r.confidence)).collect(),
+            skills: entity_skills,
             evidence_count: experience.evidence_count,
             bullets,
+        });
+    }
+
+    for education in super::vault::vault_list::<super::vault::Education>(conn)? {
+        let bullets = vec![format!("{} in {}", education.degree, education.field_of_study)];
+        let desc = format!(
+            "{} in {}{}",
+            education.degree,
+            education.field_of_study,
+            if education.description.is_empty() {
+                String::new()
+            } else {
+                format!(". {}", education.description)
+            }
+        );
+        entities.push(MatchEntity {
+            entity_type: "education".to_string(),
+            id: education.id,
+            title: education.institution,
+            description: desc,
+            start_date: education.start_date,
+            end_date: education.end_date,
+            is_current: education.is_current,
+            skills: Vec::new(),
+            evidence_count: 0,
+            bullets,
+        });
+    }
+
+    for achievement in super::vault::vault_list::<super::vault::Achievement>(conn)? {
+        let title = if achievement.issuer.is_empty() {
+            achievement.title
+        } else {
+            format!("{} — {}", achievement.title, achievement.issuer)
+        };
+        entities.push(MatchEntity {
+            entity_type: "achievement".to_string(),
+            id: achievement.id,
+            title,
+            description: achievement.description.clone(),
+            start_date: achievement.achieved_on.clone(),
+            end_date: achievement.achieved_on,
+            is_current: false,
+            skills: Vec::new(),
+            evidence_count: 0,
+            bullets: vec![achievement.description],
+        });
+    }
+
+    for certification in super::vault::vault_list::<super::vault::Certification>(conn)? {
+        let title = if certification.issuer.is_empty() {
+            certification.title
+        } else {
+            format!("{} ({})", certification.title, certification.issuer)
+        };
+        entities.push(MatchEntity {
+            entity_type: "certification".to_string(),
+            id: certification.id,
+            title,
+            description: certification.description.clone(),
+            start_date: certification.issue_date.clone(),
+            end_date: certification.expiry_date.clone(),
+            is_current: false,
+            skills: Vec::new(),
+            evidence_count: 0,
+            bullets: vec![certification.description],
         });
     }
 

@@ -249,6 +249,7 @@ function ResumeCandidates({
   dismiss: (key: string) => void;
   onDone: () => void;
 }) {
+  const vaultSkills = useVaultStore((s) => s.skills);
   const saveProfile = useVaultStore((s) => s.saveProfile);
   const profile = useVaultStore((s) => s.profile);
   const saveRecord = useVaultStore((s) => s.saveRecord);
@@ -384,6 +385,24 @@ function ResumeCandidates({
             busy={busyKey === key}
             onAccept={async (data) =>
               run(key, async () => {
+                const text = `${data.organization} ${data.role} ${data.description}`.toLowerCase();
+                const matchedSkills = vaultSkills
+                  .filter((s) => {
+                    const names = [s.canonicalName, ...s.aliases.map((a) => a.alias)];
+                    return names.some((n) => {
+                      const lower = n.toLowerCase();
+                      if (lower.length <= 2) {
+                        return text.split(/[^a-z0-9+#]/).includes(lower);
+                      }
+                      return text.includes(lower);
+                    });
+                  })
+                  .map((s) => ({
+                    skillId: s.id,
+                    canonicalName: s.canonicalName,
+                    confidence: 3,
+                  }));
+
                 const experience = await saveRecord("experiences", {
                   id: 0,
                   organization: data.organization,
@@ -393,7 +412,7 @@ function ResumeCandidates({
                   endDate: data.endDate,
                   isCurrent: data.isCurrent,
                   location: data.location,
-                  skills: [],
+                  skills: matchedSkills,
                   evidenceCount: 0,
                 } satisfies Experience);
                 toast.ok(`Experience "${experience.organization}" added`);
