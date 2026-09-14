@@ -33,7 +33,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
       const res = await ipc.exportPdf(jobId, templateId);
       setArtifact(res.artifact);
       setPdfUrl(convertFileSrc(res.artifact.pdfPath));
-      toast.success("Resume compiled successfully");
+      toast.ok("Resume compiled successfully");
     } catch (e) {
       setError(String(e));
       toast.error("Compilation failed");
