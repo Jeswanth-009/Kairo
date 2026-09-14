@@ -2,7 +2,7 @@ mod ai;
 mod commands;
 pub mod composer;
 pub mod db;
-mod imports;
+pub mod imports;
 mod interview;
 mod jd;
 pub mod latex;

@@ -212,9 +212,26 @@ export interface ClaimRule {
 
 export interface ImportProfile {
   fullName: string;
+  headline: string;
   email: string;
+  phone: string;
   github: string;
   website: string;
+  linkedin: string;
+  summary: string;
+}
+
+export interface SkillDraft {
+  name: string;
+  category: SkillCategory;
+}
+
+export interface AchievementDraft {
+  title: string;
+  issuer: string;
+  description: string;
+  achievedOn: string | null;
+  sourceSnippet: string;
 }
 
 export interface ProjectDraft {
@@ -228,6 +245,10 @@ export interface ExperienceDraft {
   organization: string;
   role: string;
   description: string;
+  startDate: string | null;
+  endDate: string | null;
+  isCurrent: boolean;
+  location: string;
   sourceSnippet: string;
 }
 
@@ -235,6 +256,9 @@ export interface EducationDraft {
   institution: string;
   degree: string;
   fieldOfStudy: string;
+  startDate: string | null;
+  endDate: string | null;
+  isCurrent: boolean;
   sourceSnippet: string;
 }
 
@@ -261,7 +285,8 @@ export interface ResumeImport {
   projects: ProjectDraft[];
   experiences: ExperienceDraft[];
   education: EducationDraft[];
-  skills: string[];
+  achievements: AchievementDraft[];
+  skills: SkillDraft[];
 }
 
 // --- Job Workspace (Phase 4) ----------------------------------------------
