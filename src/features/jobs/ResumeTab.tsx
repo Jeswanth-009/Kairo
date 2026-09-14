@@ -4,7 +4,7 @@ import { Card } from "../../components/ui/Card";
 import { ipc } from "../../lib/ipc";
 import { toast } from "../../stores/toastStore";
 import type { PdfArtifact } from "../../lib/types";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { PdfViewer } from "../resume-studio/PdfViewer";
 
 const TEMPLATES = [
   { id: "jake", name: "Jake", desc: "Clean ATS-friendly column layout" },
@@ -17,7 +17,6 @@ export function ResumeTab({ jobId }: { jobId: number }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
     ipc
@@ -25,7 +24,6 @@ export function ResumeTab({ jobId }: { jobId: number }) {
       .then((a) => {
         if (a) {
           setArtifact(a);
-          setPdfUrl(convertFileSrc(a.pdfPath));
         }
       })
       .catch(console.error);
@@ -37,7 +35,6 @@ export function ResumeTab({ jobId }: { jobId: number }) {
     try {
       const res = await ipc.exportPdf(jobId, templateId);
       setArtifact(res.artifact);
-      setPdfUrl(convertFileSrc(res.artifact.pdfPath));
       toast.ok("Resume compiled successfully");
     } catch (e) {
       setError(String(e));
@@ -131,12 +128,33 @@ export function ResumeTab({ jobId }: { jobId: number }) {
                 </span>
               </div>
             </div>
-            <div className="mt-4 flex gap-2">
-              <Button size="sm" variant="secondary" onClick={openPdf} className="flex-1 justify-center">
-                Open in viewer ↗
+            <div className="mt-4 flex flex-col gap-2">
+              <Button size="sm" variant="secondary" onClick={openPdf} className="w-full justify-center">
+                Open in external viewer ↗
               </Button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void ipc
+                      .savePdfToDownloads(artifact.pdfPath)
+                      .then((p) => toast.ok(`Saved to Downloads: ${p}`))
+                      .catch((e) => toast.error(String(e)))
+                  }
+                  className="flex-1 rounded border border-slate-200 bg-slate-50 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  💾 Downloads
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void ipc.revealFile(artifact.pdfPath).catch((e) => toast.error(String(e)))}
+                  className="flex-1 rounded border border-slate-200 bg-slate-50 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  📂 Folder
+                </button>
+              </div>
             </div>
-            <p className="mt-2 truncate text-[10px] text-slate-400" title={artifact.pdfPath}>
+            <p className="mt-2 truncate text-[10px] text-slate-400 font-mono select-all" title={artifact.pdfPath}>
               {artifact.pdfPath}
             </p>
           </Card>
@@ -145,15 +163,11 @@ export function ResumeTab({ jobId }: { jobId: number }) {
 
       {/* Right column — PDF preview */}
       <div className="w-full lg:w-2/3">
-        <Card className="flex min-h-[800px] items-center justify-center overflow-hidden bg-slate-50 p-0 shadow-inner">
-          {pdfUrl ? (
-            <iframe
-              src={`${pdfUrl}#toolbar=0`}
-              className="h-[800px] w-full border-0"
-              title="Resume PDF Preview"
-            />
-          ) : (
-            <div className="flex flex-col items-center gap-3 text-center">
+        {artifact ? (
+          <PdfViewer pdfPath={artifact.pdfPath} className="w-full" />
+        ) : (
+          <Card className="flex min-h-[600px] items-center justify-center overflow-hidden bg-slate-50 p-0 shadow-inner">
+            <div className="flex flex-col items-center gap-3 text-center p-8">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
                 <svg className="h-8 w-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -166,8 +180,8 @@ export function ResumeTab({ jobId }: { jobId: number }) {
                 </p>
               </div>
             </div>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
     </div>
   );

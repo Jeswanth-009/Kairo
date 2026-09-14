@@ -199,6 +199,10 @@ export const ipc = {
   getPdfArtifact: (jobId: number): Promise<PdfArtifact | null> =>
     invoke<PdfArtifact | null>("get_pdf_artifact", { jobId }),
   openFile: (path: string): Promise<void> => invoke<void>("open_file", { path }),
+  readPdfBytes: (path: string): Promise<number[]> => invoke<number[]>("read_pdf_bytes", { path }),
+  revealFile: (path: string): Promise<void> => invoke<void>("reveal_file", { path }),
+  savePdfToDownloads: (srcPath: string, customName?: string): Promise<string> =>
+    invoke<string>("save_pdf_to_downloads", { srcPath, customName }),
 
   // Applications (Phase 11)
   listApplications: (): Promise<Application[]> => invoke<Application[]>("list_applications"),

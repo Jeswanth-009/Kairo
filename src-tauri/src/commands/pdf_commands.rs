@@ -106,3 +106,75 @@ pub fn open_file(path: String) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Read a local file into raw binary bytes for frontend PDF rendering.
+#[tauri::command]
+pub fn read_pdf_bytes(path: String) -> Result<Vec<u8>, String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err(format!("File does not exist: {}", path));
+    }
+    std::fs::read(p).map_err(|e| format!("Failed to read file: {e}"))
+}
+
+/// Reveal a file in the OS file explorer with the file selected.
+#[tauri::command]
+pub fn reveal_file(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .args(["/select,", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-R", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(parent) = std::path::Path::new(&path).parent() {
+            std::process::Command::new("xdg-open")
+                .arg(parent)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// Save / copy a PDF to the user's standard Downloads folder.
+#[tauri::command]
+pub fn save_pdf_to_downloads(src_path: String, custom_name: Option<String>) -> Result<String, String> {
+    let src = std::path::Path::new(&src_path);
+    if !src.exists() {
+        return Err("Source file does not exist".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    let downloads = std::env::var("USERPROFILE")
+        .map(|p| std::path::PathBuf::from(p).join("Downloads"))
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+
+    #[cfg(not(target_os = "windows"))]
+    let downloads = std::env::var("HOME")
+        .map(|h| std::path::PathBuf::from(h).join("Downloads"))
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+
+    if !downloads.exists() {
+        let _ = std::fs::create_dir_all(&downloads);
+    }
+
+    let file_name = custom_name.unwrap_or_else(|| {
+        src.file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_else(|| "resume.pdf".to_string())
+    });
+
+    let dest = downloads.join(&file_name);
+    std::fs::copy(&src, &dest).map_err(|e| format!("Failed to copy to {}: {e}", dest.display()))?;
+    Ok(dest.to_string_lossy().to_string())
+}

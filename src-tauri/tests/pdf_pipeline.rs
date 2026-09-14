@@ -71,6 +71,7 @@ fn sample_plan() -> ResumePlan {
             evidence_count: 1,
             excluded: false,
         }],
+        achievements: vec![],
         skills: vec!["Python".to_string(), "SQL".to_string()],
         excluded_skills: vec![],
         estimated_lines: 21,

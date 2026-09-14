@@ -85,10 +85,24 @@ pub struct ComposerEntity {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ComposerAchievement {
+    pub id: i64,
+    pub title: String,
+    pub issuer: String,
+    pub description: String,
+    pub achieved_on: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComposerInput {
     pub profile: Option<ComposerProfile>,
     pub education: Vec<ComposerEducation>,
     pub entities: Vec<ComposerEntity>,
+    #[serde(default)]
+    pub achievements: Vec<ComposerAchievement>,
+    #[serde(default)]
+    pub vault_skills: Vec<String>,
     /// Requirement texts the bullets are scored against.
     pub requirement_texts: Vec<String>,
     pub config: ComposerConfig,
@@ -131,6 +145,19 @@ pub struct PlanItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PlanAchievement {
+    pub id: i64,
+    pub title: String,
+    pub issuer: String,
+    pub description: String,
+    pub achieved_on: Option<String>,
+    /// Studio-only toggle: excluded achievements stay in the plan but don't render.
+    #[serde(default)]
+    pub excluded: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlanEducation {
     pub id: i64,
     pub institution: String,
@@ -163,6 +190,8 @@ pub struct ResumePlan {
     pub education: Vec<PlanEducation>,
     pub experience: Vec<PlanItem>,
     pub projects: Vec<PlanItem>,
+    #[serde(default)]
+    pub achievements: Vec<PlanAchievement>,
     pub skills: Vec<String>,
     /// Studio-only: skills hidden from the resume but kept in the plan.
     #[serde(default)]
@@ -208,6 +237,12 @@ pub fn estimate_plan_lines(plan: &ResumePlan) -> u32 {
     for item in plan.experience.iter().chain(plan.projects.iter()) {
         if !item.excluded {
             lines += item_lines(item);
+        }
+    }
+    for ach in plan.achievements.iter().filter(|a| !a.excluded) {
+        lines += 1;
+        if !ach.description.is_empty() {
+            lines += wrapped_lines(&ach.description);
         }
     }
     let included: Vec<&String> = plan
@@ -411,7 +446,8 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         }
     }
 
-    // Skills: linked to selected records, requirement mentions first.
+    // Skills: linked to selected records, requirement mentions first,
+    // followed by all other skills from the Vault.
     let mut skills: Vec<String> = Vec::new();
     let req_token_sets: Vec<std::collections::HashSet<String>> = input
         .requirement_texts
@@ -444,14 +480,50 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             skills.push(name.clone());
         }
     }
+    // Also include all vault skills so they are not lost
+    for name in &input.vault_skills {
+        let lower = name.to_lowercase();
+        if skills.iter().any(|s| s.to_lowercase() == lower) {
+            continue;
+        }
+        let stem = lower.trim_end_matches('s').to_string();
+        let hits_requirements = req_token_sets
+            .iter()
+            .any(|set| set.contains(&lower) || set.contains(&stem));
+        if hits_requirements {
+            mentioned.push(name.clone());
+        } else {
+            other.push(name.clone());
+        }
+        skills.push(name.clone());
+    }
     mentioned.extend(other);
     let skills = mentioned;
 
-    let plan_at = |experience: &[PlanItem], projects: &[PlanItem], skills: &[String]| -> u32 {
+    let achievements: Vec<PlanAchievement> = input
+        .achievements
+        .iter()
+        .map(|a| PlanAchievement {
+            id: a.id,
+            title: a.title.clone(),
+            issuer: a.issuer.clone(),
+            description: a.description.clone(),
+            achieved_on: a.achieved_on.clone(),
+            excluded: false,
+        })
+        .collect();
+
+    let plan_at = |experience: &[PlanItem], projects: &[PlanItem], achievements: &[PlanAchievement], skills: &[String]| -> u32 {
         let mut lines = 4; // header block
         lines += education.len() as u32 * 2;
         for item in experience.iter().chain(projects.iter()) {
             lines += item_lines(item);
+        }
+        for ach in achievements.iter().filter(|a| !a.excluded) {
+            lines += 1;
+            if !ach.description.is_empty() {
+                lines += wrapped_lines(&ach.description);
+            }
         }
         if !skills.is_empty() {
             lines += 1; // section heading
@@ -462,7 +534,7 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
     };
 
     let capacity = (input.config.target_pages as f64 * LINES_PER_PAGE).floor() as u32;
-    let mut estimated_lines = plan_at(&experience, &projects, &skills);
+    let mut estimated_lines = plan_at(&experience, &projects, &achievements, &skills);
 
     // 5–6. Resolve overflow: drop the lowest-support bullets first, then the
     // lowest-relevance record — never the mandatory education or header.
@@ -492,7 +564,7 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
                 .find(|i| i.entity_type == entity_type && i.id == id)
                 .unwrap();
             item.bullets.retain(|b| b.id != bullet_id);
-            estimated_lines = plan_at(&experience, &projects, &skills);
+            estimated_lines = plan_at(&experience, &projects, &achievements, &skills);
             continue;
         }
         // No bullets left to trim: drop the lowest-relevance selected record.
@@ -509,7 +581,7 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
                     projects.retain(|i| i.id != id);
                 }
                 dropped_items += 1;
-                estimated_lines = plan_at(&experience, &projects, &skills);
+                estimated_lines = plan_at(&experience, &projects, &achievements, &skills);
             }
             None => break,
         }
@@ -535,6 +607,7 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         education,
         experience,
         projects,
+        achievements,
         skills,
         excluded_skills: Vec::new(),
         estimated_lines,
@@ -596,6 +669,8 @@ mod tests {
                 is_current: false,
             }],
             entities,
+            achievements: vec![],
+            vault_skills: vec![],
             requirement_texts: requirements.iter().map(|s| s.to_string()).collect(),
             config,
         }
