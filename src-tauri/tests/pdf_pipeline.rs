@@ -82,7 +82,7 @@ fn sample_plan() -> ResumePlan {
 #[test]
 fn compile_locked_produces_valid_pdf() {
     let plan = sample_plan();
-    let tex = kairo_lib::latex::render_plan(&plan);
+    let tex = kairo_lib::latex::render_plan(&plan, "classic");
     assert!(tex.contains("\\documentclass[10pt,letterpaper]{article}"));
     assert!(tex.contains("PyKV — in-memory key-value store"));
 
@@ -98,7 +98,7 @@ fn compile_locked_produces_valid_pdf() {
     let out_dir = std::env::temp_dir().join(format!("kairo-pdf-test-{}", std::process::id()));
     std::fs::create_dir_all(&out_dir).unwrap();
 
-    let output = kairo_lib::db::pdf::compile_locked(plan, 999, &candidate, &out_dir.parent().unwrap().join("kairo-pdf-root")).unwrap_or_else(|e| {
+    let output = kairo_lib::db::pdf::compile_locked(plan, 999, "classic", &candidate, &out_dir.parent().unwrap().join("kairo-pdf-root")).unwrap_or_else(|e| {
         if e.contains("bundle") || e.contains("network") {
             eprintln!("skipping: bundle not reachable: {e}");
             return kairo_lib::db::pdf::CompileOutput {

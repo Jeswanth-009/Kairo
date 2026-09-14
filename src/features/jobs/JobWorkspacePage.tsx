@@ -10,6 +10,7 @@ import { toast } from "../../stores/toastStore";
 import { MatchTab } from "./MatchTab";
 import { PlanTab } from "./PlanTab";
 import { TailorTab } from "./TailorTab";
+import { ResumeTab } from "./ResumeTab";
 
 const KIND_LABELS: Record<JobRequirementKind, string> = {
   required_skill: "Required skills",
@@ -140,13 +141,7 @@ export default function JobWorkspacePage() {
       {tab === "match" ? <MatchTab jobId={job.id} domain={job.domain} /> : null}
       {tab === "plan" ? <PlanTab jobId={job.id} /> : null}
       {tab === "tailor" ? <TailorTab jobId={job.id} onComposePlan={() => setTab("plan")} /> : null}
-      {tab === "resume" ? (
-        <Card className="p-8 text-center">
-          <p className="text-sm text-muted">
-            The Resume Studio (Phase 8) renders this plan into the final document.
-          </p>
-        </Card>
-      ) : null}
+      {tab === "resume" ? <ResumeTab jobId={job.id} /> : null}
     </div>
   );
 }

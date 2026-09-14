@@ -13,7 +13,7 @@ fn main() {
     }
     let plan_json = std::fs::read_to_string(&args[1]).expect("read plan json");
     let plan: ResumePlan = serde_json::from_str(&plan_json).expect("parse plan json");
-    let tex = kairo_lib::latex::render_plan(&plan);
+    let tex = kairo_lib::latex::render_plan(&plan, "classic");
     let out = if args.len() > 2 {
         PathBuf::from(&args[2])
     } else {

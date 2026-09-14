@@ -148,10 +148,11 @@ pub struct CompileOutput {
 pub fn compile_locked(
     plan: ResumePlan,
     job_id: i64,
+    template_id: &str,
     tectonic: &Path,
     app_data_dir: &Path,
 ) -> Result<CompileOutput, String> {
-    let tex = crate::latex::render_plan(&plan);
+    let tex = crate::latex::render_plan(&plan, template_id);
 
     let out_dir = app_data_dir
         .join("pdf")

@@ -6,6 +6,7 @@ pub mod imports;
 mod interview;
 mod jd;
 pub mod latex;
+pub mod latex_templates;
 mod logging;
 mod matching;
 mod tailor;

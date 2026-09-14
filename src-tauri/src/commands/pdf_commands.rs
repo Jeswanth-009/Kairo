@@ -17,6 +17,7 @@ pub struct ExportResult {
 pub fn export_pdf(
     state: State<'_, DbState>,
     job_id: i64,
+    template_id: String,
     app_data_dir: State<'_, AppDataDir>,
 ) -> Result<ExportResult, String> {
     let started = std::time::Instant::now();
@@ -34,7 +35,7 @@ pub fn export_pdf(
     }; // DB lock dropped — the compile can take minutes on first run.
 
     // 2. Write .tex + run Tectonic (no lock held).
-    let out = match pdf::compile_locked(plan, job_id, &tectonic, &app_data_dir.0) {
+    let out = match pdf::compile_locked(plan, job_id, &template_id, &tectonic, &app_data_dir.0) {
         Ok(out) => out,
         Err(e) => {
             crate::logging::log_event(
