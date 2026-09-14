@@ -61,33 +61,42 @@ function PlanPreview({
   const renderItems = (items: PlanItem[]) =>
     items
       .filter((i) => !i.excluded)
-      .map((item) => (
-        <div key={`${item.entityType}-${item.id}`} className="mb-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[13px] font-semibold text-neutral-900">
-              {item.title}
-              {item.subtitle ? <span className="font-normal text-neutral-600"> — {item.subtitle}</span> : null}
-            </span>
-            <span className="shrink-0 text-[11px] text-neutral-500">
-              {fmtRange({ startDate: item.startDate, endDate: item.endDate, isCurrent: item.isCurrent })}
-            </span>
+      .map((item) => {
+        // item.title is "Org — Role" for experience; just title for projects
+        const dashIdx = item.title.indexOf(" \u2014 ");
+        const org  = dashIdx >= 0 ? item.title.slice(0, dashIdx) : item.title;
+        const role = dashIdx >= 0 ? item.title.slice(dashIdx + 3) : item.subtitle;
+        const location = dashIdx >= 0 ? item.subtitle : "";
+        return (
+          <div key={`${item.entityType}-${item.id}`} className="mb-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[13px] font-semibold text-neutral-900">{org}</span>
+              <span className="shrink-0 text-[11px] text-neutral-500">
+                {fmtRange({ startDate: item.startDate, endDate: item.endDate, isCurrent: item.isCurrent })}
+              </span>
+            </div>
+            {(role || location) ? (
+              <p className="text-[11px] text-neutral-500">
+                {role}{role && location ? " · " : ""}{location}
+              </p>
+            ) : null}
+            {item.bullets.filter((b) => !b.excluded).length > 0 ? (
+              <ul className="mt-1 list-disc pl-5">
+                {item.bullets
+                  .filter((b) => !b.excluded)
+                  .map((b) => {
+                    const accepted = acceptedFor(b.id);
+                    return (
+                      <li key={b.id} className="text-[12px] leading-snug text-neutral-800">
+                        {accepted ? accepted.suggestedText : b.text}
+                      </li>
+                    );
+                  })}
+              </ul>
+            ) : null}
           </div>
-          {item.bullets.filter((b) => !b.excluded).length > 0 ? (
-            <ul className="mt-1 list-disc pl-5">
-              {item.bullets
-                .filter((b) => !b.excluded)
-                .map((b) => {
-                  const accepted = acceptedFor(b.id);
-                  return (
-                    <li key={b.id} className="text-[12px] leading-snug text-neutral-800">
-                      {accepted ? accepted.suggestedText : b.text}
-                    </li>
-                  );
-                })}
-            </ul>
-          ) : null}
-        </div>
-      ));
+        );
+      });
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm font-sans text-neutral-900">
@@ -531,25 +540,31 @@ export default function ResumeStudioPage() {
                 </span>
               </CardTitle>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {plan.skills.map((skill) => {
-                const excluded = (plan.excludedSkills ?? []).includes(skill);
-                return (
-                  <button
-                    key={skill}
-                    type="button"
-                    onClick={() => toggleSkill(skill)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                      excluded
-                        ? "border-slate-200 bg-slate-100 text-slate-400 line-through"
-                        : "border-kairo-blue/30 bg-kairo-blue/5 text-kairo-blue hover:bg-kairo-blue/10"
-                    }`}
-                  >
-                    {skill}
-                  </button>
-                );
-              })}
-            </div>
+            {plan.skills.length === 0 ? (
+              <p className="text-[11px] text-slate-400">
+                No skills linked to your vault items yet — add skills to your projects and experience in the Vault.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {plan.skills.map((skill) => {
+                  const excluded = (plan.excludedSkills ?? []).includes(skill);
+                  return (
+                    <button
+                      key={skill}
+                      type="button"
+                      onClick={() => toggleSkill(skill)}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        excluded
+                          ? "border-slate-200 bg-slate-100 text-slate-400 line-through"
+                          : "border-kairo-blue/30 bg-kairo-blue/5 text-kairo-blue hover:bg-kairo-blue/10"
+                      }`}
+                    >
+                      {skill}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </Card>
 
           {excludedCount > 0 ? (
@@ -625,19 +640,34 @@ export default function ResumeStudioPage() {
             </Button>
 
             {artifact && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[11px]">
-                <span className="text-emerald-600">✓ Compiled</span>
-                {artifact.pageCount ? <span className="text-emerald-600">· {artifact.pageCount} page(s)</span> : null}
-                {artifact.compiledAt ? (
-                  <span className="text-emerald-500">· {artifact.compiledAt.replace("T", " ").slice(0, 16)}</span>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setShowPdf(!showPdf)}
-                  className="ml-auto text-kairo-blue hover:underline"
-                >
-                  {showPdf ? "Show plan view" : "Show PDF ↗"}
-                </button>
+              <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-emerald-700">✓ Compiled</span>
+                  {artifact.pageCount ? <span className="text-[11px] text-emerald-600">· {artifact.pageCount} page(s)</span> : null}
+                  {artifact.compiledAt ? (
+                    <span className="text-[11px] text-emerald-500">· {artifact.compiledAt.replace("T", " ").slice(0, 16)}</span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setShowPdf(!showPdf)}
+                    className="ml-auto text-[11px] text-kairo-blue hover:underline"
+                  >
+                    {showPdf ? "Show plan view" : "Show PDF ↗"}
+                  </button>
+                </div>
+                {/* Save location — always visible */}
+                <div className="mt-2 flex items-start gap-2 rounded-md bg-white/60 px-2.5 py-2">
+                  <span className="mt-0.5 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Saved to</span>
+                  <p className="min-w-0 flex-1 break-all text-[11px] text-slate-600 font-mono select-all">{artifact.pdfPath}</p>
+                  <button
+                    type="button"
+                    title="Copy path"
+                    onClick={() => void navigator.clipboard.writeText(artifact.pdfPath)}
+                    className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-slate-400 hover:bg-slate-100 hover:text-ink"
+                  >
+                    copy
+                  </button>
+                </div>
               </div>
             )}
 
