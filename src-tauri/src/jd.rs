@@ -786,7 +786,18 @@ fn push_requirement(
     importance: f64,
 ) {
     let text = raw.trim();
-    if text.is_empty() || text.len() > 300 {
+    if text.is_empty() {
+        return;
+    }
+    if text.len() > 300 {
+        if text.contains(". ") {
+            for sentence in text.split(". ") {
+                let s = sentence.trim();
+                if !s.is_empty() {
+                    push_requirement(requirements, seen, kind, s, importance);
+                }
+            }
+        }
         return;
     }
     let key = text.to_lowercase();
