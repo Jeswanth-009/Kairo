@@ -7,13 +7,13 @@ import type { PdfArtifact } from "../../lib/types";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 const TEMPLATES = [
-  { id: "classic", name: "Classic", desc: "Traditional ATS-friendly layout" },
-  { id: "minimal", name: "Minimal", desc: "Clean modern sans-serif" },
-  { id: "modern", name: "Modern", desc: "Elegant serif with accented headers" },
+  { id: "jake", name: "Jake", desc: "Clean ATS-friendly column layout" },
+  { id: "expressive", name: "Expressive", desc: "Narrative style with headline & objective" },
+  { id: "plushcv", name: "PlushCV", desc: "Two-column — skills/education on sidebar" },
 ];
 
 export function ResumeTab({ jobId }: { jobId: number }) {
-  const [templateId, setTemplateId] = useState<string>("classic");
+  const [templateId, setTemplateId] = useState<string>("jake");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);

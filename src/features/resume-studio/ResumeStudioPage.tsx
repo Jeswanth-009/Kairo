@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { Select, Textarea } from "../../components/ui/inputs";
+import { Select } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
 import { fmtRange } from "../../lib/dateFmt";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -14,265 +14,43 @@ import type {
   ResumePlan,
   ResumeVersion,
   TailorSuggestion,
-  ValidationResult,
 } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
-const CAPACITY = 56; // one letter page at 9.5-10pt (mirrors composer.rs)
+const CAPACITY = 56;
 
 const TEMPLATES = [
-  { id: "classic", name: "Classic", desc: "Traditional ATS-friendly layout" },
-  { id: "minimal", name: "Minimal", desc: "Clean modern sans-serif" },
-  { id: "modern", name: "Modern", desc: "Elegant serif with accented headers" },
+  {
+    id: "jake",
+    name: "Jake",
+    desc: "Clean ATS-friendly — classic column layout",
+    preview: "Jake Gutierrez's popular MIT-licensed resume",
+  },
+  {
+    id: "expressive",
+    name: "Expressive",
+    desc: "Narrative style with headline and objective",
+    preview: "Expressive Resume — color-accented sections",
+  },
+  {
+    id: "plushcv",
+    name: "PlushCV",
+    desc: "Two-column — skills/education on sidebar",
+    preview: "PlushCV — dark header, two-column layout",
+  },
 ] as const;
 
 type TemplateId = (typeof TEMPLATES)[number]["id"];
 
 // ---------------------------------------------------------------------------
-// EditorPanel
+// HTML Plan preview (used before PDF is compiled)
 // ---------------------------------------------------------------------------
 
-function EditorPanel({
-  jobId,
-  bullet,
-  entity,
-  suggestion,
-  onAccept,
-  onReject,
-  onReset,
-  onManualSave,
-  busy,
-}: {
-  jobId: number;
-  bullet: { id: number; text: string };
-  entity: PlanItem;
-  suggestion: TailorSuggestion | null;
-  onAccept: () => void;
-  onReject: () => void;
-  onReset: () => void;
-  onManualSave: (text: string) => Promise<void>;
-  busy: boolean;
-}) {
-  const [evidence, setEvidence] = useState<
-    { id: number; kind: string; title: string; verified: boolean }[]
-  >([]);
-  const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState("");
-  const [claimReport, setClaimReport] = useState<ValidationResult | null>(null);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        setEvidence(await ipc.listEvidence(entity.entityType, entity.id));
-      } catch {
-        setEvidence([]);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entity.entityType, entity.id]);
-
-  useEffect(() => {
-    setEditing(false);
-    setEditText("");
-    setClaimReport(null);
-  }, [bullet.id]);
-
-  useEffect(() => {
-    if (!editing) return;
-    const handle = setTimeout(() => {
-      void (async () => {
-        try {
-          setClaimReport(await ipc.claimChanges(jobId, bullet.id, editText));
-        } catch {
-          setClaimReport(null);
-        }
-      })();
-    }, 400);
-    return () => clearTimeout(handle);
-  }, [editText, editing, jobId, bullet.id]);
-
-  const accepted = suggestion?.status === "accepted";
-  const currentWording = accepted && suggestion ? suggestion.suggestedText : bullet.text;
-
-  const saveManual = async () => {
-    if (!editText.trim()) return;
-    await onManualSave(editText.trim());
-    setEditing(false);
-    setClaimReport(null);
-  };
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          Canonical bullet (Vault source of truth)
-        </p>
-        <p className="mt-1 rounded-lg bg-surface p-2.5 text-xs leading-relaxed text-ink">
-          {bullet.text}
-        </p>
-      </div>
-
-      {suggestion ? (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            {accepted ? "Accepted tailored wording" : "AI suggestion"}
-            {suggestion.model ? ` · ${suggestion.model}` : ""}
-          </p>
-          <p
-            className={`mt-1 rounded-lg p-2.5 text-xs leading-relaxed ${
-              suggestion.validation.ok ? "bg-kairo-blue/5 text-ink" : "bg-red-50 text-red-700"
-            }`}
-          >
-            {suggestion.suggestedText}
-          </p>
-          {suggestion.validation.violations.length > 0 ? (
-            <ul className="mt-1.5 space-y-0.5">
-              {suggestion.validation.violations.map((v, i) => (
-                <li key={i} className="text-[11px] text-red-600">
-                  ✕ {v}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {!accepted ? (
-            <div className="mt-2 flex gap-1.5">
-              <Button size="sm" onClick={onAccept} disabled={busy || !suggestion.validation.ok}>
-                Accept
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-red-600 hover:bg-red-50"
-                onClick={onReject}
-                disabled={busy}
-              >
-                Reject
-              </Button>
-            </div>
-          ) : (
-            <div className="mt-2 flex gap-1.5">
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                ✓ In the plan preview
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-red-600 hover:bg-red-50"
-                onClick={onReset}
-                disabled={busy}
-              >
-                Reset to canonical
-              </Button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <p className="text-[11px] text-slate-400">
-          No AI suggestion for this bullet yet — generate one in the workspace's Tailor tab, or
-          edit the wording manually below.
-        </p>
-      )}
-
-      {editing ? (
-        <div className="rounded-lg border border-kairo-blue/30 bg-kairo-blue/5 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            Edit wording
-          </p>
-          <Textarea
-            autoFocus
-            rows={3}
-            className="mt-1.5"
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-          />
-          <div className="mt-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              Detected claim changes
-            </p>
-            {claimReport === null ? (
-              <p className="mt-1 text-[11px] text-slate-400">Checking…</p>
-            ) : claimReport.violations.length === 0 ? (
-              <p className="mt-1 text-[11px] text-emerald-600">
-                ✓ No new metrics, technologies or forbidden claims detected.
-              </p>
-            ) : (
-              <ul className="mt-1 space-y-0.5">
-                {claimReport.violations.map((v, i) => (
-                  <li key={i} className="text-[11px] text-amber-600">
-                    ⚠ {v}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div className="mt-2 flex gap-1.5">
-            <Button size="sm" onClick={() => void saveManual()} disabled={!editText.trim()}>
-              Save edit
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setEditing(false);
-                setClaimReport(null);
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-          <p className="mt-1.5 text-[10px] text-slate-400">
-            Manual edits are user-approved by definition — warnings are advisory, not blocking.
-          </p>
-        </div>
-      ) : (
-        <div className="flex gap-1.5">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              setEditText(currentWording);
-              setEditing(true);
-            }}
-          >
-            Edit wording
-          </Button>
-        </div>
-      )}
-
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          Evidence ({evidence.length})
-        </p>
-        {evidence.length === 0 ? (
-          <p className="mt-1 text-[11px] text-amber-600">No evidence attached to this record.</p>
-        ) : (
-          <ul className="mt-1 space-y-1">
-            {evidence.map((e) => (
-              <li key={e.id} className="text-[11px] text-muted">
-                <span className={e.verified ? "text-emerald-600" : "text-amber-600"}>
-                  {e.verified ? "✓" : "…"}
-                </span>{" "}
-                {e.title} <span className="text-slate-400">({e.kind})</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// HTML Plan Preview (shown before PDF is compiled)
-// ---------------------------------------------------------------------------
-
-function PreviewPane({
+function PlanPreview({
   plan,
-  excludedCount,
   suggestions,
 }: {
   plan: ResumePlan;
-  excludedCount: number;
   suggestions: TailorSuggestion[];
 }) {
   const acceptedFor = (bulletId: number) =>
@@ -285,12 +63,12 @@ function PreviewPane({
       .filter((i) => !i.excluded)
       .map((item) => (
         <div key={`${item.entityType}-${item.id}`} className="mb-3">
-          <div className="flex items-baseline justify-between">
+          <div className="flex items-baseline justify-between gap-2">
             <span className="text-[13px] font-semibold text-neutral-900">
               {item.title}
-              {item.subtitle ? <span className="font-normal"> — {item.subtitle}</span> : null}
+              {item.subtitle ? <span className="font-normal text-neutral-600"> — {item.subtitle}</span> : null}
             </span>
-            <span className="text-[11px] text-neutral-500">
+            <span className="shrink-0 text-[11px] text-neutral-500">
               {fmtRange({ startDate: item.startDate, endDate: item.endDate, isCurrent: item.isCurrent })}
             </span>
           </div>
@@ -312,12 +90,14 @@ function PreviewPane({
       ));
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="border-b border-neutral-300 pb-2 text-center">
-        <p className="text-lg font-bold tracking-wide text-neutral-900">
-          {plan.header.fullName || "Your Name"}
-        </p>
-        <p className="mt-0.5 text-[11px] text-neutral-500">
+    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm font-sans text-neutral-900">
+      {/* Header */}
+      <div className="border-b border-neutral-300 pb-3 text-center">
+        <p className="text-xl font-bold tracking-wide">{plan.header.fullName || "Your Name"}</p>
+        {plan.header.headline ? (
+          <p className="mt-0.5 text-[12px] italic text-neutral-600">{plan.header.headline}</p>
+        ) : null}
+        <p className="mt-1 text-[11px] text-neutral-500">
           {[
             plan.header.email,
             plan.header.phone,
@@ -331,16 +111,13 @@ function PreviewPane({
         </p>
       </div>
 
+      {/* Education */}
       {plan.education.length > 0 ? (
-        <div className="mt-3">
-          <p className="text-[12px] font-bold uppercase tracking-widest text-neutral-900">Education</p>
+        <div className="mt-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500 border-b border-neutral-200 pb-0.5 mb-2">Education</p>
           {plan.education.map((e) => (
-            <div key={e.id} className="mt-1 flex items-baseline justify-between">
-              <span className="text-[13px] text-neutral-900">
-                <span className="font-semibold">{e.institution}</span>
-                {e.degree ? ` — ${e.degree}` : ""}
-                {e.fieldOfStudy ? `, ${e.fieldOfStudy}` : ""}
-              </span>
+            <div key={e.id} className="flex items-baseline justify-between">
+              <span className="text-[13px] font-semibold">{e.institution}</span>
               <span className="text-[11px] text-neutral-500">
                 {fmtRange({ startDate: e.startDate, endDate: e.endDate, isCurrent: e.isCurrent })}
               </span>
@@ -349,31 +126,28 @@ function PreviewPane({
         </div>
       ) : null}
 
+      {/* Experience */}
       {plan.experience.some((i) => !i.excluded) ? (
-        <div className="mt-3">
-          <p className="text-[12px] font-bold uppercase tracking-widest text-neutral-900">Experience</p>
-          <div className="mt-1">{renderItems(plan.experience)}</div>
+        <div className="mt-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500 border-b border-neutral-200 pb-0.5 mb-2">Experience</p>
+          {renderItems(plan.experience)}
         </div>
       ) : null}
 
+      {/* Projects */}
       {plan.projects.some((i) => !i.excluded) ? (
-        <div className="mt-3">
-          <p className="text-[12px] font-bold uppercase tracking-widest text-neutral-900">Projects</p>
-          <div className="mt-1">{renderItems(plan.projects)}</div>
+        <div className="mt-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500 border-b border-neutral-200 pb-0.5 mb-2">Projects</p>
+          {renderItems(plan.projects)}
         </div>
       ) : null}
 
+      {/* Skills */}
       {includedSkills.length > 0 ? (
-        <div className="mt-3">
-          <p className="text-[12px] font-bold uppercase tracking-widest text-neutral-900">Skills</p>
-          <p className="mt-1 text-[12px] leading-snug text-neutral-800">{includedSkills.join(" · ")}</p>
+        <div className="mt-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500 border-b border-neutral-200 pb-0.5 mb-2">Skills</p>
+          <p className="text-[12px] text-neutral-800">{includedSkills.join(" · ")}</p>
         </div>
-      ) : null}
-
-      {excludedCount > 0 ? (
-        <p className="mt-4 border-t border-dashed border-neutral-300 pt-2 text-[10px] italic text-neutral-400">
-          {excludedCount} excluded item(s) are hidden from this preview.
-        </p>
       ) : null}
     </div>
   );
@@ -389,22 +163,22 @@ export default function ResumeStudioPage() {
   const [jobId, setJobId] = useState<number | null>(null);
   const [plan, setPlan] = useState<ResumePlan | null>(null);
   const [suggestions, setSuggestions] = useState<TailorSuggestion[]>([]);
-  const [selected, setSelected] = useState<{ entityType: string; itemId: number; bulletId: number } | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [estimatedLines, setEstimatedLines] = useState<number | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [templateId, setTemplateId] = useState<TemplateId>("classic");
+  const [templateId, setTemplateId] = useState<TemplateId>("jake");
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [savingVersion, setSavingVersion] = useState(false);
+  const [showPdf, setShowPdf] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
-        const jobs = await ipc.listJobs();
-        setJobs(jobs);
-        if (jobs.length > 0) setJobId(jobs[0].id);
+        const list = await ipc.listJobs();
+        setJobs(list);
+        if (list.length > 0) setJobId(list[0].id);
       } catch (e) {
         toast.error(String(e));
       } finally {
@@ -415,8 +189,8 @@ export default function ResumeStudioPage() {
 
   useEffect(() => {
     if (jobId === null) return;
-    // Reset PDF preview when switching jobs
     setPdfUrl(null);
+    setShowPdf(false);
     void (async () => {
       try {
         const stored = await ipc.getPlan(jobId);
@@ -427,10 +201,10 @@ export default function ResumeStudioPage() {
         } else {
           setEstimatedLines(null);
         }
-        const existingArtifact = await ipc.getPdfArtifact(jobId);
-        setArtifact(existingArtifact);
-        if (existingArtifact) {
-          setPdfUrl(convertFileSrc(existingArtifact.pdfPath));
+        const existing = await ipc.getPdfArtifact(jobId);
+        setArtifact(existing);
+        if (existing) {
+          setPdfUrl(convertFileSrc(existing.pdfPath));
         }
         setVersions(await ipc.listResumeVersions(jobId));
       } catch (e) {
@@ -439,7 +213,11 @@ export default function ResumeStudioPage() {
     })();
   }, [jobId]);
 
-  const mutatePlan = (mutator: (plan: ResumePlan) => void) => {
+  // ---------------------------------------------------------------------------
+  // Plan mutations (reorder / exclude) — auto-save on every change
+  // ---------------------------------------------------------------------------
+
+  const mutatePlan = (mutator: (p: ResumePlan) => void) => {
     if (!plan || jobId === null) return;
     const copy: ResumePlan = structuredClone(plan);
     mutator(copy);
@@ -454,75 +232,42 @@ export default function ResumeStudioPage() {
     })();
   };
 
-  const findItem = (plan: ResumePlan | null, entityType: string, id: number) =>
-    plan ? [...plan.experience, ...plan.projects].find((i) => i.entityType === entityType && i.id === id) : undefined;
+  const findItem = (p: ResumePlan, entityType: string, id: number) =>
+    [...p.experience, ...p.projects].find((i) => i.entityType === entityType && i.id === id);
 
-  const moveItem = (entityType: string, index: number, direction: -1 | 1) => {
-    mutatePlan((plan) => {
-      const list = entityType === "experience" ? plan.experience : plan.projects;
-      const target = index + direction;
-      if (target < 0 || target >= list.length) return;
-      [list[index], list[target]] = [list[target], list[index]];
+  const moveItem = (entityType: string, index: number, dir: -1 | 1) =>
+    mutatePlan((p) => {
+      const list = entityType === "experience" ? p.experience : p.projects;
+      const t = index + dir;
+      if (t < 0 || t >= list.length) return;
+      [list[index], list[t]] = [list[t], list[index]];
     });
-  };
 
-  const moveBullet = (entityType: string, itemId: number, bulletIndex: number, direction: -1 | 1) => {
-    mutatePlan((plan) => {
-      const item = findItem(plan, entityType, itemId);
-      if (!item) return;
-      const target = bulletIndex + direction;
-      if (target < 0 || target >= item.bullets.length) return;
-      [item.bullets[bulletIndex], item.bullets[target]] = [item.bullets[target], item.bullets[bulletIndex]];
-    });
-  };
-
-  const toggleExcludeItem = (entityType: string, itemId: number) => {
-    mutatePlan((plan) => {
-      const item = findItem(plan, entityType, itemId);
+  const toggleItem = (entityType: string, id: number) =>
+    mutatePlan((p) => {
+      const item = findItem(p, entityType, id);
       if (item) item.excluded = !item.excluded;
     });
-  };
 
-  const toggleExcludeBullet = (entityType: string, itemId: number, bulletId: number) => {
-    mutatePlan((plan) => {
-      const item = findItem(plan, entityType, itemId);
-      const bullet = item?.bullets.find((b) => b.id === bulletId);
+  const toggleBullet = (entityType: string, itemId: number, bulletId: number) =>
+    mutatePlan((p) => {
+      const bullet = findItem(p, entityType, itemId)?.bullets.find((b) => b.id === bulletId);
       if (bullet) bullet.excluded = !bullet.excluded;
     });
-  };
 
-  const moveSkill = (index: number, direction: -1 | 1) => {
-    mutatePlan((plan) => {
-      const target = index + direction;
-      if (target < 0 || target >= plan.skills.length) return;
-      [plan.skills[index], plan.skills[target]] = [plan.skills[target], plan.skills[index]];
-    });
-  };
-
-  const toggleSkill = (name: string) => {
-    mutatePlan((plan) => {
-      plan.excludedSkills = plan.excludedSkills ?? [];
-      if (plan.excludedSkills.includes(name)) {
-        plan.excludedSkills = plan.excludedSkills.filter((s) => s !== name);
+  const toggleSkill = (name: string) =>
+    mutatePlan((p) => {
+      p.excludedSkills = p.excludedSkills ?? [];
+      if (p.excludedSkills.includes(name)) {
+        p.excludedSkills = p.excludedSkills.filter((s) => s !== name);
       } else {
-        plan.excludedSkills.push(name);
+        p.excludedSkills.push(name);
       }
     });
-  };
 
-  const saveVersion = async () => {
-    if (jobId === null) return;
-    setSavingVersion(true);
-    try {
-      const version = await ipc.saveResumeVersion(jobId);
-      setVersions((prev) => [version, ...prev]);
-      toast.ok(`Version ${version.versionNumber} saved — reproducible forever`);
-    } catch (e) {
-      toast.error(String(e));
-    } finally {
-      setSavingVersion(false);
-    }
-  };
+  // ---------------------------------------------------------------------------
+  // Export / versions
+  // ---------------------------------------------------------------------------
 
   const exportPdf = async () => {
     if (jobId === null) return;
@@ -530,7 +275,9 @@ export default function ResumeStudioPage() {
     try {
       const result = await ipc.exportPdf(jobId, templateId);
       setArtifact(result.artifact);
-      setPdfUrl(convertFileSrc(result.artifact.pdfPath));
+      const url = convertFileSrc(result.artifact.pdfPath);
+      setPdfUrl(url);
+      setShowPdf(true);
       toast.ok(`PDF compiled — ${result.artifact.pageCount ?? "?"} page(s)`);
     } catch (e) {
       toast.error(String(e));
@@ -539,105 +286,48 @@ export default function ResumeStudioPage() {
     }
   };
 
-  const openVersion = (v: ResumeVersion) => {
-    void ipc.openFile(v.pdfPath).catch((e: unknown) => toast.error(String(e)));
-  };
-
-  const acceptSuggestion = (suggestion: TailorSuggestion) => {
-    void (async () => {
-      try {
-        const updated = await ipc.tailorSetStatus(suggestion.id, "accepted");
-        setSuggestions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-        toast.ok("Accepted — preview updated");
-      } catch (e) {
-        toast.error(String(e));
-      }
-    })();
-  };
-
-  const rejectSuggestion = (suggestion: TailorSuggestion) => {
-    void (async () => {
-      try {
-        const updated = await ipc.tailorSetStatus(suggestion.id, "rejected");
-        setSuggestions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-      } catch (e) {
-        toast.error(String(e));
-      }
-    })();
-  };
-
-  const resetSuggestion = (suggestion: TailorSuggestion) => {
-    void (async () => {
-      try {
-        await ipc.tailorDelete(suggestion.id);
-        setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
-        toast.ok("Reset to canonical wording");
-      } catch (e) {
-        toast.error(String(e));
-      }
-    })();
-  };
-
-  const saveManualEdit = async (bulletId: number, text: string) => {
+  const saveVersion = async () => {
     if (jobId === null) return;
+    setSavingVersion(true);
     try {
-      const saved = await ipc.tailorSaveManualEdit(jobId, bulletId, text);
-      setSuggestions((prev) => [
-        saved,
-        ...prev.filter((s) => !(s.bulletId === saved.bulletId && s.model === "manual" && s.id !== saved.id)),
-      ]);
-      toast.ok(
-        saved.validation.violations.length === 0
-          ? "Manual edit saved — no claim changes detected"
-          : "Manual edit saved — review the detected claim changes",
-      );
+      const version = await ipc.saveResumeVersion(jobId);
+      setVersions((prev) => [version, ...prev]);
+      toast.ok(`Version ${version.versionNumber} saved`);
     } catch (e) {
       toast.error(String(e));
+    } finally {
+      setSavingVersion(false);
     }
   };
 
-  const contentSections: { key: string; label: string; items: PlanItem[]; cap: number | null }[] = plan
-    ? [
-        { key: "experience", label: "Experience", items: plan.experience, cap: plan.config.maxExperienceItems },
-        { key: "projects", label: "Projects", items: plan.projects, cap: plan.config.maxProjects },
-      ]
-    : [];
+  // ---------------------------------------------------------------------------
+  // Computed
+  // ---------------------------------------------------------------------------
 
-  const selectedBulletState = useMemo(() => {
-    if (!selected || !plan) return null;
-    const item = findItem(plan, selected.entityType, selected.itemId);
-    const bullet = item?.bullets.find((b) => b.id === selected.bulletId);
-    if (!item || !bullet) return null;
-    const suggestion =
-      suggestions
-        .filter((s) => s.bulletId === bullet.id)
-        .sort((a, b) => b.id - a.id)[0] ?? null;
-    return { item, bullet, suggestion };
-  }, [selected, plan, suggestions]);
-
-  const excludedCount =
-    plan
-      ? [...plan.experience, ...plan.projects].filter((i) => i.excluded).length +
-        [...plan.experience, ...plan.projects].flatMap((i) => i.bullets).filter((b) => b.excluded).length +
-        (plan.excludedSkills?.length ?? 0)
-      : 0;
+  const excludedCount = useMemo(
+    () =>
+      plan
+        ? [...plan.experience, ...plan.projects].filter((i) => i.excluded).length +
+          [...plan.experience, ...plan.projects].flatMap((i) => i.bullets).filter((b) => b.excluded).length +
+          (plan.excludedSkills?.length ?? 0)
+        : 0,
+    [plan],
+  );
 
   const overflows = estimatedLines !== null && estimatedLines > CAPACITY;
 
-  if (!loaded) {
-    return <p className="py-16 text-center text-sm text-muted">Loading studio…</p>;
-  }
+  // ---------------------------------------------------------------------------
+  // Guard states
+  // ---------------------------------------------------------------------------
+
+  if (!loaded) return <p className="py-16 text-center text-sm text-muted">Loading studio…</p>;
 
   if (jobs.length === 0) {
     return (
       <div className="mx-auto max-w-3xl p-8">
         <Card className="p-8 text-center">
-          <p className="text-sm text-muted">
-            No job workspaces yet — paste a job description on the Jobs page first.
-          </p>
-          <div className="mt-4">
-            <Button onClick={() => navigate("/jobs")}>Go to Jobs</Button>
-          </div>
+          <p className="text-sm text-muted">No job workspaces yet — paste a job description on the Jobs page first.</p>
+          <div className="mt-4"><Button onClick={() => navigate("/jobs")}>Go to Jobs</Button></div>
         </Card>
       </div>
     );
@@ -647,196 +337,182 @@ export default function ResumeStudioPage() {
     return (
       <div className="mx-auto max-w-3xl p-8">
         <Card className="p-8 text-center">
-          <p className="text-sm text-muted">
-            No plan for this workspace yet — compose one in the workspace's Plan tab.
-          </p>
-          <div className="mt-4">
-            <Button onClick={() => navigate(`/jobs/${jobId}`)}>Open workspace</Button>
-          </div>
+          <p className="text-sm text-muted">No plan for this workspace yet — compose one in the Plan tab.</p>
+          <div className="mt-4"><Button onClick={() => navigate(`/jobs/${jobId}`)}>Open workspace</Button></div>
         </Card>
       </div>
     );
   }
 
+  const contentSections = [
+    { key: "experience", label: "Experience", items: plan.experience, cap: plan.config.maxExperienceItems },
+    { key: "projects", label: "Projects", items: plan.projects, cap: plan.config.maxProjects },
+  ];
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
   return (
     <div className="flex h-full flex-col p-6">
       <PageHeader
         title="Resume Studio"
-        description="Content · Editor · Preview — changes to the plan save automatically."
+        description="Curate your content, pick a template, and export a polished PDF."
         actions={
           <>
-            {jobs.length > 0 ? (
-              <Select
-                value={jobId ?? undefined}
-                onChange={(e) => setJobId(Number(e.target.value))}
-                className="w-64"
-              >
-                {jobs.map((job) => (
-                  <option key={job.id} value={job.id}>
-                    {job.roleTitle || "Untitled role"}
-                    {job.company ? ` · ${job.company}` : ""}
-                  </option>
-                ))}
-              </Select>
-            ) : null}
-            <Button variant="secondary" size="sm" onClick={() => navigate("/jobs")}>
-              Jobs
-            </Button>
+            <Select
+              value={jobId ?? undefined}
+              onChange={(e) => setJobId(Number(e.target.value))}
+              className="w-64"
+            >
+              {jobs.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.roleTitle || "Untitled role"}
+                  {job.company ? ` · ${job.company}` : ""}
+                </option>
+              ))}
+            </Select>
+            <Button variant="secondary" size="sm" onClick={() => navigate("/jobs")}>Jobs</Button>
           </>
         }
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-12 gap-4">
-        {/* Column 1 · Content */}
-        <div className="col-span-4 flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+      <div className="grid min-h-0 flex-1 grid-cols-12 gap-5">
+        {/* ----------------------------------------------------------------- */}
+        {/* LEFT COLUMN — Content curation                                     */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="col-span-5 flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+
+          {/* Page fit badge */}
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <span className="text-xs font-medium text-slate-600">Page estimate</span>
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                estimatedLines === null
+                  ? "bg-slate-100 text-slate-500"
+                  : overflows
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-emerald-100 text-emerald-700"
+              }`}
+            >
+              {estimatedLines === null
+                ? "no estimate"
+                : `~${estimatedLines} / ${CAPACITY} lines · ${overflows ? "overflows ⚠" : "fits ✓"}`}
+            </span>
+          </div>
+
+          {/* Header summary */}
           <Card className="p-4">
-            <CardTitle>Header</CardTitle>
-            <div className="mt-2 text-xs">
-              <p className="font-medium text-ink">{plan.header.fullName || "(no profile)"}</p>
-              <p className="mt-0.5 break-all text-slate-400">
-                {[
-                  plan.header.email,
-                  plan.header.phone,
-                  plan.header.location,
-                  plan.header.github,
-                  plan.header.website,
-                  plan.header.linkedin,
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || "no contact details"}
-              </p>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-semibold text-ink">{plan.header.fullName || "(no name)"}</p>
+                {plan.header.headline ? (
+                  <p className="mt-0.5 text-xs italic text-muted">{plan.header.headline}</p>
+                ) : null}
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {[plan.header.email, plan.header.phone, plan.header.location].filter(Boolean).join(" · ") || "no contact"}
+                </p>
+              </div>
               <button
                 type="button"
-                className="mt-1 text-[11px] text-kairo-blue hover:underline"
+                className="shrink-0 text-[11px] text-kairo-blue hover:underline"
                 onClick={() => navigate("/vault")}
               >
-                Edit in Vault profile →
+                Edit →
               </button>
             </div>
           </Card>
 
+          {/* Experience + Projects */}
           {contentSections.map(({ key, label, items, cap }) => {
             const included = items.filter((i) => !i.excluded).length;
             const atCap = cap !== null && included >= cap;
             return (
               <Card key={key} className="p-4">
-                <CardTitle>
-                  {label}{" "}
-                  <span
-                    className={`text-slate-300 ${atCap ? "font-bold text-amber-500" : ""}`}
-                    title={cap === null ? undefined : atCap ? `At the composer cap of ${cap}` : `Cap: ${cap} from the Plan tab`}
-                  >
-                    · {included}/{cap ?? "—"}
-                  </span>
-                </CardTitle>
-                <ul className="mt-2 space-y-2">
+                <div className="mb-2 flex items-center justify-between">
+                  <CardTitle>
+                    {label}
+                    <span className={`ml-1 text-slate-300 ${atCap ? "font-bold !text-amber-500" : ""}`}>
+                      · {included}/{cap ?? "—"}
+                    </span>
+                  </CardTitle>
+                </div>
+                <ul className="space-y-2">
                   {items.map((item, index) => {
-                    const bulletCap = plan.config.maxBulletsPerItem;
                     const bulletsUsed = item.bullets.filter((b) => !b.excluded).length;
+                    const bulletCap = plan.config.maxBulletsPerItem;
                     return (
                       <li
                         key={`${item.entityType}-${item.id}`}
-                        className={`rounded-lg border p-2.5 ${
-                          item.excluded ? "border-dashed border-slate-300 opacity-60" : "border-slate-200"
+                        className={`rounded-lg border p-3 transition-colors ${
+                          item.excluded ? "border-dashed border-slate-300 bg-slate-50 opacity-60" : "border-slate-200 bg-white"
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-1">
-                          <span className="text-xs font-medium text-ink">{item.title}</span>
-                          <span className="flex shrink-0">
+                        {/* Item header */}
+                        <div className="flex items-start gap-1">
+                          <div className="min-w-0 flex-1">
+                            <p className={`truncate text-xs font-semibold ${item.excluded ? "text-slate-400 line-through" : "text-ink"}`}>
+                              {item.title}
+                            </p>
+                            {item.subtitle ? (
+                              <p className="truncate text-[11px] text-muted">{item.subtitle}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-0.5 text-slate-400">
                             <button
                               type="button"
                               title="Move up"
-                              className="px-1 text-slate-400 hover:text-ink disabled:opacity-30"
+                              className="rounded px-1 py-0.5 hover:bg-slate-100 hover:text-ink disabled:opacity-30"
                               disabled={index === 0}
                               onClick={() => moveItem(item.entityType, index, -1)}
-                            >
-                              ↑
-                            </button>
+                            >↑</button>
                             <button
                               type="button"
                               title="Move down"
-                              className="px-1 text-slate-400 hover:text-ink disabled:opacity-30"
+                              className="rounded px-1 py-0.5 hover:bg-slate-100 hover:text-ink disabled:opacity-30"
                               disabled={index === items.length - 1}
                               onClick={() => moveItem(item.entityType, index, 1)}
-                            >
-                              ↓
-                            </button>
+                            >↓</button>
                             <button
                               type="button"
                               title={item.excluded ? "Include" : "Exclude"}
-                              className="px-1 text-slate-400 hover:text-kairo-blue"
-                              onClick={() => toggleExcludeItem(item.entityType, item.id)}
+                              className="rounded px-1 py-0.5 text-xs hover:bg-slate-100 hover:text-kairo-blue"
+                              onClick={() => toggleItem(item.entityType, item.id)}
                             >
-                              {item.excluded ? "⭕" : "◉"}
+                              {item.excluded ? "+" : "−"}
                             </button>
-                          </span>
+                          </div>
                         </div>
-                        {item.bullets.length > 0 ? (
-                          <>
-                            <p
-                              className={`mt-1 text-[10px] ${
-                                bulletsUsed >= bulletCap ? "font-medium text-amber-500" : "text-slate-400"
-                              }`}
-                            >
+
+                        {/* Bullets */}
+                        {!item.excluded && item.bullets.length > 0 ? (
+                          <div className="mt-2">
+                            <p className={`mb-1 text-[10px] ${bulletsUsed >= bulletCap ? "font-semibold text-amber-500" : "text-slate-400"}`}>
                               {bulletsUsed}/{bulletCap} bullets
                             </p>
-                            <ul className="mt-1 space-y-1">
-                              {item.bullets.map((bullet, bIndex) => (
+                            <ul className="space-y-1">
+                              {item.bullets.map((bullet) => (
                                 <li key={bullet.id} className="flex items-start gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setSelected({
-                                        entityType: item.entityType,
-                                        itemId: item.id,
-                                        bulletId: bullet.id,
-                                      })
-                                    }
-                                    className={`min-w-0 flex-1 truncate text-left text-[11px] hover:text-kairo-blue ${
-                                      selected?.bulletId === bullet.id
-                                        ? "font-medium text-kairo-blue"
-                                        : bullet.excluded
-                                          ? "text-slate-400 line-through"
-                                          : "text-muted"
+                                  <span
+                                    className={`min-w-0 flex-1 text-[11px] leading-relaxed ${
+                                      bullet.excluded ? "text-slate-400 line-through" : "text-muted"
                                     }`}
                                   >
                                     {bullet.text}
-                                  </button>
-                                  <span className="flex shrink-0 text-[10px] text-slate-400">
-                                    <button
-                                      type="button"
-                                      title="Move up"
-                                      disabled={bIndex === 0}
-                                      className="px-0.5 hover:text-ink disabled:opacity-30"
-                                      onClick={() => moveBullet(item.entityType, item.id, bIndex, -1)}
-                                    >
-                                      ↑
-                                    </button>
-                                    <button
-                                      type="button"
-                                      title="Move down"
-                                      disabled={bIndex === item.bullets.length - 1}
-                                      className="px-0.5 hover:text-ink disabled:opacity-30"
-                                      onClick={() => moveBullet(item.entityType, item.id, bIndex, 1)}
-                                    >
-                                      ↓
-                                    </button>
-                                    <button
-                                      type="button"
-                                      title={bullet.excluded ? "Include bullet" : "Exclude bullet"}
-                                      className="px-0.5 hover:text-kairo-blue"
-                                      onClick={() => toggleExcludeBullet(item.entityType, item.id, bullet.id)}
-                                    >
-                                      {bullet.excluded ? "⭕" : "◉"}
-                                    </button>
                                   </span>
+                                  <button
+                                    type="button"
+                                    title={bullet.excluded ? "Include bullet" : "Exclude bullet"}
+                                    className="shrink-0 rounded px-1 text-[10px] text-slate-400 hover:bg-slate-100 hover:text-kairo-blue"
+                                    onClick={() => toggleBullet(item.entityType, item.id, bullet.id)}
+                                  >
+                                    {bullet.excluded ? "+" : "−"}
+                                  </button>
                                 </li>
                               ))}
                             </ul>
-                          </>
-                        ) : (
-                          <p className="mt-1 text-[10px] text-slate-400">no approved bullets</p>
-                        )}
+                          </div>
+                        ) : null}
                       </li>
                     );
                   })}
@@ -845,248 +521,186 @@ export default function ResumeStudioPage() {
             );
           })}
 
+          {/* Skills */}
           <Card className="p-4">
-            <CardTitle>
-              Skills{" "}
-              <span className="text-slate-300">
-                ·{" "}
-                {plan.skills.filter((s) => !(plan.excludedSkills ?? []).includes(s)).length}/
-                {plan.skills.length}
-              </span>
-            </CardTitle>
-            <ul className="mt-2 space-y-1">
-              {plan.skills.map((skill, index) => {
-                const isExcluded = (plan.excludedSkills ?? []).includes(skill);
-                return (
-                  <li key={skill} className="flex items-center gap-1 text-xs">
-                    <span
-                      className={`min-w-0 flex-1 truncate ${
-                        isExcluded ? "text-slate-400 line-through" : "text-ink"
-                      }`}
-                    >
-                      {skill}
-                    </span>
-                    <span className="flex shrink-0 text-[10px] text-slate-400">
-                      <button
-                        type="button"
-                        title="Move up"
-                        disabled={index === 0}
-                        className="px-0.5 hover:text-ink disabled:opacity-30"
-                        onClick={() => moveSkill(index, -1)}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        title="Move down"
-                        disabled={index === plan.skills.length - 1}
-                        className="px-0.5 hover:text-ink disabled:opacity-30"
-                        onClick={() => moveSkill(index, 1)}
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        title={isExcluded ? "Include skill" : "Exclude skill"}
-                        className="px-0.5 hover:text-kairo-blue"
-                        onClick={() => toggleSkill(skill)}
-                      >
-                        {isExcluded ? "⭕" : "◉"}
-                      </button>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        </div>
-
-        {/* Column 2 · Editor */}
-        <div className="col-span-4 overflow-y-auto pr-1">
-          <Card className="p-4">
-            <CardTitle>Editor</CardTitle>
-            {selectedBulletState ? (
-              <div className="mt-3">
-                <EditorPanel
-                  jobId={jobId ?? 0}
-                  bullet={selectedBulletState.bullet}
-                  entity={selectedBulletState.item}
-                  suggestion={selectedBulletState.suggestion}
-                  busy={false}
-                  onAccept={() => acceptSuggestion(selectedBulletState.suggestion!)}
-                  onReject={() => rejectSuggestion(selectedBulletState.suggestion!)}
-                  onReset={() => resetSuggestion(selectedBulletState.suggestion!)}
-                  onManualSave={(text) => saveManualEdit(selectedBulletState.bullet.id, text)}
-                />
-              </div>
-            ) : (
-              <p className="mt-3 text-xs text-muted">
-                Select a bullet in the Content column to inspect its canonical wording, tailored
-                suggestion, evidence — or edit the wording manually with live claim-change
-                detection.
-              </p>
-            )}
-          </Card>
-        </div>
-
-        {/* Column 3 · Preview & Export */}
-        <div className="col-span-4 flex min-h-0 flex-col gap-3 overflow-y-auto">
-          {/* Export card */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <CardTitle>Export PDF</CardTitle>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                  estimatedLines === null
-                    ? "bg-slate-100 text-slate-500"
-                    : overflows
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-emerald-100 text-emerald-700"
-                }`}
-              >
-                {estimatedLines === null
-                  ? "no estimate"
-                  : `~${estimatedLines} / ${CAPACITY} lines${overflows ? " · overflows" : " · fits"}`}
-              </span>
+            <div className="mb-2 flex items-center justify-between">
+              <CardTitle>
+                Skills
+                <span className="ml-1 text-slate-300">
+                  · {plan.skills.filter((s) => !(plan.excludedSkills ?? []).includes(s)).length}/{plan.skills.length}
+                </span>
+              </CardTitle>
             </div>
-            {excludedCount > 0 ? (
-              <p className="mt-2 text-[11px] text-slate-400">{excludedCount} excluded element(s)</p>
-            ) : null}
-
-            {/* Template picker */}
-            <div className="mt-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Template</p>
-              <div className="flex flex-col gap-1.5">
-                {TEMPLATES.map((t) => (
+            <div className="flex flex-wrap gap-1.5">
+              {plan.skills.map((skill) => {
+                const excluded = (plan.excludedSkills ?? []).includes(skill);
+                return (
                   <button
-                    key={t.id}
+                    key={skill}
                     type="button"
-                    onClick={() => setTemplateId(t.id)}
-                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${
-                      templateId === t.id
-                        ? "border-kairo-blue bg-kairo-blue/5 ring-1 ring-kairo-blue"
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    onClick={() => toggleSkill(skill)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      excluded
+                        ? "border-slate-200 bg-slate-100 text-slate-400 line-through"
+                        : "border-kairo-blue/30 bg-kairo-blue/5 text-kairo-blue hover:bg-kairo-blue/10"
                     }`}
                   >
+                    {skill}
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
+          {excludedCount > 0 ? (
+            <p className="px-1 text-[11px] text-slate-400">{excludedCount} item(s) excluded — they won't appear in the PDF.</p>
+          ) : null}
+        </div>
+
+        {/* ----------------------------------------------------------------- */}
+        {/* RIGHT COLUMN — Export + Preview                                    */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="col-span-7 flex min-h-0 flex-col gap-4 overflow-y-auto">
+
+          {/* Export card */}
+          <Card className="p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <CardTitle>Export PDF</CardTitle>
+              {artifact && (
+                <button
+                  type="button"
+                  onClick={() => void ipc.openFile(artifact.pdfPath).catch((e: unknown) => toast.error(String(e)))}
+                  className="text-[11px] text-kairo-blue hover:underline"
+                >
+                  Open last PDF ↗
+                </button>
+              )}
+            </div>
+
+            {/* Template picker */}
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Template</p>
+            <div className="mb-4 grid grid-cols-3 gap-2">
+              {TEMPLATES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTemplateId(t.id)}
+                  className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+                    templateId === t.id
+                      ? "border-kairo-blue bg-kairo-blue/5 ring-1 ring-kairo-blue shadow-sm"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
                     <span
-                      className={`h-3 w-3 shrink-0 rounded-full border-2 ${
-                        templateId === t.id
-                          ? "border-kairo-blue bg-kairo-blue"
-                          : "border-slate-300"
+                      className={`h-2.5 w-2.5 rounded-full border-2 ${
+                        templateId === t.id ? "border-kairo-blue bg-kairo-blue" : "border-slate-300"
                       }`}
                     />
-                    <span>
-                      <span className="block text-xs font-medium text-ink">{t.name}</span>
-                      <span className="block text-[11px] text-slate-400">{t.desc}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
+                    <span className="text-xs font-semibold text-ink">{t.name}</span>
+                  </span>
+                  <span className="mt-1 text-[10px] leading-tight text-slate-400">{t.desc}</span>
+                </button>
+              ))}
             </div>
 
-            <div className="mt-3">
-              <Button
-                className="w-full justify-center"
-                onClick={() => void exportPdf()}
-                disabled={exporting || !plan.fitsOnePage}
-                title={
-                  !plan.fitsOnePage
-                    ? "Resolve the overflow before exporting"
-                    : "Compile the plan to PDF with Tectonic (first run downloads the TeX bundle)"
-                }
-              >
-                {exporting ? "Compiling… (first run may take minutes)" : "Export PDF"}
-              </Button>
-            </div>
+            {/* Export button */}
+            <Button
+              className="w-full justify-center"
+              onClick={() => void exportPdf()}
+              disabled={exporting || !plan.fitsOnePage}
+              title={!plan.fitsOnePage ? "Resolve page overflow first" : "Compile to PDF with Tectonic (first run downloads TeX packages)"}
+            >
+              {exporting ? (
+                <span className="flex items-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Compiling… (first run may take a few minutes)
+                </span>
+              ) : (
+                "Export PDF"
+              )}
+            </Button>
 
-            {artifact ? (
-              <div className="mt-3 rounded-lg bg-surface p-2.5 text-[11px] leading-relaxed">
-                <p className={exporting ? "text-slate-400" : "text-emerald-600"}>
-                  ✓ Compiled{artifact.pageCount ? ` · ${artifact.pageCount} page(s)` : ""}
-                  {artifact.compiledAt ? ` · ${artifact.compiledAt.replace("T", " ").slice(0, 16)}` : ""}
-                </p>
-                <div className="mt-1 flex items-center gap-2">
-                  <p className="min-w-0 flex-1 truncate break-all text-slate-400">{artifact.pdfPath}</p>
-                  <button
-                    type="button"
-                    onClick={() => void ipc.openFile(artifact.pdfPath).catch((e: unknown) => toast.error(String(e)))}
-                    className="shrink-0 text-kairo-blue hover:underline"
-                  >
-                    Open ↗
-                  </button>
-                </div>
+            {artifact && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[11px]">
+                <span className="text-emerald-600">✓ Compiled</span>
+                {artifact.pageCount ? <span className="text-emerald-600">· {artifact.pageCount} page(s)</span> : null}
+                {artifact.compiledAt ? (
+                  <span className="text-emerald-500">· {artifact.compiledAt.replace("T", " ").slice(0, 16)}</span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setShowPdf(!showPdf)}
+                  className="ml-auto text-kairo-blue hover:underline"
+                >
+                  {showPdf ? "Show plan view" : "Show PDF ↗"}
+                </button>
               </div>
-            ) : null}
+            )}
 
             {/* Versions */}
-            <div className="mt-3 border-t border-slate-100 pt-3">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => void saveVersion()}
-                disabled={savingVersion || !artifact}
-                title={!artifact ? "Export the PDF first" : "Freeze plan + JD + match + tailoring + PDF"}
-              >
-                {savingVersion ? "Saving…" : "Save version"}
-              </Button>
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Saved versions</p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void saveVersion()}
+                  disabled={savingVersion || !artifact}
+                  title={!artifact ? "Export the PDF first" : "Freeze this plan + PDF as a version"}
+                >
+                  {savingVersion ? "Saving…" : "Save version"}
+                </Button>
+              </div>
               {versions.length > 0 ? (
-                <ul className="mt-2.5 space-y-1">
+                <ul className="mt-2 space-y-1">
                   {versions.map((v) => (
-                    <li key={v.id} className="flex items-center justify-between gap-2 text-[11px]">
-                      <span className="text-ink">
-                        v{v.versionNumber}
-                        <span className="ml-1.5 text-slate-400">
-                          {v.createdAt.replace("T", " ").slice(0, 16)}
-                        </span>
-                      </span>
+                    <li key={v.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-[11px]">
+                      <span className="font-medium text-ink">v{v.versionNumber}</span>
+                      <span className="text-slate-400">{v.createdAt.replace("T", " ").slice(0, 16)}</span>
                       <button
                         type="button"
-                        onClick={() => openVersion(v)}
-                        className="text-kairo-blue hover:underline"
+                        onClick={() => void ipc.openFile(v.pdfPath).catch((e: unknown) => toast.error(String(e)))}
+                        className="shrink-0 text-kairo-blue hover:underline"
                       >
-                        open ↗
+                        Open ↗
                       </button>
                     </li>
                   ))}
                 </ul>
-              ) : null}
+              ) : (
+                <p className="mt-2 text-[11px] text-slate-400">No versions saved yet.</p>
+              )}
             </div>
           </Card>
 
-          {/* PDF preview or HTML plan preview */}
-          {pdfUrl ? (
+          {/* Preview area — PDF iframe or HTML plan preview */}
+          {showPdf && pdfUrl ? (
             <Card className="overflow-hidden p-0">
-              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
-                <p className="text-xs font-medium text-ink">PDF Preview</p>
-                <button
-                  type="button"
-                  onClick={() => setPdfUrl(null)}
-                  className="text-[11px] text-slate-400 hover:text-ink"
-                >
-                  Show plan view
-                </button>
-              </div>
               <iframe
                 src={`${pdfUrl}#toolbar=0`}
-                className="h-[700px] w-full border-0"
+                className="h-[750px] w-full border-0"
                 title="Resume PDF Preview"
               />
             </Card>
           ) : (
-            <div className="mx-auto w-full max-w-[420px]">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Plan preview</p>
-                {artifact && (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Plan preview
+                {artifact && !showPdf ? (
                   <button
                     type="button"
-                    onClick={() => setPdfUrl(convertFileSrc(artifact.pdfPath))}
-                    className="text-[11px] text-kairo-blue hover:underline"
+                    onClick={() => setShowPdf(true)}
+                    className="ml-2 normal-case font-normal text-kairo-blue hover:underline"
                   >
-                    Show PDF ↗
+                    Switch to PDF view
                   </button>
-                )}
-              </div>
-              <PreviewPane plan={plan} excludedCount={excludedCount} suggestions={suggestions} />
+                ) : null}
+              </p>
+              <PlanPreview plan={plan} suggestions={suggestions} />
             </div>
           )}
         </div>
