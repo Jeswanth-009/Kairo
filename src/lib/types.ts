@@ -440,6 +440,15 @@ export interface PlanEducation {
   isCurrent: boolean;
 }
 
+export interface PlanAchievement {
+  id: number;
+  title: string;
+  issuer: string;
+  description: string;
+  achievedOn?: string | null;
+  excluded?: boolean;
+}
+
 export interface PlanHeader {
   fullName: string;
   headline: string;
@@ -458,6 +467,7 @@ export interface ResumePlan {
   education: PlanEducation[];
   experience: PlanItem[];
   projects: PlanItem[];
+  achievements?: PlanAchievement[];
   skills: string[];
   excludedSkills?: string[];
   estimatedLines: number;

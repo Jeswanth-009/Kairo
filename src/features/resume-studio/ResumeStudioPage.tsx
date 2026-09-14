@@ -6,7 +6,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
 import { fmtRange } from "../../lib/dateFmt";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { PdfViewer } from "./PdfViewer";
 import type {
   Job,
   PdfArtifact,
@@ -151,6 +151,30 @@ function PlanPreview({
         </div>
       ) : null}
 
+      {/* Achievements */}
+      {plan.achievements && plan.achievements.some((a) => !a.excluded) ? (
+        <div className="mt-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-500 border-b border-neutral-200 pb-0.5 mb-2">
+            Achievements & Awards
+          </p>
+          {plan.achievements
+            .filter((a) => !a.excluded)
+            .map((a) => (
+              <div key={a.id} className="mb-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[13px] font-semibold text-neutral-900">{a.title}</span>
+                  <span className="shrink-0 text-[11px] text-neutral-500">
+                    {[a.issuer, a.achievedOn].filter(Boolean).join(" · ")}
+                  </span>
+                </div>
+                {a.description ? (
+                  <p className="mt-0.5 text-[12px] text-neutral-700">{a.description}</p>
+                ) : null}
+              </div>
+            ))}
+        </div>
+      ) : null}
+
       {/* Skills */}
       {includedSkills.length > 0 ? (
         <div className="mt-4">
@@ -175,7 +199,6 @@ export default function ResumeStudioPage() {
   const [loaded, setLoaded] = useState(false);
   const [estimatedLines, setEstimatedLines] = useState<number | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [templateId, setTemplateId] = useState<TemplateId>("jake");
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
@@ -198,7 +221,6 @@ export default function ResumeStudioPage() {
 
   useEffect(() => {
     if (jobId === null) return;
-    setPdfUrl(null);
     setShowPdf(false);
     void (async () => {
       try {
@@ -213,7 +235,7 @@ export default function ResumeStudioPage() {
         const existing = await ipc.getPdfArtifact(jobId);
         setArtifact(existing);
         if (existing) {
-          setPdfUrl(convertFileSrc(existing.pdfPath));
+          setShowPdf(true);
         }
         setVersions(await ipc.listResumeVersions(jobId));
       } catch (e) {
@@ -264,6 +286,38 @@ export default function ResumeStudioPage() {
       if (bullet) bullet.excluded = !bullet.excluded;
     });
 
+  const toggleAchievement = (id: number) =>
+    mutatePlan((p) => {
+      const ach = p.achievements?.find((a) => a.id === id);
+      if (ach) ach.excluded = !ach.excluded;
+    });
+
+  const moveAchievement = (index: number, dir: -1 | 1) =>
+    mutatePlan((p) => {
+      if (!p.achievements) return;
+      const t = index + dir;
+      if (t < 0 || t >= p.achievements.length) return;
+      [p.achievements[index], p.achievements[t]] = [p.achievements[t], p.achievements[index]];
+    });
+
+  const [newSkillInput, setNewSkillInput] = useState("");
+
+  const addCustomSkill = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newSkillInput.trim();
+    if (!trimmed) return;
+    mutatePlan((p) => {
+      if (!p.skills.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
+        p.skills.push(trimmed);
+      }
+      if (p.excludedSkills) {
+        p.excludedSkills = p.excludedSkills.filter((s) => s.toLowerCase() !== trimmed.toLowerCase());
+      }
+    });
+    setNewSkillInput("");
+    toast.ok(`Added skill "${trimmed}"`);
+  };
+
   const toggleSkill = (name: string) =>
     mutatePlan((p) => {
       p.excludedSkills = p.excludedSkills ?? [];
@@ -284,8 +338,6 @@ export default function ResumeStudioPage() {
     try {
       const result = await ipc.exportPdf(jobId, templateId);
       setArtifact(result.artifact);
-      const url = convertFileSrc(result.artifact.pdfPath);
-      setPdfUrl(url);
       setShowPdf(true);
       toast.ok(`PDF compiled — ${result.artifact.pageCount ?? "?"} page(s)`);
     } catch (e) {
@@ -318,6 +370,7 @@ export default function ResumeStudioPage() {
       plan
         ? [...plan.experience, ...plan.projects].filter((i) => i.excluded).length +
           [...plan.experience, ...plan.projects].flatMap((i) => i.bullets).filter((b) => b.excluded).length +
+          (plan.achievements ?? []).filter((a) => a.excluded).length +
           (plan.excludedSkills?.length ?? 0)
         : 0,
     [plan],
@@ -530,6 +583,76 @@ export default function ResumeStudioPage() {
             );
           })}
 
+          {/* Achievements */}
+          {plan.achievements && plan.achievements.length > 0 ? (
+            <Card className="p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <CardTitle>
+                  Achievements & Awards
+                  <span className="ml-1 text-slate-300">
+                    · {plan.achievements.filter((a) => !a.excluded).length}/{plan.achievements.length}
+                  </span>
+                </CardTitle>
+              </div>
+              <ul className="space-y-2">
+                {plan.achievements.map((ach, index) => (
+                  <li
+                    key={ach.id}
+                    className={`rounded-lg border p-3 transition-colors ${
+                      ach.excluded
+                        ? "border-dashed border-slate-300 bg-slate-50 opacity-60"
+                        : "border-slate-200 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start gap-1">
+                      <div className="min-w-0 flex-1">
+                        <p className={`truncate text-xs font-semibold ${ach.excluded ? "text-slate-400 line-through" : "text-ink"}`}>
+                          {ach.title}
+                        </p>
+                        <p className="truncate text-[11px] text-muted">
+                          {[ach.issuer, ach.achievedOn].filter(Boolean).join(" · ")}
+                        </p>
+                        {ach.description ? (
+                          <p className={`mt-1 text-[11px] ${ach.excluded ? "text-slate-400 line-through" : "text-slate-600"}`}>
+                            {ach.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-0.5 text-slate-400">
+                        <button
+                          type="button"
+                          title="Move up"
+                          className="rounded px-1 py-0.5 hover:bg-slate-100 hover:text-ink disabled:opacity-30"
+                          disabled={index === 0}
+                          onClick={() => moveAchievement(index, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          title="Move down"
+                          className="rounded px-1 py-0.5 hover:bg-slate-100 hover:text-ink disabled:opacity-30"
+                          disabled={index === (plan.achievements?.length ?? 0) - 1}
+                          onClick={() => moveAchievement(index, 1)}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          title={ach.excluded ? "Include" : "Exclude"}
+                          className="rounded px-1 py-0.5 text-xs hover:bg-slate-100 hover:text-kairo-blue"
+                          onClick={() => toggleAchievement(ach.id)}
+                        >
+                          {ach.excluded ? "+" : "−"}
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
           {/* Skills */}
           <Card className="p-4">
             <div className="mb-2 flex items-center justify-between">
@@ -540,9 +663,28 @@ export default function ResumeStudioPage() {
                 </span>
               </CardTitle>
             </div>
+
+            {/* Quick add skill input */}
+            <form onSubmit={addCustomSkill} className="mb-3 flex gap-1.5">
+              <input
+                type="text"
+                placeholder="Add custom skill… (e.g. Docker, Next.js)"
+                value={newSkillInput}
+                onChange={(e) => setNewSkillInput(e.target.value)}
+                className="flex-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs text-ink placeholder:text-slate-400 focus:border-kairo-blue focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!newSkillInput.trim()}
+                className="rounded-md bg-kairo-blue/10 px-2.5 py-1 text-xs font-medium text-kairo-blue hover:bg-kairo-blue/20 disabled:opacity-40 transition-colors"
+              >
+                + Add
+              </button>
+            </form>
+
             {plan.skills.length === 0 ? (
               <p className="text-[11px] text-slate-400">
-                No skills linked to your vault items yet — add skills to your projects and experience in the Vault.
+                No skills added yet — type a skill above to add one, or link skills in the Vault.
               </p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
@@ -553,13 +695,14 @@ export default function ResumeStudioPage() {
                       key={skill}
                       type="button"
                       onClick={() => toggleSkill(skill)}
+                      title={excluded ? "Click to include" : "Click to exclude"}
                       className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                         excluded
                           ? "border-slate-200 bg-slate-100 text-slate-400 line-through"
                           : "border-kairo-blue/30 bg-kairo-blue/5 text-kairo-blue hover:bg-kairo-blue/10"
                       }`}
                     >
-                      {skill}
+                      {skill} {excluded ? "+" : "−"}
                     </button>
                   );
                 })}
@@ -640,33 +783,82 @@ export default function ResumeStudioPage() {
             </Button>
 
             {artifact && (
-              <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2.5">
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-medium text-emerald-700">✓ Compiled</span>
-                  {artifact.pageCount ? <span className="text-[11px] text-emerald-600">· {artifact.pageCount} page(s)</span> : null}
+                  <span className="text-[11px] font-bold text-emerald-800">✓ Compiled PDF</span>
+                  {artifact.pageCount ? (
+                    <span className="text-[11px] text-emerald-700">· {artifact.pageCount} page(s)</span>
+                  ) : null}
                   {artifact.compiledAt ? (
-                    <span className="text-[11px] text-emerald-500">· {artifact.compiledAt.replace("T", " ").slice(0, 16)}</span>
+                    <span className="text-[11px] text-emerald-600">
+                      · {artifact.compiledAt.replace("T", " ").slice(0, 16)}
+                    </span>
                   ) : null}
                   <button
                     type="button"
                     onClick={() => setShowPdf(!showPdf)}
-                    className="ml-auto text-[11px] text-kairo-blue hover:underline"
+                    className="ml-auto text-[11px] font-medium text-kairo-blue hover:underline"
                   >
-                    {showPdf ? "Show plan view" : "Show PDF ↗"}
+                    {showPdf ? "Switch to plan layout" : "Switch to PDF view ↗"}
                   </button>
                 </div>
-                {/* Save location — always visible */}
-                <div className="mt-2 flex items-start gap-2 rounded-md bg-white/60 px-2.5 py-2">
-                  <span className="mt-0.5 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Saved to</span>
-                  <p className="min-w-0 flex-1 break-all text-[11px] text-slate-600 font-mono select-all">{artifact.pdfPath}</p>
-                  <button
-                    type="button"
-                    title="Copy path"
-                    onClick={() => void navigator.clipboard.writeText(artifact.pdfPath)}
-                    className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-slate-400 hover:bg-slate-100 hover:text-ink"
-                  >
-                    copy
-                  </button>
+
+                {/* Save location display & actions */}
+                <div className="mt-2.5 flex flex-col gap-1.5 rounded-md bg-white p-2.5 border border-emerald-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Saved File Location
+                    </span>
+                    <button
+                      type="button"
+                      title="Copy path"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(artifact.pdfPath);
+                        toast.ok("Path copied to clipboard");
+                      }}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-medium text-kairo-blue hover:bg-kairo-blue/5"
+                    >
+                      Copy path
+                    </button>
+                  </div>
+                  <p className="break-all font-mono text-[11px] text-slate-700 select-all">
+                    {artifact.pdfPath}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void ipc
+                          .savePdfToDownloads(
+                            artifact.pdfPath,
+                            `${plan.header.fullName.replace(/\s+/g, "_") || "Resume"}.pdf`,
+                          )
+                          .then((p) => toast.ok(`Saved copy to Downloads: ${p}`))
+                          .catch((e) => toast.error(String(e)))
+                      }
+                      className="rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-emerald-700 transition-colors"
+                    >
+                      💾 Save to Downloads
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void ipc.revealFile(artifact.pdfPath).catch((e) => toast.error(String(e)))
+                      }
+                      className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+                    >
+                      📂 Reveal in Folder
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void ipc.openFile(artifact.pdfPath).catch((e) => toast.error(String(e)))
+                      }
+                      className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+                    >
+                      ↗ Open with system viewer
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -707,26 +899,24 @@ export default function ResumeStudioPage() {
             </div>
           </Card>
 
-          {/* Preview area — PDF iframe or HTML plan preview */}
-          {showPdf && pdfUrl ? (
-            <Card className="overflow-hidden p-0">
-              <iframe
-                src={`${pdfUrl}#toolbar=0`}
-                className="h-[750px] w-full border-0"
-                title="Resume PDF Preview"
-              />
-            </Card>
+          {/* Preview area — Canvas PDF preview or HTML plan preview */}
+          {showPdf && artifact ? (
+            <PdfViewer
+              pdfPath={artifact.pdfPath}
+              candidateName={plan.header.fullName}
+              className="w-full"
+            />
           ) : (
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Plan preview
-                {artifact && !showPdf ? (
+                Plan layout preview
+                {artifact ? (
                   <button
                     type="button"
                     onClick={() => setShowPdf(true)}
                     className="ml-2 normal-case font-normal text-kairo-blue hover:underline"
                   >
-                    Switch to PDF view
+                    Switch to PDF preview ↗
                   </button>
                 ) : null}
               </p>

@@ -177,10 +177,29 @@ fn assemble(
         });
     }
 
+    let achievements = super::vault::vault_list::<super::vault::Achievement>(conn)?
+        .into_iter()
+        .map(|a| crate::composer::ComposerAchievement {
+            id: a.id,
+            title: a.title,
+            issuer: a.issuer,
+            description: a.description,
+            achieved_on: a.achieved_on,
+        })
+        .collect();
+
+    let vault_skills: Vec<String> = super::vault::vault_list::<super::vault::Skill>(conn)?
+        .into_iter()
+        .map(|s| s.canonical_name.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
     Ok(ComposerInput {
         profile,
         education,
         entities,
+        achievements,
+        vault_skills,
         requirement_texts,
         config: config.clone(),
     })

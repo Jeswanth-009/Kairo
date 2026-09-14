@@ -208,6 +208,32 @@ fn render_jake(plan: &ResumePlan) -> String {
         tex.push_str("    \\resumeSubHeadingListEnd\n\n");
     }
 
+    // --- Achievements ---
+    let ach: Vec<_> = plan.achievements.iter().filter(|a| !a.excluded).collect();
+    if !ach.is_empty() {
+        tex.push_str("%-----------ACHIEVEMENTS-----------\n\\section{Achievements \\& Awards}\n  \\resumeSubHeadingListStart\n");
+        for a in ach {
+            let title = escape_latex(&inline(&a.title));
+            let issuer = escape_latex(&inline(&a.issuer));
+            let date = escape_latex(a.achieved_on.as_deref().unwrap_or(""));
+            let tech_str = if !issuer.is_empty() {
+                format!(" $|$ \\emph{{{}}}", issuer)
+            } else {
+                String::new()
+            };
+            tex.push_str(&format!(
+                "    \\resumeProjectHeading\n        {{\\textbf{{{}}}{}}}{{{}}}\n",
+                title, tech_str, date
+            ));
+            if !a.description.is_empty() {
+                tex.push_str("        \\resumeItemListStart\n");
+                tex.push_str(&format!("          \\resumeItem{{{}}}\n", escape_latex(&inline(&a.description))));
+                tex.push_str("        \\resumeItemListEnd\n");
+            }
+        }
+        tex.push_str("  \\resumeSubHeadingListEnd\n\n");
+    }
+
     // --- Skills ---
     let skills: Vec<_> = plan.skills.iter().filter(|s| !plan.excluded_skills.contains(s)).collect();
     if !skills.is_empty() {
@@ -314,6 +340,23 @@ fn render_expressive(plan: &ResumePlan) -> String {
                 degree_field, inst, year
             ));
         }
+    }
+
+    // Achievements
+    let ach: Vec<_> = plan.achievements.iter().filter(|a| !a.excluded).collect();
+    if !ach.is_empty() {
+        tex.push_str("\\section{Honors \\& Achievements}\n\n");
+        for a in ach {
+            let title = escape_latex(&inline(&a.title));
+            let issuer = escape_latex(&inline(&a.issuer));
+            let date = escape_latex(a.achieved_on.as_deref().unwrap_or(""));
+            let right_parts = [issuer, date].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" $|$ ");
+            tex.push_str(&format!("{{\\bfseries {}}}\\hfill{{\\small\\itshape {}}}\\par\n", title, right_parts));
+            if !a.description.is_empty() {
+                tex.push_str(&format!("\\vspace{{1pt}}{{\\small {}}}\\par\\vspace{{4pt}}\n", escape_latex(&inline(&a.description))));
+            }
+        }
+        tex.push_str("\n");
     }
 
     // Skills
@@ -455,6 +498,28 @@ fn render_plushcv(plan: &ResumePlan) -> String {
         }
     }
 
+    // Achievements
+    let ach: Vec<_> = plan.achievements.iter().filter(|a| !a.excluded).collect();
+    if !ach.is_empty() {
+        tex.push_str("\\section{Achievements}\n");
+        for a in ach {
+            let title = escape_latex(&inline(&a.title));
+            let issuer = escape_latex(&inline(&a.issuer));
+            let date = escape_latex(a.achieved_on.as_deref().unwrap_or(""));
+            tex.push_str(&format!("\\subsection{{{}}}\n", title));
+            if !issuer.is_empty() {
+                tex.push_str(&format!("\\descript{{{}}}\n", issuer));
+            }
+            if !date.is_empty() {
+                tex.push_str(&format!("\\location{{{}}}\n", date));
+            }
+            if !a.description.is_empty() {
+                tex.push_str(&format!("\\small {}\n", escape_latex(&inline(&a.description))));
+            }
+            tex.push_str("\\sectionsep\n\n");
+        }
+    }
+
     tex.push_str("\\end{paracol}\n\\end{document}\n");
     tex
 }
@@ -527,6 +592,7 @@ mod tests {
                 evidence_count: 1,
                 excluded: false,
             }],
+            achievements: vec![],
             skills: vec!["Python & SQL".to_string()],
             excluded_skills: vec![],
             estimated_lines: 20,
@@ -560,6 +626,7 @@ mod tests {
             education: vec![],
             experience: vec![],
             projects: vec![],
+            achievements: vec![],
             skills: vec![],
             excluded_skills: vec![],
             estimated_lines: 0,
