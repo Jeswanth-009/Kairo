@@ -45,6 +45,23 @@ fn fmt_dates(start: &Option<String>, end: &Option<String>, current: bool) -> Str
     .to_string()
 }
 
+/// Splits "Org — Role" (the format used by db/composer.rs assemble()) into
+/// (escaped_org, escaped_role). Falls back to (full_title, "") if no " — "
+/// separator is present.
+fn split_title_role(title: &str) -> (String, String) {
+    if let Some(idx) = title.find(" \u{2014} ") {
+        let org  = escape_latex(&inline(&title[..idx]));
+        let role = escape_latex(&inline(&title[idx + 4..])); // 4 bytes for " — "
+        (org, role)
+    } else if let Some(idx) = title.find(" - ") {
+        let org  = escape_latex(&inline(&title[..idx]));
+        let role = escape_latex(&inline(&title[idx + 3..]));
+        (org, role)
+    } else {
+        (escape_latex(&inline(title)), String::new())
+    }
+}
+
 /// Renders the approved plan into the chosen LaTeX template.
 pub fn render_plan(plan: &ResumePlan, template_id: &str) -> String {
     match template_id {
@@ -137,18 +154,19 @@ fn render_jake(plan: &ResumePlan) -> String {
     }
 
     // --- Experience ---
-    // PlanItem.title = company, PlanItem.subtitle = role (set by composer)
+    // item.title = "Org — Role", item.subtitle = location (set by db/composer.rs assemble())
     let exp: Vec<_> = plan.experience.iter().filter(|i| !i.excluded).collect();
     if !exp.is_empty() {
         tex.push_str("%-----------EXPERIENCE-----------\n\\section{Experience}\n  \\resumeSubHeadingListStart\n\n");
         for item in exp {
-            let company = escape_latex(&inline(&item.title));
-            let role    = escape_latex(&inline(&item.subtitle));
-            let dates   = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
-            // Jake: \resumeSubheading{Company}{Dates}{Role}{}
+            // Split "Organization — Role" into company and role
+            let (company, role) = split_title_role(&item.title);
+            let loc = escape_latex(&inline(&item.subtitle));
+            let dates = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
+            // Jake: \resumeSubheading{Company}{Dates}{Role}{Location}
             tex.push_str(&format!(
-                "    \\resumeSubheading\n      {{{}}}{{{}}}\n      {{{}}}{{}}\n",
-                company, dates, role
+                "    \\resumeSubheading\n      {{{}}}{{{}}}\n      {{{}}}{{{}}}\n",
+                company, dates, role, loc
             ));
             let bullets: Vec<_> = item.bullets.iter().filter(|b| !b.excluded).collect();
             if !bullets.is_empty() {
@@ -249,10 +267,10 @@ fn render_expressive(plan: &ResumePlan) -> String {
     if !exp.is_empty() {
         tex.push_str("\\section{Work Experience}\n\n");
         for item in exp {
-            let company = escape_latex(&inline(&item.title));
-            let role    = escape_latex(&inline(&item.subtitle));
-            let dates   = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
-            tex.push_str(&format!("\\experience{{{}}}{{}}{{\n", company));
+            let (company, role) = split_title_role(&item.title);
+            let loc    = escape_latex(&inline(&item.subtitle));
+            let dates  = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
+            tex.push_str(&format!("\\experience{{{}}}{{{}}}{{\n", company, loc));
             tex.push_str(&format!("    \\role{{{}}}{{{}}}{{\n", role, dates));
             for b in item.bullets.iter().filter(|b| !b.excluded) {
                 tex.push_str(&format!("        \\achievement{{{}}}\n", escape_latex(&inline(&b.text))));
@@ -364,14 +382,15 @@ fn render_plushcv(plan: &ResumePlan) -> String {
     if !exp.is_empty() {
         tex.push_str("\\section{Experience}\n");
         for item in exp {
-            let company = escape_latex(&inline(&item.title));
-            let role    = escape_latex(&inline(&item.subtitle));
-            let dates   = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
+            let (company, role) = split_title_role(&item.title);
+            let loc   = escape_latex(&inline(&item.subtitle));
+            let dates = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
+            let loc_date = if loc.is_empty() { dates.clone() } else { format!("{} | {}", loc, dates) };
             tex.push_str(&format!("\\runsubsection{{{}}}\n", company));
             if !role.is_empty() {
                 tex.push_str(&format!("\\descript{{| {}}}\n", role));
             }
-            tex.push_str(&format!("\\location{{{}}}\n", dates));
+            tex.push_str(&format!("\\location{{{}}}\n", loc_date));
             let bullets: Vec<_> = item.bullets.iter().filter(|b| !b.excluded).collect();
             if !bullets.is_empty() {
                 tex.push_str("\\begin{tightemize}\n");
