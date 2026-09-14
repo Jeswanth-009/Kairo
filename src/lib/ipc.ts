@@ -198,6 +198,7 @@ export const ipc = {
     invoke<{ artifact: PdfArtifact; logTail: string }>("export_pdf", { jobId, templateId }),
   getPdfArtifact: (jobId: number): Promise<PdfArtifact | null> =>
     invoke<PdfArtifact | null>("get_pdf_artifact", { jobId }),
+  openFile: (path: string): Promise<void> => invoke<void>("open_file", { path }),
 
   // Applications (Phase 11)
   listApplications: (): Promise<Application[]> => invoke<Application[]>("list_applications"),
