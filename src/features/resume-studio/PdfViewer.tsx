@@ -1,13 +1,19 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import { Download, ExternalLink, FolderOpen, HardDriveDownload, Maximize2, Minus, Plus } from "lucide-react";
 import { ipc } from "../../lib/ipc";
 import { toast } from "../../stores/toastStore";
+import { Skeleton, Spinner } from "../../components/ui/Feedback";
+import { cn } from "../../lib/cn";
 
 // Configure worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
+  import.meta.url,
 ).toString();
+
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 2.5;
 
 interface PdfViewerProps {
   pdfPath: string;
@@ -15,29 +21,82 @@ interface PdfViewerProps {
   className?: string;
 }
 
-export function PdfViewer({ pdfPath, candidateName, className = "" }: PdfViewerProps) {
+/** One canvas per page; resumes are short so rendering eagerly is fine. */
+function PdfPage({
+  doc,
+  pageNumber,
+  scale,
+}: {
+  doc: pdfjsLib.PDFDocumentProxy;
+  pageNumber: number;
+  scale: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const taskRef = useRef<pdfjsLib.RenderTask | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const page = await doc.getPage(pageNumber);
+        if (cancelled) return;
+        const dpr = window.devicePixelRatio || 1;
+        const viewport = page.getViewport({ scale });
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.width = Math.floor(viewport.width * dpr);
+        canvas.height = Math.floor(viewport.height * dpr);
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        taskRef.current?.cancel();
+        const task = page.render({ canvasContext: ctx, viewport, canvas });
+        taskRef.current = task;
+        await task.promise;
+      } catch (err) {
+        const name = (err as { name?: string })?.name ?? "";
+        if (name !== "RenderingCancelledException" && !cancelled) {
+          console.error("PDF page render failed:", err);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      taskRef.current?.cancel();
+    };
+  }, [doc, pageNumber, scale]);
+
+  return <canvas ref={canvasRef} data-page={pageNumber} className="block bg-white shadow-md ring-1 ring-black/5" />;
+}
+
+/** Continuous multi-page PDF preview with fit-width default and zoom. */
+export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
-  const [numPages, setNumPages] = useState<number>(1);
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [scale, setScale] = useState<number>(1.2);
+  const [numPages, setNumPages] = useState(1);
+  const [scale, setScale] = useState<number | null>(null); // null = not fitted yet
+  const [fitWidth, setFitWidth] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const [savingDownload, setSavingDownload] = useState(false);
   const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
 
-  // Suggested download file name
   const suggestedFileName = candidateName
     ? `${candidateName.replace(/\s+/g, "_")}_Resume.pdf`
     : "Resume.pdf";
 
-  // Load PDF data via Tauri IPC
+  // Load the document bytes via Tauri IPC.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setPdfDoc(null);
+    setScale(null);
+    setFitWidth(true);
 
     async function loadPdf() {
       try {
@@ -45,11 +104,8 @@ export function PdfViewer({ pdfPath, candidateName, className = "" }: PdfViewerP
         if (cancelled) return;
         const uint8 = new Uint8Array(bytes);
         setPdfData(uint8);
-
-        const loadingTask = pdfjsLib.getDocument({ data: uint8 });
-        const doc = await loadingTask.promise;
+        const doc = await pdfjsLib.getDocument({ data: uint8 }).promise;
         if (cancelled) return;
-
         setPdfDoc(doc);
         setNumPages(doc.numPages);
         setCurrentPage(1);
@@ -59,9 +115,7 @@ export function PdfViewer({ pdfPath, candidateName, className = "" }: PdfViewerP
           setError(String(err));
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -71,52 +125,44 @@ export function PdfViewer({ pdfPath, candidateName, className = "" }: PdfViewerP
     };
   }, [pdfPath]);
 
-  // Render active page onto canvas
-  const renderPage = useCallback(
-    async (pageNumber: number, doc: pdfjsLib.PDFDocumentProxy, currentScale: number) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  // Fit width on first load and on demand.
+  const fitToWidth = useCallback(async (doc: pdfjsLib.PDFDocumentProxy) => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const page = await doc.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const target = Math.min(MAX_SCALE, Math.max(MIN_SCALE, (container.clientWidth - 56) / base.width));
+    setScale(+target.toFixed(2));
+  }, []);
 
-      try {
-        const page = await doc.getPage(pageNumber);
-        const pixelRatio = window.devicePixelRatio || 1;
-        const viewport = page.getViewport({ scale: currentScale });
-
-        // Set actual canvas size in memory (scaled for HiDPI)
-        canvas.width = Math.floor(viewport.width * pixelRatio);
-        canvas.height = Math.floor(viewport.height * pixelRatio);
-
-        // Display size via CSS
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-
-        const renderContext = {
-          canvasContext: ctx,
-          viewport,
-          canvas,
-        };
-
-        await page.render(renderContext).promise;
-      } catch (err) {
-        console.error("Error rendering PDF page:", err);
-      }
-    },
-    [],
-  );
-
-  // Trigger render when page, doc, or scale changes
   useEffect(() => {
-    if (pdfDoc) {
-      void renderPage(currentPage, pdfDoc, scale);
-    }
-  }, [pdfDoc, currentPage, scale, renderPage]);
+    if (pdfDoc && fitWidth) void fitToWidth(pdfDoc);
+  }, [pdfDoc, fitWidth, fitToWidth]);
 
-  // Download directly in browser via blob
+  // Track the page currently in view.
+  const onScroll = () => {
+    const container = scrollRef.current;
+    if (!container || numPages <= 1) return;
+    const kids = Array.from(container.querySelectorAll<HTMLElement>("canvas[data-page]"));
+    const mid = container.scrollTop + container.clientHeight / 2;
+    let best = 1;
+    for (const kid of kids) {
+      const top = kid.offsetTop;
+      const n = Number(kid.dataset.page ?? 1);
+      if (top <= mid) best = n;
+    }
+    setCurrentPage(best);
+  };
+
+  const zoomIn = () => {
+    setFitWidth(false);
+    setScale((s) => Math.min(MAX_SCALE, +((s ?? 1) + 0.15).toFixed(2)));
+  };
+  const zoomOut = () => {
+    setFitWidth(false);
+    setScale((s) => Math.max(MIN_SCALE, +((s ?? 1) - 0.15).toFixed(2)));
+  };
+
   const handleBrowserDownload = () => {
     if (!pdfData) return;
     try {
@@ -135,7 +181,6 @@ export function PdfViewer({ pdfPath, candidateName, className = "" }: PdfViewerP
     }
   };
 
-  // Save copy directly to Windows Downloads folder
   const handleSaveToDownloads = async () => {
     setSavingDownload(true);
     try {
@@ -148,179 +193,146 @@ export function PdfViewer({ pdfPath, candidateName, className = "" }: PdfViewerP
     }
   };
 
-  // Reveal file in Windows Explorer
-  const handleReveal = async () => {
-    try {
-      await ipc.revealFile(pdfPath);
-    } catch (e) {
-      toast.error(String(e));
-    }
-  };
-
-  // Open in default OS PDF application
-  const handleOpenExternal = async () => {
-    try {
-      await ipc.openFile(pdfPath);
-    } catch (e) {
-      toast.error(String(e));
-    }
-  };
-
-  const zoomIn = () => setScale((s) => Math.min(2.5, +(s + 0.15).toFixed(2)));
-  const zoomOut = () => setScale((s) => Math.max(0.6, +(s - 0.15).toFixed(2)));
-  const resetZoom = () => setScale(1.15);
+  const handleReveal = () => void ipc.revealFile(pdfPath).catch((e) => toast.error(String(e)));
+  const handleOpenExternal = () => void ipc.openFile(pdfPath).catch((e) => toast.error(String(e)));
 
   return (
-    <div className={`flex flex-col rounded-xl border border-slate-200 bg-slate-900/5 shadow-sm overflow-hidden ${className}`}>
-      {/* Controls Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 text-xs">
-        {/* Left: Page Navigation & Zoom */}
+    <div className={cn("flex flex-col overflow-hidden rounded-xl border border-line bg-card shadow-card", className)}>
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-card px-3 py-2 text-xs">
         <div className="flex items-center gap-1.5">
-          {numPages > 1 && (
-            <div className="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1">
-              <button
-                type="button"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="rounded px-1.5 py-0.5 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
-                title="Previous page"
-              >
-                ◀
-              </button>
-              <span className="text-[11px] font-medium text-slate-600">
-                {currentPage} / {numPages}
-              </span>
-              <button
-                type="button"
-                disabled={currentPage >= numPages}
-                onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-                className="rounded px-1.5 py-0.5 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
-                title="Next page"
-              >
-                ▶
-              </button>
-            </div>
-          )}
-
-          {/* Zoom controls */}
-          <div className="flex items-center gap-1">
+          {numPages > 1 ? (
+            <span className="mr-1 rounded-md bg-accent-soft px-2 py-1 text-[11px] font-medium text-muted">
+              Page {currentPage} / {numPages}
+            </span>
+          ) : null}
+          <div className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={zoomOut}
-              className="rounded px-1.5 py-0.5 text-slate-600 hover:bg-slate-100"
-              title="Zoom out"
+              aria-label="Zoom out"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-accent-soft hover:text-ink"
             >
-              −
+              <Minus className="size-3.5" />
             </button>
             <button
               type="button"
-              onClick={resetZoom}
-              className="px-1 text-[11px] font-semibold text-slate-600 hover:text-kairo-blue"
+              onClick={() => {
+                setFitWidth(false);
+                setScale((s) => s ?? 1);
+              }}
+              className="w-12 text-[11px] font-semibold text-muted hover:text-kairo-blue"
               title="Reset zoom"
             >
-              {Math.round(scale * 100)}%
+              {Math.round((scale ?? 1) * 100)}%
             </button>
             <button
               type="button"
               onClick={zoomIn}
-              className="rounded px-1.5 py-0.5 text-slate-600 hover:bg-slate-100"
-              title="Zoom in"
+              aria-label="Zoom in"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-accent-soft hover:text-ink"
             >
-              +
+              <Plus className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setFitWidth(true)}
+              aria-label="Fit to width"
+              title="Fit to width"
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-md",
+                fitWidth ? "bg-kairo-blue/10 text-kairo-blue" : "text-muted hover:bg-accent-soft hover:text-ink",
+              )}
+            >
+              <Maximize2 className="size-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Right: Quick Action Buttons */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={handleSaveToDownloads}
+            onClick={() => void handleSaveToDownloads()}
             disabled={savingDownload}
-            className="flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100 transition-colors"
-            title="Save a copy directly into your Windows Downloads folder"
+            className="flex items-center gap-1.5 rounded-md border border-line bg-card px-2 py-1.5 text-[11px] font-medium text-ink hover:bg-accent-soft disabled:opacity-50"
+            title="Save a copy directly into your Downloads folder"
           >
-            <span>💾</span>
-            <span>Save to Downloads</span>
+            <HardDriveDownload className="size-3.5" />
+            Save to Downloads
           </button>
-
           <button
             type="button"
             onClick={handleBrowserDownload}
-            className="flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-1.5 rounded-md border border-line bg-card px-2 py-1.5 text-[11px] font-medium text-ink hover:bg-accent-soft"
             title="Download PDF"
           >
-            <span>📥</span>
-            <span>Download</span>
+            <Download className="size-3.5" />
+            Download
           </button>
-
           <button
             type="button"
             onClick={handleReveal}
-            className="flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-            title="Open containing folder in File Explorer with PDF selected"
+            aria-label="Reveal in folder"
+            title="Reveal in folder"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-accent-soft hover:text-ink"
           >
-            <span>📂</span>
-            <span>Reveal in Folder</span>
+            <FolderOpen className="size-3.5" />
           </button>
-
           <button
             type="button"
             onClick={handleOpenExternal}
-            className="flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-kairo-blue hover:bg-kairo-blue/5 transition-colors"
-            title="Open in default desktop PDF app"
+            aria-label="Open in system viewer"
+            title="Open in system viewer"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-accent-soft hover:text-ink"
           >
-            <span>↗</span>
-            <span>Open in App</span>
+            <ExternalLink className="size-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Canvas Viewport */}
+      {/* Viewport */}
       <div
-        ref={containerRef}
-        className="flex min-h-[650px] max-h-[850px] w-full flex-col items-center overflow-auto bg-slate-100/80 p-4"
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="flex min-h-[560px] w-full flex-col items-center gap-4 overflow-auto bg-accent-soft p-5"
       >
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400 gap-2">
-            <svg className="h-6 w-6 animate-spin text-kairo-blue" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
-            <p className="text-xs font-medium">Rendering PDF preview…</p>
+        {loading ? (
+          <div className="flex w-full max-w-[620px] flex-col gap-3">
+            <Skeleton className="h-[780px] w-full" />
+            <p className="flex items-center justify-center gap-2 text-xs font-medium text-muted">
+              <Spinner className="size-3.5" /> Rendering PDF preview…
+            </p>
           </div>
-        )}
+        ) : null}
 
-        {error && (
-          <div className="m-auto max-w-md rounded-lg border border-red-200 bg-red-50 p-4 text-center">
-            <p className="text-xs font-semibold text-red-700">Unable to render PDF in-app</p>
-            <p className="mt-1 text-[11px] text-red-600 font-mono break-all">{error}</p>
-            <div className="mt-3 flex justify-center gap-2">
+        {error ? (
+          <div className="m-auto max-w-md rounded-xl border border-red-200 bg-red-50 p-5 text-center dark:border-red-500/30 dark:bg-red-500/10">
+            <p className="text-sm font-semibold text-red-700 dark:text-red-300">Unable to render PDF in-app</p>
+            <p className="mt-1 font-mono text-[11px] break-all text-red-600 dark:text-red-400/80">{error}</p>
+            <div className="mt-4 flex justify-center gap-2">
               <button
                 type="button"
                 onClick={handleOpenExternal}
-                className="rounded bg-red-600 px-3 py-1 text-xs text-white hover:bg-red-700"
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500"
               >
-                Open in external PDF reader ↗
+                Open in external PDF reader
               </button>
               <button
                 type="button"
                 onClick={handleReveal}
-                className="rounded border border-red-300 bg-white px-3 py-1 text-xs text-red-700 hover:bg-red-50"
+                className="rounded-lg border border-red-300 bg-card px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-500/10"
               >
-                Reveal in Explorer
+                Reveal in folder
               </button>
             </div>
           </div>
-        )}
+        ) : null}
 
-        <canvas
-          ref={canvasRef}
-          className={`bg-white shadow-md transition-opacity duration-200 ${
-            loading || error ? "hidden" : "block"
-          }`}
-          style={{ maxWidth: "none" }}
-        />
+        {pdfDoc && scale !== null
+          ? Array.from({ length: numPages }, (_, i) => i + 1).map((n) => (
+              <PdfPage key={n} doc={pdfDoc} pageNumber={n} scale={scale} />
+            ))
+          : null}
       </div>
     </div>
   );
