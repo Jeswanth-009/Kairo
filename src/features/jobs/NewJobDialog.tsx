@@ -200,11 +200,11 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
                   Requirements ({requirements.length})
                 </h4>
                 {requirements.length > 0 ? (
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-muted">
                     · {requirements.filter((r) => r.kind === "required_skill").length} required
                     · {requirements.filter((r) => r.kind === "responsibility").length} responsibilities
                     {requirements.filter((r) => r.kind === "preferred_skill").length > 0 ? (
@@ -231,7 +231,7 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
             </div>
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
               {requirements.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-muted">
+                <p className="rounded-lg border border-dashed border-line-strong px-4 py-6 text-center text-xs text-muted">
                   Nothing was extracted — add requirements manually or go back and paste the full
                   posting.
                 </p>

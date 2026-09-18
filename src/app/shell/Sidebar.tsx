@@ -33,7 +33,7 @@ const linkClasses = ({ isActive }: { isActive: boolean }) =>
     "transition-all duration-200",
     isActive
       ? "bg-white/[0.09] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.07)]"
-      : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-100",
+      : "text-muted hover:bg-white/[0.05] hover:text-slate-100",
   ].join(" ");
 
 function NavItemLink({ item }: { item: NavItem }) {
@@ -50,7 +50,7 @@ function NavItemLink({ item }: { item: NavItem }) {
           <item.icon
             className={[
               "shrink-0 transition-colors duration-200",
-              isActive ? "text-kairo-sky" : "text-slate-500 group-hover:text-slate-300",
+              isActive ? "text-kairo-sky" : "text-muted group-hover:text-muted/60",
             ].join(" ")}
           />
           <span>{item.label}</span>
@@ -79,14 +79,14 @@ export function Sidebar() {
           <div className="text-[15px] leading-tight font-semibold tracking-tight text-white">
             Kairo
           </div>
-          <div className="truncate text-[11px] leading-tight text-slate-500">
+          <div className="truncate text-[11px] leading-tight text-muted">
             Your career. A brighter next step.
           </div>
         </div>
       </div>
 
       <div className="relative px-5 pt-2 pb-1">
-        <span className="text-[10px] font-semibold tracking-[0.14em] text-slate-600 uppercase">
+        <span className="text-[10px] font-semibold tracking-[0.14em] text-muted uppercase">
           Workspace
         </span>
       </div>
@@ -100,7 +100,7 @@ export function Sidebar() {
         <NavItemLink
           item={{ to: "/settings", label: "Settings", icon: Settings }}
         />
-        <div className="px-3 pt-2.5 text-[11px] text-slate-600">v0.1.0 · Local-first</div>
+        <div className="px-3 pt-2.5 text-[11px] text-muted">v0.1.0 · Local-first</div>
       </div>
     </aside>
   );

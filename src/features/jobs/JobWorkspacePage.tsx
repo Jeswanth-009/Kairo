@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
+import { Tabs } from "../../components/ui/Tabs";
+import { Badge } from "../../components/ui/Badge";
+import { Skeleton } from "../../components/ui/Feedback";
 import { Field, Input, Select } from "../../components/ui/inputs";
 import { JOB_REQUIREMENT_KINDS } from "../../lib/types";
 import type { Job, JobRequirement, JobRequirementKind } from "../../lib/types";
@@ -22,13 +25,13 @@ const KIND_ORDER: JobRequirementKind[] = ["required_skill", "preferred_skill", "
 
 type WorkspaceTab = "overview" | "requirements" | "match" | "plan" | "tailor" | "resume";
 
-const TAB_META: { key: WorkspaceTab; label: string; phase: string | null }[] = [
-  { key: "overview", label: "Overview", phase: null },
-  { key: "requirements", label: "Requirements", phase: null },
-  { key: "match", label: "Match", phase: null },
-  { key: "plan", label: "Plan", phase: null },
-  { key: "tailor", label: "Tailor", phase: null },
-  { key: "resume", label: "Resume", phase: "Phase 8" },
+const TAB_META: { key: WorkspaceTab; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "requirements", label: "Requirements" },
+  { key: "match", label: "Match" },
+  { key: "plan", label: "Plan" },
+  { key: "tailor", label: "Tailor" },
+  { key: "resume", label: "Resume" },
 ];
 
 export default function JobWorkspacePage() {
@@ -69,7 +72,14 @@ export default function JobWorkspacePage() {
   }
 
   if (!job) {
-    return <p className="py-16 text-center text-sm text-muted">Loading workspace…</p>;
+    return (
+      <div className="mx-auto max-w-5xl p-8">
+        <Skeleton className="h-8 w-72" />
+        <Skeleton className="mt-4 h-6 w-52" />
+        <Skeleton className="mt-6 h-11 w-full" />
+        <Skeleton className="mt-6 h-48 w-full" />
+      </div>
+    );
   }
 
   const counts: Record<JobRequirementKind, number> = {
@@ -87,23 +97,11 @@ export default function JobWorkspacePage() {
             {job.company ? <span className="text-muted"> · {job.company}</span> : null}
           </h2>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {job.seniority ? (
-              <span className="rounded-full bg-kairo-violet/10 px-2 py-0.5 text-[11px] font-medium text-kairo-violet">
-                {job.seniority}
-              </span>
-            ) : null}
-            {job.domain ? (
-              <span className="rounded-full bg-kairo-sky/20 px-2 py-0.5 text-[11px] font-medium text-sky-700">
-                {job.domain}
-              </span>
-            ) : null}
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                job.requirementCount > 0 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-              }`}
-            >
+            {job.seniority ? <Badge tone="violet">{job.seniority}</Badge> : null}
+            {job.domain ? <Badge tone="sky">{job.domain}</Badge> : null}
+            <Badge tone={job.requirementCount > 0 ? "green" : "amber"}>
               {job.requirementCount} requirements reviewed
-            </span>
+            </Badge>
           </div>
         </div>
         <Button variant="secondary" size="sm" onClick={() => navigate("/jobs")}>
@@ -111,29 +109,13 @@ export default function JobWorkspacePage() {
         </Button>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-white p-1.5">
-        {TAB_META.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={[
-              "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200",
-              tab === t.key ? "bg-kairo-midnight text-white" : "text-muted hover:bg-slate-100",
-            ].join(" ")}
-          >
-            {t.label}
-            {t.phase ? (
-              <span
-                className={`rounded-full px-1.5 text-[10px] ${
-                  tab === t.key ? "bg-white/15 text-white" : "bg-slate-100 text-slate-400"
-                }`}
-              >
-                {t.phase}
-              </span>
-            ) : null}
-          </button>
-        ))}
+      <div className="mb-6">
+        <Tabs
+          tabs={TAB_META.map((t) => ({ id: t.key, label: t.label }))}
+          active={tab}
+          onChange={(id) => setTab(id as WorkspaceTab)}
+          className="flex-wrap"
+        />
       </div>
 
       {tab === "overview" ? <OverviewTab job={job} counts={counts} /> : null}
@@ -163,7 +145,7 @@ function OverviewTab({
     <div className="space-y-5">
       <Card className="p-6">
         <CardTitle>Position</CardTitle>
-        <dl className="mt-3 divide-y divide-slate-100">
+        <dl className="mt-3 divide-y divide-line">
           <Row label="Role" value={job.roleTitle || "—"} />
           <Row label="Company" value={job.company || "—"} />
           <Row label="Seniority" value={job.seniority || "Unspecified"} />
@@ -192,7 +174,7 @@ function OverviewTab({
           {KIND_ORDER.map((kind) => (
             <span
               key={kind}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-ink"
+              className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs text-ink"
             >
               {KIND_LABELS[kind]}: <strong>{counts[kind]}</strong>
             </span>
@@ -212,7 +194,7 @@ function OverviewTab({
           extracted from.
         </p>
         {showRaw ? (
-          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-[11px] leading-relaxed text-slate-600">
+          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-accent-soft p-3 font-mono text-[11px] leading-relaxed text-muted">
             {job.rawJd}
           </pre>
         ) : null}
@@ -269,8 +251,8 @@ function RequirementsTab({ job }: { job: Job }) {
       {rows.map(({ kind, items }) => (
         <div key={kind}>
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              {KIND_LABELS[kind]} <span className="text-slate-300">· {items.length}</span>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
+              {KIND_LABELS[kind]} <span className="font-normal text-muted/70">· {items.length}</span>
             </h4>
             <Button
               size="sm"
@@ -297,13 +279,13 @@ function RequirementsTab({ job }: { job: Job }) {
             </Button>
           </div>
           {items.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center text-xs text-muted">
+            <p className="rounded-lg border border-dashed border-line-strong px-4 py-5 text-center text-xs text-muted">
               None in this category.
             </p>
           ) : (
             <ul className="space-y-2">
               {items.map((req) => (
-                <li key={req.id} className="rounded-lg border border-slate-200 bg-white p-3.5">
+                <li key={req.id} className="rounded-lg border border-line bg-card p-3.5">
                   {editingId === req.id ? (
                     <RequirementEditRow
                       requirement={req}
@@ -324,7 +306,7 @@ function RequirementsTab({ job }: { job: Job }) {
                         <p className="text-sm text-ink">
                           {req.rawText || <span className="text-red-500">empty requirement</span>}
                         </p>
-                        <p className="mt-0.5 text-[11px] text-slate-400">
+                        <p className="mt-0.5 text-[11px] text-muted/90">
                           importance {Math.round(req.importance * 100)}%
                           {req.userConfirmed ? " · user-confirmed" : " · unconfirmed"}
                         </p>
@@ -336,7 +318,7 @@ function RequirementsTab({ job }: { job: Job }) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-red-600 hover:bg-red-50"
+                          className="text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:text-red-400"
                           onClick={() => {
                             void (async () => {
                               try {
@@ -361,7 +343,7 @@ function RequirementsTab({ job }: { job: Job }) {
       ))}
 
       {requirements.length === 0 ? (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
           No requirements yet — add them manually or recreate the workspace with the JD text.
         </p>
       ) : null}

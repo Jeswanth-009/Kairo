@@ -6,13 +6,14 @@ import { Dialog } from "../../components/ui/Dialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Field, Input, Select } from "../../components/ui/inputs";
-import { IconApplications } from "../../components/icons";
+import { ClipboardCheck } from "lucide-react";
+import { Badge } from "../../components/ui/Badge";
+import { Tabs } from "../../components/ui/Tabs";
+import { Skeleton } from "../../components/ui/Feedback";
 import { ipc } from "../../lib/ipc";
-import {
-  APPLICATION_STATUSES,
-  STATUS_COLORS,
-} from "../../lib/types";
+import { APPLICATION_STATUSES } from "../../lib/types";
 import type { Application, ApplicationStatus } from "../../lib/types";
+import type { BadgeTone } from "../../components/ui/Badge";
 import { toast } from "../../stores/toastStore";
 
 const PIPELINE_ORDER: ApplicationStatus[] = [
@@ -30,6 +31,18 @@ const PIPELINE_ORDER: ApplicationStatus[] = [
 const STATUS_LABEL: Record<ApplicationStatus, string> = Object.fromEntries(
   APPLICATION_STATUSES.map((s) => [s.value, s.label]),
 ) as Record<ApplicationStatus, string>;
+
+const STATUS_TONE: Record<ApplicationStatus, BadgeTone> = {
+  wishlist: "neutral",
+  preparing: "sky",
+  applied: "blue",
+  oa: "violet",
+  interview: "amber",
+  final: "dawn",
+  offer: "green",
+  rejected: "red",
+  withdrawn: "neutral",
+};
 
 function ApplicationDialog({
   open,
@@ -203,37 +216,31 @@ export default function ApplicationsPage() {
       />
 
       {/* Status pipeline summary */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setFilter("all")}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200 ${
-            filter === "all" ? "bg-kairo-midnight text-white" : "bg-white text-muted hover:bg-slate-100 ring-1 ring-slate-200"
-          }`}
-        >
-          All · {apps.length}
-        </button>
-        {PIPELINE_ORDER.map((status) =>
-          counts[status] > 0 ? (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setFilter(status)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200 ${
-                filter === status
-                  ? "bg-kairo-midnight text-white"
-                  : `ring-1 ring-slate-200 hover:bg-slate-100 ${STATUS_COLORS[status]}`
-              }`}
-            >
-              {STATUS_LABEL[status]} · {counts[status]}
-            </button>
-          ) : null,
-        )}
+      <div className="mb-6">
+        <Tabs
+          variant="pills"
+          tabs={[
+            { id: "all", label: `All · ${apps.length}` },
+            ...PIPELINE_ORDER.filter((status) => counts[status] > 0).map((status) => ({
+              id: status,
+              label: `${STATUS_LABEL[status]} · ${counts[status]}`,
+            })),
+          ]}
+          active={filter}
+          onChange={(id) => setFilter(id as "all" | ApplicationStatus)}
+          className="max-w-full flex-wrap"
+        />
       </div>
 
-      {loaded && apps.length === 0 ? (
+      {!loaded ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Skeleton key={i} className="h-20" />
+          ))}
+        </div>
+      ) : apps.length === 0 ? (
         <EmptyState
-          icon={<IconApplications width={24} height={24} />}
+          icon={<ClipboardCheck className="size-6" />}
           title="Track applications manually"
           description="Use “New application” above to record your first one — link the exact resume version submitted, then move it through the pipeline by hand. No email scraping, no auto-detection."
         />
@@ -248,20 +255,14 @@ export default function ApplicationsPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                        STATUS_COLORS[app.status]
-                      }`}
-                    >
-                      {STATUS_LABEL[app.status]}
-                    </span>
+                    <Badge tone={STATUS_TONE[app.status]}>{STATUS_LABEL[app.status]}</Badge>
                     <span className="text-sm font-medium text-ink">{app.company}</span>
                     <span className="text-xs text-muted">· {app.role}</span>
                   </div>
                   {app.nextAction ? (
                     <p className="mt-1 text-xs text-muted">Next: {app.nextAction}</p>
                   ) : null}
-                  {app.notes ? <p className="mt-0.5 text-[11px] text-slate-400">{app.notes}</p> : null}
+                  {app.notes ? <p className="mt-0.5 text-[11px] text-muted/80">{app.notes}</p> : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Select
@@ -285,7 +286,7 @@ export default function ApplicationsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-red-600 hover:bg-red-50"
+                    className="text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:text-red-400"
                     onClick={() => setDeleting(app)}
                   >
                     Delete

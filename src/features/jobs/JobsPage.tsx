@@ -5,7 +5,9 @@ import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { IconJobs } from "../../components/icons";
+import { Briefcase } from "lucide-react";
+import { Badge } from "../../components/ui/Badge";
+import { Skeleton } from "../../components/ui/Feedback";
 import type { Job } from "../../lib/types";
 import { useJobsStore } from "../../stores/jobsStore";
 import { toast } from "../../stores/toastStore";
@@ -19,31 +21,19 @@ function JobCard({ job, onOpen, onDelete }: { job: Job; onOpen: () => void; onDe
         </h3>
         {job.company ? <p className="mt-0.5 text-xs text-muted">{job.company}</p> : null}
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {job.seniority ? (
-            <span className="rounded-full bg-kairo-violet/10 px-2 py-0.5 text-[11px] font-medium text-kairo-violet">
-              {job.seniority}
-            </span>
-          ) : null}
-          {job.domain ? (
-            <span className="rounded-full bg-kairo-sky/20 px-2 py-0.5 text-[11px] font-medium text-sky-700">
-              {job.domain}
-            </span>
-          ) : null}
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-              job.requirementCount > 0 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-            }`}
-          >
+          {job.seniority ? <Badge tone="violet">{job.seniority}</Badge> : null}
+          {job.domain ? <Badge tone="sky">{job.domain}</Badge> : null}
+          <Badge tone={job.requirementCount > 0 ? "green" : "amber"}>
             {job.requirementCount} requirements
-          </span>
+          </Badge>
         </div>
       </button>
-      <div className="mt-4 flex items-center justify-end border-t border-slate-100 pt-3">
+      <div className="mt-4 flex items-center justify-end border-t border-line pt-3">
         <div className="flex gap-1">
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:bg-red-50"
+            className="text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:text-red-400"
             onClick={onDelete}
           >
             Delete
@@ -89,10 +79,14 @@ export default function JobsPage() {
       />
 
       {loading && !loaded ? (
-        <p className="py-16 text-center text-sm text-muted">Loading jobs…</p>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} className="h-40" />
+          ))}
+        </div>
       ) : jobs.length === 0 ? (
         <EmptyState
-          icon={<IconJobs width={24} height={24} />}
+          icon={<Briefcase className="size-6" />}
           title="Paste a job description to start a workspace."
           description="The original text is stored unchanged, then turned into an editable requirement model you can correct before anything is matched."
         >

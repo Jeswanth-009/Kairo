@@ -19,11 +19,11 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
   const acceptedFor = (bulletId: number) =>
     suggestions.find((s) => s.bulletId === bulletId && s.status === "accepted");
   return (
-    <li className="rounded-lg border border-slate-200 p-3.5">
+    <li className="rounded-lg border border-line p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-ink">{item.title}</p>
-          <p className="mt-0.5 text-[11px] text-slate-400">
+          <p className="mt-0.5 text-[11px] text-muted">
             {[
               item.subtitle,
               fmtRange({ startDate: item.startDate, endDate: item.endDate, isCurrent: item.isCurrent }),
@@ -84,7 +84,7 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
       {item.skills.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1">
           {item.skills.map((s) => (
-            <span key={s} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+            <span key={s} className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] text-muted">
               {s}
             </span>
           ))}
@@ -221,7 +221,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
               {plan.header.headline ? (
                 <p className="text-xs text-muted">{plan.header.headline}</p>
               ) : null}
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-muted">
                 {[
                   plan.header.email,
                   plan.header.phone,
@@ -246,7 +246,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
                     <span className="ml-2 text-xs text-muted">
                       {[e.degree, e.fieldOfStudy].filter(Boolean).join(" · ")}
                     </span>
-                    <span className="ml-2 text-[11px] text-slate-400">
+                    <span className="ml-2 text-[11px] text-muted">
                       {fmtRange({ startDate: e.startDate, endDate: e.endDate, isCurrent: e.isCurrent })}
                     </span>
                   </li>
@@ -274,7 +274,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
           {plan.skills.length > 0 ? (
             <Card className="p-6">
               <CardTitle>Skills</CardTitle>
-              <p className="mt-1 text-[11px] text-slate-400">
+              <p className="mt-1 text-[11px] text-muted">
                 Linked to selected records; skills named in the job requirements come first.
               </p>
               <div className="mt-3 flex flex-wrap gap-1.5">

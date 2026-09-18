@@ -39,14 +39,14 @@ export function VaultCard({
             type="checkbox"
             checked={selected}
             onChange={(e) => onToggleSelect(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-kairo-blue focus:ring-kairo-blue cursor-pointer shrink-0"
+            className="mt-0.5 h-4 w-4 rounded border-line-strong text-kairo-blue focus:ring-kairo-blue cursor-pointer shrink-0"
             title="Select item"
           />
         ) : null}
         <button type="button" onClick={onOpen} className="text-left flex-1 min-w-0">
           <div className="flex items-start justify-between gap-3">
             <h3 className="text-sm font-semibold text-ink hover:text-kairo-blue truncate">{title}</h3>
-            {range ? <span className="shrink-0 text-xs text-slate-400">{range}</span> : null}
+            {range ? <span className="shrink-0 text-xs text-muted">{range}</span> : null}
           </div>
           {subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}
           {description ? (
@@ -64,7 +64,7 @@ export function VaultCard({
               className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                 ref.confidence >= 3
                   ? "bg-kairo-blue/10 text-kairo-blue"
-                  : "bg-slate-100 text-slate-500"
+                  : "bg-accent-soft text-muted"
               }`}
             >
               {ref.canonicalName} · {ref.confidence}
@@ -90,7 +90,7 @@ export function VaultCard({
         </div>
       ) : null}
 
-      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+      <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
         <div className="flex gap-3">
           {links.map((link) => (
             <a

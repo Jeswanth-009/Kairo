@@ -4,7 +4,9 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Input } from "../../components/ui/inputs";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { IconSpark, IconVault } from "../../components/icons";
+import { Archive, Sparkles } from "lucide-react";
+import { Tabs } from "../../components/ui/Tabs";
+import { Skeleton } from "../../components/ui/Feedback";
 import { useVaultStore } from "../../stores/vaultStore";
 import { toast } from "../../stores/toastStore";
 import type { AnyVaultRecord } from "../../lib/types";
@@ -141,11 +143,17 @@ export default function VaultPage() {
       />
       <ProfileCard />
 
-      {loading && !loaded ? <p className="py-16 text-center text-sm text-muted">Loading vault…</p> : null}
+      {loading && !loaded ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} className="h-36" />
+          ))}
+        </div>
+      ) : null}
 
       {totalCount === 0 && loaded && !loading ? (
         <EmptyState
-          icon={<IconVault width={24} height={24} />}
+          icon={<Archive className="size-6" />}
           title="Start your Career Vault"
           description="Add your first project or import an existing resume. Every record you store here becomes verified evidence that the rest of Kairo builds on."
         >
@@ -165,32 +173,16 @@ export default function VaultPage() {
 
       {loaded || loading ? (
         <>
-          <div className="mb-6 flex flex-wrap gap-1.5 rounded-xl border border-slate-200/80 bg-white p-1.5 shadow-card">
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => {
-                  setTab(t.key);
-                  setQuery("");
-                }}
-                className={[
-                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200",
-                  tab === t.key
-                    ? "bg-kairo-midnight text-white shadow-sm"
-                    : "text-muted hover:bg-slate-100 hover:text-ink",
-                ].join(" ")}
-              >
-                {t.label}
-                <span
-                  className={`rounded-full px-1.5 text-[10px] ${
-                    tab === t.key ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {records[t.key].length}
-                </span>
-              </button>
-            ))}
+          <div className="mb-6">
+            <Tabs
+              tabs={TABS.map((t) => ({ id: t.key, label: t.label, count: records[t.key].length }))}
+              active={tab}
+              onChange={(id) => {
+                setTab(id);
+                setQuery("");
+              }}
+              className="flex-wrap"
+            />
           </div>
 
           {tab === "skills" ? (
@@ -200,7 +192,7 @@ export default function VaultPage() {
               <div className="mb-5 flex flex-wrap items-center gap-3">
                 <h2 className="text-sm font-semibold text-ink">
                   {config.label}
-                  <span className="ml-2 text-xs font-normal text-slate-400">
+                  <span className="ml-2 text-xs font-normal text-muted">
                     {filtered.length} of {records[tab].length}
                   </span>
                 </h2>
@@ -219,14 +211,14 @@ export default function VaultPage() {
               </div>
 
               {filtered.length > 0 ? (
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-2">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-accent-soft/70 px-4 py-2">
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-2 text-xs font-medium text-ink cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={filtered.length > 0 && filtered.every((item) => selectedIds.has(item.id))}
                         onChange={(e) => toggleSelectAll(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-kairo-blue focus:ring-kairo-blue cursor-pointer"
+                        className="h-4 w-4 rounded border-line-strong text-kairo-blue focus:ring-kairo-blue cursor-pointer"
                       />
                       Select all ({filtered.length})
                     </label>
@@ -260,7 +252,7 @@ export default function VaultPage() {
 
               {records[tab].length === 0 ? (
                 <EmptyState
-                  icon={<IconSpark width={24} height={24} />}
+                  icon={<Sparkles className="size-6" />}
                   title={`No ${config.label.toLowerCase()} yet`}
                   description={`Add your first ${config.singular.toLowerCase()} — only approved, factual records belong in the Vault.`}
                 >

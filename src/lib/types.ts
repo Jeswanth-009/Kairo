@@ -544,7 +544,7 @@ export const APPLICATION_STATUSES: { value: ApplicationStatus; label: string }[]
 ];
 
 export const STATUS_COLORS: Record<ApplicationStatus, string> = {
-  wishlist: "bg-slate-100 text-slate-600",
+  wishlist: "bg-accent-soft text-muted",
   preparing: "bg-kairo-sky/20 text-sky-700",
   applied: "bg-kairo-blue/10 text-kairo-blue",
   oa: "bg-kairo-violet/10 text-kairo-violet",
@@ -552,7 +552,7 @@ export const STATUS_COLORS: Record<ApplicationStatus, string> = {
   final: "bg-orange-100 text-orange-700",
   offer: "bg-emerald-100 text-emerald-700",
   rejected: "bg-red-100 text-red-700",
-  withdrawn: "bg-slate-200 text-slate-500",
+  withdrawn: "bg-slate-200 text-muted",
 };
 
 export interface Application {

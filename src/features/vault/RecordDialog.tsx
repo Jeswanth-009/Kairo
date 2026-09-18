@@ -89,8 +89,8 @@ function SkillLinkEditor({
   };
 
   return (
-    <div className="rounded-lg border border-slate-200">
-      <div className="flex items-center gap-2 border-b border-slate-100 p-2.5">
+    <div className="rounded-lg border border-line">
+      <div className="flex items-center gap-2 border-b border-line p-2.5">
         <Input
           placeholder="Search skills…"
           value={query}
@@ -103,7 +103,7 @@ function SkillLinkEditor({
       </div>
 
       {adding ? (
-        <div className="flex items-end gap-2 border-b border-slate-100 bg-surface p-2.5">
+        <div className="flex items-end gap-2 border-b border-line bg-surface p-2.5">
           <div className="flex-1">
             <Input
               autoFocus
@@ -153,11 +153,11 @@ function SkillLinkEditor({
                     type="checkbox"
                     checked={!!ref}
                     onChange={() => toggle(skill)}
-                    className="h-4 w-4 rounded border-slate-300 accent-kairo-blue"
+                    className="h-4 w-4 rounded border-line-strong accent-kairo-blue"
                   />
                   {skill.canonicalName}
                   {skill.aliases.length > 0 ? (
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-muted">
                       ({skill.aliases.map((a) => a.alias).join(", ")})
                     </span>
                   ) : null}
@@ -167,7 +167,7 @@ function SkillLinkEditor({
                     value={ref.confidence}
                     title={CONFIDENCE_LEVELS[ref.confidence]}
                     onChange={(e) => setConfidence(skill.id, Number(e.target.value))}
-                    className="rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs text-ink focus:border-kairo-blue focus:outline-none"
+                    className="rounded-md border border-line bg-card px-1.5 py-1 text-xs text-ink focus:border-kairo-blue focus:outline-none"
                   >
                     {CONFIDENCE_LEVELS.map((label, level) => (
                       <option key={level} value={level}>

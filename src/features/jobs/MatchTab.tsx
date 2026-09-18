@@ -35,7 +35,7 @@ function ScoreRow({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center gap-2">
       <span className="w-36 shrink-0 text-[11px] text-muted">{label}</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-accent-soft">
         <div
           className="h-full rounded-full bg-kairo-blue transition-all duration-300"
           style={{ width: `${Math.round(value * 100)}%` }}
@@ -144,7 +144,7 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
           <ScoreRow label="Recency" value={report.components.recency} />
           <ScoreRow label="Evidence strength" value={report.components.evidenceStrength} />
         </div>
-        <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
+        <p className="mt-3 text-[11px] leading-relaxed text-muted">
           Weighted overall relevance {report.overallScore.toFixed(2)} — a ranking of your own
           evidence, not a prediction of hiring outcomes. Weights: required 35% · preferred 20% ·
           responsibilities 15% · domain 10% · recency 10% · evidence strength 10% · engine v
@@ -162,7 +162,7 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
                   <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
                   <div className="min-w-0">
                     <p className="text-sm text-ink">{result.rawText}</p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">
+                    <p className="mt-0.5 text-[11px] text-muted">
                       {KIND_LABELS[result.kind] ?? result.kind}
                       {result.matchedSkills.length > 0
                         ? ` · matched: ${result.matchedSkills.join(", ")}`
@@ -192,7 +192,7 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
               ) : null}
 
               {meta.hint ? (
-                <p className="mt-2 text-[11px] text-slate-400">{meta.hint}</p>
+                <p className="mt-2 text-[11px] text-muted">{meta.hint}</p>
               ) : null}
             </Card>
           );
@@ -210,11 +210,11 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
               <li key={`${entity.entityType}-${entity.id}`}>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-ink">{entity.title}</span>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-muted">
                     relevance {entity.relevance.toFixed(2)}
                   </span>
                 </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-accent-soft">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-kairo-blue to-kairo-violet"
                     style={{
@@ -231,7 +231,7 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
                 </div>
                 <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
                   {entity.reasons.slice(0, 4).map((reason, i) => (
-                    <li key={i} className="text-[11px] text-slate-400">
+                    <li key={i} className="text-[11px] text-muted">
                       {reason}
                     </li>
                   ))}

@@ -33,9 +33,9 @@ const KIND_COLORS: Record<string, string> = {
   document: "bg-kairo-blue/10 text-kairo-blue",
   certificate: "bg-kairo-blue/10 text-kairo-blue",
   metric: "bg-emerald-100 text-emerald-700",
-  note: "bg-slate-100 text-slate-600",
+  note: "bg-accent-soft text-muted",
   link: "bg-kairo-sky/20 text-sky-700",
-  other: "bg-slate-100 text-slate-600",
+  other: "bg-accent-soft text-muted",
 };
 
 type InspectorTab = "overview" | "evidence" | "bullets" | "rules";
@@ -98,14 +98,14 @@ export function RecordInspector({
             onClick={() => setTab(t.key)}
             className={[
               "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200",
-              tab === t.key ? "bg-kairo-midnight text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200",
+              tab === t.key ? "bg-kairo-midnight text-white" : "bg-accent-soft text-muted hover:bg-slate-200",
             ].join(" ")}
           >
             {t.label}
             {t.count !== undefined ? (
               <span
                 className={`ml-1.5 rounded-full px-1.5 text-[10px] ${
-                  tab === t.key ? "bg-white/15 text-white" : "bg-white text-slate-500"
+                  tab === t.key ? "bg-white/15 text-white" : "bg-card text-muted"
                 }`}
               >
                 {t.count}
@@ -162,7 +162,7 @@ function OverviewTab({
 
       {skills.length > 0 ? (
         <div className="mt-4">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Skills</h4>
+          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted">Skills</h4>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {skills.map((ref) => (
               <span
@@ -178,7 +178,7 @@ function OverviewTab({
       ) : null}
 
       {rows.length > 0 ? (
-        <dl className="mt-4 divide-y divide-slate-100 border-t border-slate-100 pt-2">
+        <dl className="mt-4 divide-y divide-slate-100 border-t border-line pt-2">
           {rows.map((row) => (
             <div key={row.label} className="flex justify-between gap-6 py-2 text-sm">
               <dt className="shrink-0 text-xs text-muted">{row.label}</dt>
@@ -226,14 +226,14 @@ function EvidenceTab({
       </div>
 
       {evidence.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-muted">
+        <div className="rounded-lg border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">
           Attach a repository, document, certificate, measured metric or note — then mark it
           verified once you have confirmed it.
         </div>
       ) : (
         <ul className="space-y-2">
           {evidence.map((item) => (
-            <li key={item.id} className="rounded-lg border border-slate-200 p-3.5">
+            <li key={item.id} className="rounded-lg border border-line p-3.5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -479,14 +479,14 @@ function BulletsTab({
       </div>
 
       {bullets.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-muted">
+        <div className="rounded-lg border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">
           No canonical bullets yet. Write the factual sentences a resume would use — nothing gets
           approved without support.
         </div>
       ) : (
         <ul className="space-y-2">
           {bullets.map((bullet) => (
-            <li key={bullet.id} className="rounded-lg border border-slate-200 p-3.5">
+            <li key={bullet.id} className="rounded-lg border border-line p-3.5">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm leading-relaxed text-ink">{bullet.text}</p>
                 {bullet.approved ? (
@@ -662,17 +662,17 @@ function BulletDialog({
               reference it.
             </p>
           ) : (
-            <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+            <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-line p-2">
               {evidence.map((e) => (
                 <label key={e.id} className="flex cursor-pointer items-center gap-2 px-1 py-1 text-sm text-ink">
                   <input
                     type="checkbox"
                     checked={evidenceIds.includes(e.id)}
                     onChange={() => toggle(e.id)}
-                    className="h-4 w-4 rounded border-slate-300 accent-kairo-blue"
+                    className="h-4 w-4 rounded border-line-strong accent-kairo-blue"
                   />
                   <span className={e.verified ? "" : "text-muted"}>{e.title}</span>
-                  <span className="text-[11px] text-slate-400">{e.kind}</span>
+                  <span className="text-[11px] text-muted">{e.kind}</span>
                 </label>
               ))}
             </div>
@@ -722,13 +722,13 @@ function RulesTab({
 
   const list = (items: ClaimRule[], emptyText: string) =>
     items.length === 0 ? (
-      <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-muted">
+      <p className="rounded-lg border border-dashed border-line-strong px-4 py-6 text-center text-xs text-muted">
         {emptyText}
       </p>
     ) : (
       <ul className="space-y-2">
         {items.map((rule) => (
-          <li key={rule.id} className="rounded-lg border border-slate-200 p-3.5">
+          <li key={rule.id} className="rounded-lg border border-line p-3.5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <span
@@ -776,7 +776,7 @@ function RulesTab({
         </Button>
       </div>
 
-      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
         For this record
       </h4>
       {list(
@@ -784,7 +784,7 @@ function RulesTab({
         "No rules for this record yet. Example: forbid “production-scale distributed system”.",
       )}
 
-      <h4 className="mb-2 mt-5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <h4 className="mb-2 mt-5 text-[11px] font-semibold uppercase tracking-wide text-muted">
         Global (apply to everything)
       </h4>
       {list(global, "No global rules yet.")}

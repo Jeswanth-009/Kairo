@@ -131,7 +131,7 @@ export function TailorTab({
       </Card>
 
       {!plan ? (
-        <p className="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-muted">
+        <p className="rounded-lg border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">
           Compose a plan first — tailoring works on planned bullets only.
         </p>
       ) : (
@@ -140,7 +140,7 @@ export function TailorTab({
             <div className="flex items-center justify-between">
               <CardTitle>
                 {item.title}
-                <span className="ml-2 text-[11px] font-normal text-slate-400">
+                <span className="ml-2 text-[11px] font-normal text-muted">
                   {fmtRange({ startDate: item.startDate, endDate: item.endDate, isCurrent: item.isCurrent })}
                 </span>
               </CardTitle>
@@ -150,10 +150,10 @@ export function TailorTab({
                 const suggestion = suggestions.find((s) => s.bulletId === bullet.id);
                 const busy = busyBullet === bullet.id;
                 return (
-                  <li key={bullet.id} className="rounded-lg border border-slate-200 p-3.5">
+                  <li key={bullet.id} className="rounded-lg border border-line p-3.5">
                     <div className="flex items-start justify-between gap-3">
                       <p className="text-sm text-ink">
-                        <span className="mr-1.5 text-slate-400">canonical:</span>
+                        <span className="mr-1.5 text-muted">canonical:</span>
                         {bullet.text}
                       </p>
                       <Button
@@ -169,7 +169,7 @@ export function TailorTab({
                     {suggestion ? (
                       <div className="mt-3 rounded-lg bg-surface p-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] font-medium text-slate-400">
+                          <span className="text-[11px] font-medium text-muted">
                             AI wording{suggestion.model ? ` · ${suggestion.model}` : ""}
                           </span>
                           <span

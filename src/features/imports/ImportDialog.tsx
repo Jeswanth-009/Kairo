@@ -58,7 +58,7 @@ export function ImportDialog({
             onClick={() => setTab(t)}
             className={[
               "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200",
-              tab === t ? "bg-kairo-midnight text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200",
+              tab === t ? "bg-kairo-midnight text-white" : "bg-accent-soft text-muted hover:bg-slate-200",
             ].join(" ")}
           >
             {TAB_LABELS[t]}
@@ -70,7 +70,7 @@ export function ImportDialog({
       {tab === "github" ? <GithubImportTab onDone={onClose} /> : null}
       {tab === "certificate" ? <CertificateImportTab onDone={onClose} /> : null}
 
-      <p className="mt-5 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">
+      <p className="mt-5 border-t border-line pt-3 text-[11px] leading-relaxed text-muted">
         Imported data is never trusted automatically: candidates stay out of the Vault until you
         press Accept. Every candidate shows its source so you can verify before approving.
       </p>
@@ -132,10 +132,10 @@ function CandidateShell({
       <div className="mt-2.5">{children}</div>
       {source ? (
         <details className="mt-3">
-          <summary className="cursor-pointer select-none text-[11px] font-medium text-slate-400 hover:text-ink">
+          <summary className="cursor-pointer select-none text-[11px] font-medium text-muted hover:text-ink">
             Source preview
           </summary>
-          <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-2.5 font-mono text-[11px] leading-relaxed text-slate-500">
+          <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-accent-soft p-2.5 font-mono text-[11px] leading-relaxed text-muted">
             {source}
           </pre>
         </details>
@@ -292,7 +292,7 @@ function ResumeCandidates({
 
   if (total === 0 || activeKeys.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-muted">
+      <p className="rounded-lg border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">
         No candidates recognized. Try text with clear section headings — or add records manually.
       </p>
     );
@@ -301,8 +301,8 @@ function ResumeCandidates({
   return (
     <div className="space-y-3">
       {activeKeys.length > 1 ? (
-        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-2 text-xs">
-          <span className="font-medium text-slate-600">
+        <div className="flex items-center justify-between rounded-lg border border-line bg-accent-soft/70 px-4 py-2 text-xs">
+          <span className="font-medium text-muted">
             {activeKeys.length} candidate items to review
           </span>
           <Button
@@ -559,7 +559,7 @@ function ProfileCandidate({
           <p className="font-medium text-ink">{fullName || <span className="text-muted">no name found</span>}</p>
           {headline ? <p className="text-xs font-medium text-kairo-violet">{headline}</p> : null}
           <p className="text-xs text-muted">{contactLine || "no contact details found"}</p>
-          {summary ? <p className="mt-1.5 whitespace-pre-wrap text-xs text-slate-600 line-clamp-3">{summary}</p> : null}
+          {summary ? <p className="mt-1.5 whitespace-pre-wrap text-xs text-muted line-clamp-3">{summary}</p> : null}
         </div>
       )}
     </CandidateShell>
@@ -617,7 +617,7 @@ function ProjectCandidate({
               key={s}
               title={existing(s) ? "Links to an existing Vault skill" : "Will be created on accept"}
               className={`rounded-full px-2 py-0.5 text-[11px] ${
-                existing(s) ? "bg-kairo-blue/10 text-kairo-blue" : "bg-slate-100 text-slate-500"
+                existing(s) ? "bg-kairo-blue/10 text-kairo-blue" : "bg-accent-soft text-muted"
               }`}
             >
               {s}{existing(s) ? " ✓" : " +"}
@@ -691,7 +691,7 @@ function ExperienceCandidate({
             <Input value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End (YYYY-MM)" disabled={isCurrent} />
             <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location" />
           </div>
-          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          <label className="flex items-center gap-1.5 text-xs text-muted">
             <input type="checkbox" checked={isCurrent} onChange={(e) => setIsCurrent(e.target.checked)} />
             Currently working here
           </label>
@@ -703,7 +703,7 @@ function ExperienceCandidate({
             <p className="font-medium text-ink">{[organization, role].filter(Boolean).join(" · ")}</p>
             {dateStr ? <span className="font-mono text-xs text-muted">{dateStr}</span> : null}
           </div>
-          {location ? <p className="text-xs text-slate-500">{location}</p> : null}
+          {location ? <p className="text-xs text-muted">{location}</p> : null}
           {description ? <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{description}</p> : null}
         </div>
       )}
@@ -752,7 +752,7 @@ function AchievementCandidate({
             <p className="font-medium text-ink">{title}</p>
             {achievedOn ? <span className="font-mono text-xs text-muted">{achievedOn}</span> : null}
           </div>
-          {issuer ? <p className="text-xs text-slate-500">{issuer}</p> : null}
+          {issuer ? <p className="text-xs text-muted">{issuer}</p> : null}
           {description ? <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{description}</p> : null}
         </div>
       )}
@@ -819,7 +819,7 @@ function EducationCandidate({
             <Input value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="Start (YYYY-MM)" />
             <Input value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End (YYYY-MM)" disabled={isCurrent} />
           </div>
-          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          <label className="flex items-center gap-1.5 text-xs text-muted">
             <input type="checkbox" checked={isCurrent} onChange={(e) => setIsCurrent(e.target.checked)} />
             Currently studying here
           </label>
@@ -845,7 +845,7 @@ const CATEGORY_META: Record<SkillCategory, { label: string; badge: string }> = {
   cloud: { label: "Cloud & Infrastructure", badge: "bg-sky-50 text-sky-700 border-sky-200" },
   devops: { label: "DevOps & CI/CD", badge: "bg-teal-50 text-teal-700 border-teal-200" },
   soft: { label: "Soft Skills", badge: "bg-rose-50 text-rose-700 border-rose-200" },
-  other: { label: "Other Skills", badge: "bg-slate-50 text-slate-700 border-slate-200" },
+  other: { label: "Other Skills", badge: "bg-accent-soft text-ink border-line" },
 };
 
 function SkillsCandidate({
@@ -922,9 +922,9 @@ function SkillsCandidate({
 
   return (
     <Card className="p-4">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div className="flex items-center justify-between border-b border-line pb-3">
         <div>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-muted">
             Skills by Category
           </span>
           <span className="ml-2 text-xs text-muted">
@@ -978,7 +978,7 @@ function SkillsCandidate({
                           ? isEx
                             ? "border-kairo-blue/40 bg-kairo-blue/10 text-kairo-blue font-medium"
                             : "border-transparent bg-kairo-blue text-white"
-                          : "border-slate-200 bg-slate-50 text-slate-400 line-through"
+                          : "border-line bg-accent-soft text-muted line-through"
                       }`}
                       title={isEx ? "Already in Vault — will link" : `Will be saved as ${meta.label}`}
                     >
@@ -1071,7 +1071,7 @@ function GithubCandidateCard({
     );
 
   if (rejected) {
-    return <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-muted">Candidate rejected.</p>;
+    return <p className="rounded-lg border border-dashed border-line-strong px-4 py-6 text-center text-xs text-muted">Candidate rejected.</p>;
   }
 
   const accept = async () => {
@@ -1119,7 +1119,7 @@ function GithubCandidateCard({
         <div className="text-sm">
           <p className="font-medium text-ink">{title}</p>
           <p className="mt-0.5 text-xs text-muted">{description || "no description"}</p>
-          <p className="mt-1 break-all text-[11px] text-slate-400">
+          <p className="mt-1 break-all text-[11px] text-muted">
             {[candidate.repoUrl, candidate.url !== candidate.repoUrl ? candidate.url : "", candidate.startDate ? `started ${candidate.startDate}` : ""]
               .filter(Boolean)
               .join(" · ")}
@@ -1133,7 +1133,7 @@ function GithubCandidateCard({
               key={s}
               title={existing(s) ? "Links to an existing Vault skill" : "Will be created on accept"}
               className={`rounded-full px-2 py-0.5 text-[11px] ${
-                existing(s) ? "bg-kairo-blue/10 text-kairo-blue" : "bg-slate-100 text-slate-500"
+                existing(s) ? "bg-kairo-blue/10 text-kairo-blue" : "bg-accent-soft text-muted"
               }`}
             >
               {s}
@@ -1205,7 +1205,7 @@ function CertificateCandidateCard({
   const [rejected, setRejected] = useState(false);
 
   if (rejected) {
-    return <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-muted">Candidate rejected.</p>;
+    return <p className="rounded-lg border border-dashed border-line-strong px-4 py-6 text-center text-xs text-muted">Candidate rejected.</p>;
   }
 
   const accept = async () => {
@@ -1254,7 +1254,7 @@ function CertificateCandidateCard({
             {[issuer, candidate.issueDate ? `issued ${candidate.issueDate}` : ""].filter(Boolean).join(" · ") ||
               "no issuer/date recognized"}
           </p>
-          {candidate.email ? <p className="mt-0.5 text-[11px] text-slate-400">{candidate.email}</p> : null}
+          {candidate.email ? <p className="mt-0.5 text-[11px] text-muted">{candidate.email}</p> : null}
         </div>
       )}
     </CandidateShell>

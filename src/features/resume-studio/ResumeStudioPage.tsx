@@ -64,7 +64,7 @@ function TemplateThumb({ id, active }: { id: ResumeTemplateId; active: boolean }
   return (
     <div
       className={cn(
-        "flex h-[88px] w-[64px] shrink-0 overflow-hidden rounded-md border bg-white shadow-sm transition-colors",
+        "flex h-[88px] w-[64px] shrink-0 overflow-hidden rounded-md border border-line bg-white shadow-sm transition-colors",
         active ? "border-kairo-blue/60 ring-1 ring-kairo-blue/40" : "border-line",
       )}
     >
@@ -195,7 +195,7 @@ function PlanPreview({
       });
 
   return (
-    <div className="rounded-xl border border-line bg-white p-6 font-sans text-neutral-900 shadow-card">
+    <div className="rounded-xl border border-neutral-200 bg-white p-6 font-sans text-neutral-900 shadow-card">
       {/* Header */}
       <div className="border-b border-neutral-300 pb-3 text-center">
         <p className="text-xl font-bold tracking-wide">{plan.header.fullName || "Your Name"}</p>

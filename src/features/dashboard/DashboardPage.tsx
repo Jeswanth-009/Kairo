@@ -2,35 +2,36 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BrandMark } from "../../components/BrandMark";
 import {
-  IconAlert,
-  IconApplications,
-  IconArrowUpRight,
-  IconBriefcase,
-  IconCheckCircle,
-  IconCode,
-  IconFolder,
-  IconJobs,
-  IconResume,
-  IconShieldCheck,
-  IconSpark,
-} from "../../components/icons";
+  ArrowUpRight,
+  Briefcase,
+  CircleCheck,
+  ClipboardCheck,
+  Code2,
+  FileText,
+  Folder,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
+import { Badge } from "../../components/ui/Badge";
 import { Card, CardTitle } from "../../components/ui/Card";
+import { Skeleton } from "../../components/ui/Feedback";
 import { fmtAgo } from "../../lib/dateFmt";
 import { ipc } from "../../lib/ipc";
 import type { ActivityItem, DashboardOverview, EvidenceReviewItem } from "../../lib/types";
 
 const KIND_COLORS: Record<string, string> = {
   job: "bg-kairo-blue/10 text-kairo-blue",
-  application: "bg-emerald-100 text-emerald-700",
+  application: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
   version: "bg-kairo-violet/10 text-kairo-violet",
-  evidence: "bg-kairo-dawn/25 text-amber-700",
-  bullet: "bg-sky-100 text-sky-700",
-  project: "bg-slate-100 text-slate-600",
-  experience: "bg-slate-100 text-slate-600",
-  education: "bg-slate-100 text-slate-600",
-  certification: "bg-slate-100 text-slate-600",
-  achievement: "bg-slate-100 text-slate-600",
+  evidence: "bg-kairo-dawn/25 text-amber-700 dark:text-amber-300",
+  bullet: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+  project: "bg-accent-soft text-muted",
+  experience: "bg-accent-soft text-muted",
+  education: "bg-accent-soft text-muted",
+  certification: "bg-accent-soft text-muted",
+  achievement: "bg-accent-soft text-muted",
 };
 
 function activityRoute(item: ActivityItem): string {
@@ -54,7 +55,7 @@ function StatTile({ tile }: { tile: Tile }) {
   return (
     <Link
       to={tile.to}
-      className="group flex flex-col rounded-xl border border-slate-200/80 bg-white p-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-kairo-blue/30 hover:shadow-raised"
+      className="group flex flex-col rounded-xl border border-line bg-card p-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-kairo-blue/30 hover:shadow-raised"
     >
       <div className="flex items-start justify-between">
         <span
@@ -62,13 +63,9 @@ function StatTile({ tile }: { tile: Tile }) {
         >
           <Icon width={17} height={17} />
         </span>
-        <IconArrowUpRight
-          width={14}
-          height={14}
-          className="text-slate-300 opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-kairo-blue group-hover:opacity-100"
-        />
+        <ArrowUpRight className="size-3.5 text-muted/50 opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-kairo-blue group-hover:opacity-100" />
       </div>
-      <div className="mt-3 text-[26px] leading-none font-semibold tracking-tight text-ink">
+      <div className="mt-3 text-2xl leading-none font-semibold tracking-tight text-ink">
         {tile.value}
       </div>
       <div className="mt-1.5 text-xs font-medium text-ink">{tile.label}</div>
@@ -81,17 +78,17 @@ function EvidenceRow({ item }: { item: EvidenceReviewItem }) {
   return (
     <Link
       to="/vault"
-      className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-200 hover:bg-slate-50"
+      className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-200 hover:bg-accent-soft"
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-        <IconAlert width={15} height={15} />
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+        <TriangleAlert className="size-4" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-ink">{item.title}</span>
         <span className="mt-0.5 flex items-center gap-2 text-xs">
           <span
             className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-              KIND_COLORS[item.kind] ?? "bg-slate-100 text-slate-600"
+              KIND_COLORS[item.kind] ?? "bg-accent-soft text-muted"
             }`}
           >
             {item.kind}
@@ -100,11 +97,7 @@ function EvidenceRow({ item }: { item: EvidenceReviewItem }) {
         </span>
       </span>
       <span className="shrink-0 text-[11px] text-muted">{fmtAgo(item.createdAt)}</span>
-      <IconArrowUpRight
-        width={13}
-        height={13}
-        className="shrink-0 text-slate-300 transition-colors duration-200 group-hover:text-kairo-blue"
-      />
+      <ArrowUpRight className="size-3 shrink-0 text-muted/50 transition-colors duration-200 group-hover:text-kairo-blue" />
     </Link>
   );
 }
@@ -113,11 +106,11 @@ function ActivityRow({ item }: { item: ActivityItem }) {
   return (
     <Link
       to={activityRoute(item)}
-      className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-200 hover:bg-slate-50"
+      className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-200 hover:bg-accent-soft"
     >
       <span
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-semibold uppercase ${
-          KIND_COLORS[item.kind] ?? "bg-slate-100 text-slate-600"
+          KIND_COLORS[item.kind] ?? "bg-accent-soft text-muted"
         }`}
       >
         {item.kind.slice(0, 2)}
@@ -131,17 +124,8 @@ function ActivityRow({ item }: { item: ActivityItem }) {
   );
 }
 
-function CountPill({ value, tone = "slate" }: { value: string; tone?: "slate" | "amber" | "emerald" }) {
-  const tones = {
-    slate: "bg-slate-100 text-muted",
-    amber: "bg-amber-50 text-amber-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-  } as const;
-  return (
-    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${tones[tone]}`}>
-      {value}
-    </span>
-  );
+function CountPill({ value, tone = "neutral" }: { value: string; tone?: "neutral" | "amber" | "green" }) {
+  return <Badge tone={tone}>{value}</Badge>;
 }
 
 function GettingStarted() {
@@ -167,10 +151,10 @@ function GettingStarted() {
   ];
   return (
     <Card className="overflow-hidden p-0">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-kairo-blue/[0.04] to-kairo-violet/[0.04] px-6 py-4">
+      <div className="border-b border-line bg-gradient-to-r from-kairo-blue/[0.04] to-kairo-violet/[0.04] px-6 py-4">
         <CardTitle>Start here — three steps to your first application</CardTitle>
       </div>
-      <ol className="grid grid-cols-1 divide-y divide-slate-100 md:grid-cols-3 md:divide-x md:divide-y-0">
+      <ol className="grid grid-cols-1 divide-y divide-line md:grid-cols-3 md:divide-x md:divide-y-0">
         {steps.map((step, i) => (
           <li key={step.title} className="flex flex-col p-6">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-kairo-blue to-kairo-violet text-xs font-bold text-white shadow-sm">
@@ -183,7 +167,7 @@ function GettingStarted() {
               className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-kairo-blue hover:underline"
             >
               {step.cta}
-              <IconArrowUpRight width={12} height={12} />
+              <ArrowUpRight className="size-3" />
             </Link>
           </li>
         ))}
@@ -222,7 +206,7 @@ export default function DashboardPage() {
             <BrandMark size={48} />
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Welcome to Kairo</h1>
-              <p className="mt-1 text-sm text-slate-300">
+              <p className="mt-1 text-sm text-muted/60">
                 Store verified career evidence once. For every opportunity, select the strongest
                 proof, improve the wording without changing the facts, and review every change.
               </p>
@@ -231,7 +215,7 @@ export default function DashboardPage() {
         </section>
         <Card className="p-6">
           <CardTitle>Dashboard unavailable</CardTitle>
-          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
+          <p className="mt-2 rounded-lg bg-warn-soft px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
             Tauri bridge unavailable ({error}). Launch the desktop app with{" "}
             <code className="font-mono">npm run tauri dev</code> instead of the browser.
           </p>
@@ -243,7 +227,12 @@ export default function DashboardPage() {
   if (!overview) {
     return (
       <div className="mx-auto max-w-5xl p-8">
-        <p className="py-24 text-center text-sm text-muted">Loading your workspace…</p>
+        <Skeleton className="h-40 w-full rounded-2xl" />
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 8 }, (_, i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -257,22 +246,22 @@ export default function DashboardPage() {
       to: "/vault",
       value: counts.projects,
       label: "Projects",
-      icon: IconFolder,
-      iconClass: "bg-blue-50 text-blue-600",
+      icon: Folder,
+      iconClass: "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
     },
     {
       to: "/vault",
       value: counts.experiences,
       label: "Experiences",
-      icon: IconBriefcase,
-      iconClass: "bg-violet-50 text-violet-600",
+      icon: Briefcase,
+      iconClass: "bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400",
     },
     {
       to: "/vault",
       value: counts.skills,
       label: "Skills",
-      icon: IconCode,
-      iconClass: "bg-cyan-50 text-cyan-600",
+      icon: Code2,
+      iconClass: "bg-cyan-50 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-400",
     },
     {
       to: "/vault",
@@ -285,9 +274,9 @@ export default function DashboardPage() {
             ? "no evidence yet"
             : "all verified",
       subClass: counts.evidenceUnverified > 0 ? "text-amber-600" : "text-emerald-600",
-      icon: IconShieldCheck,
+      icon: ShieldCheck,
       iconClass:
-        counts.evidenceUnverified > 0 ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600",
+        counts.evidenceUnverified > 0 ? "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400" : "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400",
     },
   ];
 
@@ -297,8 +286,8 @@ export default function DashboardPage() {
       value: counts.jobs,
       label: "Job workspaces",
       sub: counts.jobs > 0 ? `${counts.jobsWithPlan} with a resume plan` : "paste a JD to start",
-      icon: IconJobs,
-      iconClass: "bg-blue-50 text-blue-600",
+      icon: Briefcase,
+      iconClass: "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
     },
     {
       to: "/applications",
@@ -308,16 +297,16 @@ export default function DashboardPage() {
         counts.applications > 0
           ? `${counts.applications} tracked in total`
           : "track them manually here",
-      icon: IconApplications,
-      iconClass: "bg-rose-50 text-rose-600",
+      icon: ClipboardCheck,
+      iconClass: "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400",
     },
     {
       to: "/resume-studio",
       value: counts.resumeVersions,
       label: "Resume versions",
       sub: counts.pdfsCompiled > 0 ? `${counts.pdfsCompiled} ${counts.pdfsCompiled === 1 ? "PDF compiled" : "PDFs compiled"}` : "export to create",
-      icon: IconResume,
-      iconClass: "bg-violet-50 text-violet-600",
+      icon: FileText,
+      iconClass: "bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400",
     },
     {
       to: "/jobs",
@@ -328,8 +317,8 @@ export default function DashboardPage() {
           ? "AI rewrites awaiting your review"
           : "nothing awaiting review",
       subClass: counts.suggestionsPending > 0 ? "text-kairo-violet" : "text-muted",
-      icon: IconSpark,
-      iconClass: "bg-amber-50 text-amber-600",
+      icon: Sparkles,
+      iconClass: "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400",
     },
   ];
 
@@ -355,7 +344,7 @@ export default function DashboardPage() {
             <h1 className="text-xl font-semibold tracking-tight">
               {brandNew ? "Welcome to Kairo" : "Welcome back"}
             </h1>
-            <p className="mt-1 text-sm text-slate-300">
+            <p className="mt-1 text-sm text-muted/60">
               {brandNew
                 ? "Store verified career evidence once. For every opportunity, select the strongest proof, improve the wording without changing the facts, and review every change."
                 : `${counts.projects + counts.experiences} records · ${
@@ -381,7 +370,7 @@ export default function DashboardPage() {
       {/* Real counts — every tile is a live query result, no derived scores. */}
       <div className="mb-3 flex items-center gap-3">
         <h2 className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">Vault</h2>
-        <span className="h-px flex-1 bg-slate-200" />
+        <span className="h-px flex-1 bg-line" />
       </div>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {vaultTiles.map((tile) => (
@@ -391,7 +380,7 @@ export default function DashboardPage() {
 
       <div className="mb-3 flex items-center gap-3">
         <h2 className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">Pipeline</h2>
-        <span className="h-px flex-1 bg-slate-200" />
+        <span className="h-px flex-1 bg-line" />
       </div>
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {pipelineTiles.map((tile) => (
@@ -406,13 +395,13 @@ export default function DashboardPage() {
           <Card className="p-5 lg:col-span-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-                  <IconShieldCheck width={14} height={14} />
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+                  <ShieldCheck className="size-3.5" />
                 </span>
                 <CardTitle>Evidence needing review</CardTitle>
               </div>
               <CountPill
-                tone={counts.evidenceUnverified > 0 ? "amber" : "emerald"}
+                tone={counts.evidenceUnverified > 0 ? "amber" : "green"}
                 value={`${counts.evidenceUnverified} of ${counts.evidenceTotal} unverified`}
               />
             </div>
@@ -421,11 +410,11 @@ export default function DashboardPage() {
                 <p
                   className={`flex items-center gap-2.5 rounded-lg px-3 py-3 text-xs ${
                     counts.evidenceTotal === 0
-                      ? "bg-slate-50 text-muted"
-                      : "bg-emerald-50 text-emerald-700"
+                      ? "bg-accent-soft text-muted"
+                      : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
                   }`}
                 >
-                  <IconCheckCircle width={14} height={14} className="shrink-0" />
+                  <CircleCheck className="size-3.5 shrink-0" />
                   {counts.evidenceTotal === 0
                     ? "No evidence yet — attach proof to your records in the Career Vault."
                     : counts.evidenceTotal === 1
@@ -441,8 +430,8 @@ export default function DashboardPage() {
           <Card className="p-5 lg:col-span-2">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                  <IconJobs width={14} height={14} />
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                  <Briefcase className="size-3.5" />
                 </span>
                 <CardTitle>Recent activity</CardTitle>
               </div>
@@ -452,7 +441,7 @@ export default function DashboardPage() {
             </div>
             <div className="mt-3 space-y-0.5">
               {recentActivity.length === 0 ? (
-                <p className="rounded-lg bg-slate-50 px-3 py-3 text-xs text-muted">
+                <p className="rounded-lg bg-accent-soft px-3 py-3 text-xs text-muted">
                   No activity yet — add a record or a job to get started.
                 </p>
               ) : (

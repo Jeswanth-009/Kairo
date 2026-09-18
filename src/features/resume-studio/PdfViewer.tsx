@@ -68,7 +68,7 @@ function PdfPage({
     };
   }, [doc, pageNumber, scale]);
 
-  return <canvas ref={canvasRef} data-page={pageNumber} className="block bg-white shadow-md ring-1 ring-black/5" />;
+  return <canvas ref={canvasRef} data-page={pageNumber} className="block bg-card shadow-md ring-1 ring-black/5" />;
 }
 
 /** Continuous multi-page PDF preview with fit-width default and zoom. */

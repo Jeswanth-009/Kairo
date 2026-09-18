@@ -127,13 +127,13 @@ function SkillCard({
               type="checkbox"
               checked={selected}
               onChange={(e) => onToggleSelect(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-kairo-blue focus:ring-kairo-blue cursor-pointer shrink-0"
+              className="mt-0.5 h-4 w-4 rounded border-line-strong text-kairo-blue focus:ring-kairo-blue cursor-pointer shrink-0"
               title="Select skill"
             />
           ) : null}
           <div>
             <h3 className="text-sm font-semibold text-ink">{skill.canonicalName}</h3>
-            <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+            <span className="mt-1 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-muted">
               {categoryLabel}
             </span>
           </div>
@@ -154,7 +154,7 @@ function SkillCard({
       </div>
 
       <div className="mt-3">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
           Aliases <span className="font-normal normal-case">(used for matching)</span>
         </h4>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -167,7 +167,7 @@ function SkillCard({
               <button
                 type="button"
                 aria-label={`Remove alias ${row.alias}`}
-                className="text-slate-400 hover:text-red-600"
+                className="text-muted hover:text-red-600"
                 onClick={() => {
                   void (async () => {
                     try {
@@ -196,7 +196,7 @@ function SkillCard({
                   if (e.key === "Enter") void submitAlias();
                   if (e.key === "Escape") setAliasOpen(false);
                 }}
-                className="h-7 w-28 rounded-full border border-slate-200 px-2.5 text-xs focus:border-kairo-blue focus:outline-none"
+                className="h-7 w-28 rounded-full border border-line px-2.5 text-xs focus:border-kairo-blue focus:outline-none"
               />
               <Button size="sm" onClick={() => void submitAlias()}>
                 Add
@@ -205,7 +205,7 @@ function SkillCard({
           ) : (
             <button
               type="button"
-              className="rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-500 transition-colors duration-200 hover:border-kairo-blue hover:text-kairo-blue"
+              className="rounded-full border border-dashed border-line-strong px-2.5 py-1 text-xs text-muted transition-colors duration-200 hover:border-kairo-blue hover:text-kairo-blue"
               onClick={() => setAliasOpen(true)}
             >
               + alias
@@ -239,7 +239,7 @@ function SkillCard({
 function EmptySkills() {
   return (
     <div className="mx-auto flex max-w-md flex-col items-center py-16 text-center">
-      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
+      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-line bg-card text-muted shadow-sm">
         <IconSpark width={24} height={24} />
       </div>
       <h3 className="text-base font-semibold text-ink">Build your canonical skill vocabulary</h3>
@@ -326,21 +326,21 @@ export function SkillsTab() {
             </option>
           ))}
         </Select>
-        <span className="text-xs text-slate-400">{filtered.length} skills</span>
+        <span className="text-xs text-muted">{filtered.length} skills</span>
         <Button size="sm" className="ml-auto" onClick={() => setAdding(true)}>
           Add skill
         </Button>
       </div>
 
       {filtered.length > 0 ? (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/70 px-4 py-2">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-accent-soft/70 px-4 py-2">
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-xs font-medium text-ink cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={filtered.length > 0 && filtered.every((s) => selectedIds.has(s.id))}
                 onChange={(e) => toggleSelectAll(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-kairo-blue focus:ring-kairo-blue cursor-pointer"
+                className="h-4 w-4 rounded border-line-strong text-kairo-blue focus:ring-kairo-blue cursor-pointer"
               />
               Select all ({filtered.length})
             </label>

@@ -4,7 +4,10 @@ import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/inputs";
-import { IconInterview } from "../../components/icons";
+import { MessagesSquare, ShieldCheck } from "lucide-react";
+import { Badge } from "../../components/ui/Badge";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { Skeleton } from "../../components/ui/Feedback";
 import { ipc } from "../../lib/ipc";
 import type { InterviewCategory, InterviewPrep, Job } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
@@ -14,7 +17,7 @@ const CATEGORY_ORDER: { key: InterviewCategory; label: string; color: string }[]
   { key: "project_deep_dive", label: "Project deep-dives", color: "text-kairo-blue" },
   { key: "technical_skill", label: "Technical questions", color: "text-kairo-violet" },
   { key: "responsibility", label: "Behavioral / responsibility", color: "text-sky-700" },
-  { key: "resume_question", label: "Resume questions", color: "text-slate-500" },
+  { key: "resume_question", label: "Resume questions", color: "text-muted" },
 ];
 
 export default function InterviewPrepPage() {
@@ -91,60 +94,52 @@ export default function InterviewPrepPage() {
       />
 
       {!loaded ? (
-        <p className="py-16 text-center text-sm text-muted">Loading…</p>
+        <div className="space-y-4">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
       ) : jobs.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400">
-            <IconInterview width={24} height={24} />
-          </div>
-          <p className="text-sm text-muted">
-            No job workspaces yet — paste a job description on the Jobs page first.
-          </p>
-          <div className="mt-4">
-            <Button onClick={() => navigate("/jobs")}>Go to Jobs</Button>
-          </div>
-        </Card>
+        <EmptyState
+          icon={<MessagesSquare className="size-6" />}
+          title="No job workspaces yet"
+          description="Paste a job description on the Jobs page first, then come back to generate grounded interview prep."
+        >
+          <Button onClick={() => navigate("/jobs")}>Go to Jobs</Button>
+        </EmptyState>
       ) : !prep ? (
-        <Card className="p-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400">
-            <IconInterview width={24} height={24} />
-          </div>
-          <h3 className="text-base font-semibold text-ink">Grounded interview prep</h3>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
-            Generate questions from the exact JD, the requirements you reviewed, the resume you
-            submitted and your match gaps. Every question shows why it is being asked and which
-            evidence backs the answer.
-          </p>
-          <div className="mt-5">
-            <Button onClick={() => void generate()} disabled={loading}>
-              {loading ? "Generating…" : "Generate prep"}
-            </Button>
-          </div>
-        </Card>
+        <EmptyState
+          icon={<MessagesSquare className="size-6" />}
+          title="Grounded interview prep"
+          description="Generate questions from the exact JD, the requirements you reviewed, the resume you submitted and your match gaps. Every question shows why it is being asked and which evidence backs the answer."
+        >
+          <Button onClick={() => void generate()} disabled={loading}>
+            {loading ? "Generating…" : "Generate prep"}
+          </Button>
+        </EmptyState>
       ) : (
         <div className="space-y-5">
           <Card className="p-6">
             <CardTitle>Inputs used</CardTitle>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-lg border border-slate-200 px-3 py-1.5 text-ink">
+              <span className="rounded-lg border border-line bg-card px-3 py-1.5 text-ink">
                 JD: {prep.inputs.rawJdChars} chars stored
               </span>
-              <span className="rounded-lg border border-slate-200 px-3 py-1.5 text-ink">
+              <span className="rounded-lg border border-line bg-card px-3 py-1.5 text-ink">
                 {prep.inputs.requirementCount} requirements
               </span>
-              <span className="rounded-lg border border-slate-200 px-3 py-1.5 text-ink">
+              <span className="rounded-lg border border-line bg-card px-3 py-1.5 text-ink">
                 {prep.inputs.planBulletCount} resume bullets
               </span>
               <span
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
                   prep.inputs.gapCount > 0
-                    ? "bg-amber-50 text-amber-700"
-                    : "bg-emerald-50 text-emerald-700"
+                    ? "bg-warn-soft text-amber-700 dark:text-amber-300"
+                    : "bg-ok-soft text-emerald-700 dark:text-emerald-300"
                 }`}
               >
                 {prep.inputs.gapCount} match gaps
               </span>
-              <span className="rounded-lg border border-slate-200 px-3 py-1.5 text-ink">
+              <span className="rounded-lg border border-line bg-card px-3 py-1.5 text-ink">
                 {prep.inputs.evidenceCount} evidence records
               </span>
             </div>
@@ -159,18 +154,15 @@ export default function InterviewPrepPage() {
                 {group.items.map((q, i) => (
                   <Card key={i} className="p-4">
                     <p className="text-sm leading-relaxed text-ink">{q.question}</p>
-                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-                      <span className="font-medium text-slate-500">Why asked:</span> {q.why}
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-muted/90">
+                      <span className="font-medium text-muted">Why asked:</span> {q.why}
                     </p>
                     {q.evidenceRefs.length > 0 ? (
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {q.evidenceRefs.map((ref, j) => (
-                          <span
-                            key={j}
-                            className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700"
-                          >
-                            ✓ {ref}
-                          </span>
+                          <Badge key={j} tone="green">
+                            <ShieldCheck className="size-3" /> {ref}
+                          </Badge>
                         ))}
                       </div>
                     ) : null}

@@ -145,7 +145,7 @@ function BackupsCard() {
         current schema automatically.
       </p>
       {loaded && backups.length === 0 ? (
-        <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-muted">
+        <p className="mt-3 rounded-lg bg-accent-soft px-3 py-2 text-xs text-muted">
           No backups yet — create one before importing data you care about.
         </p>
       ) : (

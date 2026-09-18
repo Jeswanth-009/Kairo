@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
+import { ExternalLink, FileText, FolderOpen, HardDriveDownload } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { Spinner } from "../../components/ui/Feedback";
+import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
+import { fmtAgo } from "../../lib/dateFmt";
 import { toast } from "../../stores/toastStore";
 import type { PdfArtifact } from "../../lib/types";
 import { PdfViewer } from "../resume-studio/PdfViewer";
@@ -22,12 +26,33 @@ export function ResumeTab({ jobId }: { jobId: number }) {
     ipc
       .getPdfArtifact(jobId)
       .then((a) => {
-        if (a) {
-          setArtifact(a);
-        }
+        if (a) setArtifact(a);
+      })
+      .catch(console.error);
+    // The Studio persists the template on the plan config; honor it here.
+    ipc
+      .getPlan(jobId)
+      .then((stored) => {
+        const persisted = stored?.plan.config.templateId;
+        if (persisted) setTemplateId(persisted);
       })
       .catch(console.error);
   }, [jobId]);
+
+  const chooseTemplate = (id: string) => {
+    setTemplateId(id);
+    if (jobId > 0) {
+      void ipc
+        .getPlan(jobId)
+        .then((stored) => {
+          if (!stored) return;
+          const next = structuredClone(stored.plan);
+          next.config.templateId = id;
+          return ipc.savePlan(jobId, next);
+        })
+        .catch((e) => toast.error(String(e)));
+    }
+  };
 
   const compile = async () => {
     setBusy(true);
@@ -58,7 +83,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
           <div className="space-y-4">
             {/* Template picker */}
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-muted">
                 Template
               </label>
               <div className="flex flex-col gap-2">
@@ -66,18 +91,19 @@ export function ResumeTab({ jobId }: { jobId: number }) {
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => setTemplateId(t.id)}
-                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                    onClick={() => chooseTemplate(t.id)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
                       templateId === t.id
-                        ? "border-kairo-blue bg-kairo-blue/5 ring-1 ring-kairo-blue"
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
+                        ? "border-kairo-blue bg-kairo-blue/5 ring-1 ring-kairo-blue dark:bg-kairo-blue/10"
+                        : "border-line hover:border-line-strong hover:bg-accent-soft",
+                    )}
                   >
                     <span
                       className={`h-3 w-3 shrink-0 rounded-full border-2 transition-colors ${
                         templateId === t.id
                           ? "border-kairo-blue bg-kairo-blue"
-                          : "border-slate-300"
+                          : "border-line-strong"
                       }`}
                     />
                     <span>
@@ -91,20 +117,16 @@ export function ResumeTab({ jobId }: { jobId: number }) {
 
             <Button className="w-full justify-center" onClick={compile} disabled={busy}>
               {busy ? (
-                <span className="flex items-center gap-2">
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  Compiling PDF…
-                </span>
+                <>
+                  <Spinner className="size-4" /> Compiling PDF…
+                </>
               ) : (
                 "Generate Resume"
               )}
             </Button>
 
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 whitespace-pre-wrap font-mono">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 whitespace-pre-wrap font-mono dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
                 {error}
               </div>
             )}
@@ -122,15 +144,13 @@ export function ResumeTab({ jobId }: { jobId: number }) {
               <div className="flex items-center justify-between">
                 <span className="text-muted">Compiled</span>
                 <span className="font-medium text-ink">
-                  {artifact.compiledAt
-                    ? new Date(artifact.compiledAt + "Z").toLocaleString()
-                    : "Unknown"}
+                  {artifact.compiledAt ? fmtAgo(artifact.compiledAt) : "Unknown"}
                 </span>
               </div>
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <Button size="sm" variant="secondary" onClick={openPdf} className="w-full justify-center">
-                Open in external viewer ↗
+                <ExternalLink className="size-3.5" /> Open in external viewer
               </Button>
               <div className="flex gap-2">
                 <button
@@ -141,20 +161,20 @@ export function ResumeTab({ jobId }: { jobId: number }) {
                       .then((p) => toast.ok(`Saved to Downloads: ${p}`))
                       .catch((e) => toast.error(String(e)))
                   }
-                  className="flex-1 rounded border border-slate-200 bg-slate-50 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                  className="flex flex-1 items-center justify-center gap-1 rounded border border-line bg-accent-soft py-1 text-[11px] font-medium text-ink hover:bg-accent-soft/80"
                 >
-                  💾 Downloads
+                  <HardDriveDownload className="size-3.5" /> Downloads
                 </button>
                 <button
                   type="button"
                   onClick={() => void ipc.revealFile(artifact.pdfPath).catch((e) => toast.error(String(e)))}
-                  className="flex-1 rounded border border-slate-200 bg-slate-50 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
+                  className="flex flex-1 items-center justify-center gap-1 rounded border border-line bg-accent-soft py-1 text-[11px] font-medium text-ink hover:bg-accent-soft/80"
                 >
-                  📂 Folder
+                  <FolderOpen className="size-3.5" /> Folder
                 </button>
               </div>
             </div>
-            <p className="mt-2 truncate text-[10px] text-slate-400 font-mono select-all" title={artifact.pdfPath}>
+            <p className="mt-2 truncate font-mono text-[10px] text-muted/80 select-all" title={artifact.pdfPath}>
               {artifact.pdfPath}
             </p>
           </Card>
@@ -166,16 +186,14 @@ export function ResumeTab({ jobId }: { jobId: number }) {
         {artifact ? (
           <PdfViewer pdfPath={artifact.pdfPath} className="w-full" />
         ) : (
-          <Card className="flex min-h-[600px] items-center justify-center overflow-hidden bg-slate-50 p-0 shadow-inner">
-            <div className="flex flex-col items-center gap-3 text-center p-8">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
-                <svg className="h-8 w-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+          <Card className="flex min-h-[600px] items-center justify-center overflow-hidden bg-accent-soft p-0">
+            <div className="flex flex-col items-center gap-3 p-8 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-sm">
+                <FileText className="size-7 text-muted/60" />
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-600">No PDF generated yet</p>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="text-sm font-medium text-ink">No PDF generated yet</p>
+                <p className="mt-1 text-xs text-muted">
                   Select a template and click <span className="font-medium">Generate Resume</span>
                 </p>
               </div>
