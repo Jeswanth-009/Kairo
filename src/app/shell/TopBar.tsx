@@ -1,34 +1,56 @@
+import { Moon, Sun } from "lucide-react";
 import { useAppStore } from "../../stores/appStore";
+import { useThemeStore } from "../../stores/themeStore";
+import { cn } from "../../lib/cn";
 
 const STATUS_META = {
   unverified: {
     dot: "bg-amber-500",
-    pill: "border-amber-200 bg-amber-50 text-amber-700",
+    pill: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
     label: "SQLite · Unverified",
   },
   ok: {
     dot: "bg-emerald-500",
-    pill: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    pill: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
     label: "SQLite · Verified",
   },
   error: {
     dot: "bg-red-500",
-    pill: "border-red-200 bg-red-50 text-red-700",
+    pill: "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
     label: "SQLite · Error",
   },
 } as const;
+
+function ThemeToggle() {
+  const theme = useThemeStore((s) => s.theme);
+  const toggle = useThemeStore((s) => s.toggle);
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted shadow-sm transition-colors duration-150 border border-line bg-card hover:text-ink hover:border-line-strong hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+    >
+      {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </button>
+  );
+}
 
 export function TopBar({ title }: { title: string }) {
   const dbStatus = useAppStore((s) => s.dbStatus);
   const meta = STATUS_META[dbStatus];
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white px-8">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-card px-8">
       <h1 className="text-[15px] font-semibold tracking-tight text-ink">{title}</h1>
       <div className="flex items-center gap-3">
         <span className="hidden text-xs text-muted sm:inline">Local-first · Offline</span>
         <span
-          className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${meta.pill}`}
+          className={cn(
+            "flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
+            meta.pill,
+          )}
         >
           <span className={`relative flex h-2 w-2`}>
             <span className={`absolute inline-flex h-full w-full rounded-full ${meta.dot} opacity-40`} />
@@ -36,6 +58,7 @@ export function TopBar({ title }: { title: string }) {
           </span>
           {meta.label}
         </span>
+        <ThemeToggle />
       </div>
     </header>
   );

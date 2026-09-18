@@ -26,7 +26,7 @@ export function ConfirmDialog({
           Cancel
         </Button>
         <Button
-          className="bg-red-600 hover:bg-red-600/90 focus-visible:ring-red-600"
+          variant="danger"
           onClick={() => {
             onConfirm();
             onClose();

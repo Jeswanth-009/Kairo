@@ -1,15 +1,15 @@
 import { NavLink } from "react-router-dom";
-import { BrandMark } from "../../components/BrandMark";
 import {
-  IconApplications,
-  IconDashboard,
-  IconInterview,
-  IconJobs,
-  IconResume,
-  IconSettings,
-  IconVault,
-} from "../../components/icons";
+  Archive,
+  Briefcase,
+  ClipboardCheck,
+  FileText,
+  LayoutDashboard,
+  MessagesSquare,
+  Settings,
+} from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
+import { BrandMark } from "../../components/BrandMark";
 
 interface NavItem {
   to: string;
@@ -19,12 +19,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: IconDashboard, end: true },
-  { to: "/vault", label: "Career Vault", icon: IconVault },
-  { to: "/jobs", label: "Jobs", icon: IconJobs },
-  { to: "/resume-studio", label: "Resume Studio", icon: IconResume },
-  { to: "/applications", label: "Applications", icon: IconApplications },
-  { to: "/interview", label: "Interview Prep", icon: IconInterview },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/vault", label: "Career Vault", icon: Archive },
+  { to: "/jobs", label: "Jobs", icon: Briefcase },
+  { to: "/resume-studio", label: "Resume Studio", icon: FileText },
+  { to: "/applications", label: "Applications", icon: ClipboardCheck },
+  { to: "/interview", label: "Interview Prep", icon: MessagesSquare },
 ];
 
 const linkClasses = ({ isActive }: { isActive: boolean }) =>
@@ -62,14 +62,14 @@ function NavItemLink({ item }: { item: NavItem }) {
 
 export function Sidebar() {
   return (
-    <aside className="relative flex w-60 shrink-0 flex-col overflow-hidden bg-kairo-midnight">
+    <aside className="relative flex w-60 shrink-0 flex-col overflow-hidden bg-sidebar">
       {/* Ambient brand glow — decoration only, keeps nav text on solid contrast. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(420px 220px at -20% -10%, rgba(37,99,235,0.28), transparent 65%), radial-gradient(380px 260px at 120% 110%, rgba(139,92,246,0.16), transparent 60%)",
+            "radial-gradient(420px 220px at -20% -10%, rgba(37,99,235,0.24), transparent 65%), radial-gradient(380px 260px at 120% 110%, rgba(139,92,246,0.14), transparent 60%)",
         }}
       />
 
@@ -98,7 +98,7 @@ export function Sidebar() {
 
       <div className="relative border-t border-white/[0.06] px-3 py-3">
         <NavItemLink
-          item={{ to: "/settings", label: "Settings", icon: IconSettings }}
+          item={{ to: "/settings", label: "Settings", icon: Settings }}
         />
         <div className="px-3 pt-2.5 text-[11px] text-slate-600">v0.1.0 · Local-first</div>
       </div>

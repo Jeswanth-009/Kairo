@@ -4,18 +4,19 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
+import { cn } from "../../lib/cn";
 
 const BASE = [
-  "w-full rounded-lg border bg-white px-3 py-2 text-sm text-ink shadow-sm",
-  "placeholder:text-slate-400",
+  "w-full rounded-lg border bg-card px-3 py-2 text-sm text-ink shadow-sm",
+  "placeholder:text-muted/70",
   "transition-colors duration-200",
   "focus:outline-none focus:ring-4 focus:ring-kairo-blue/10",
 ].join(" ");
 
 function borderFor(error?: boolean) {
   return error
-    ? "border-red-300 hover:border-red-400 focus:border-red-400"
-    : "border-slate-200 hover:border-slate-300 focus:border-kairo-blue";
+    ? "border-red-300 dark:border-red-500/50 hover:border-red-400 focus:border-red-400"
+    : "border-line hover:border-line-strong focus:border-kairo-blue";
 }
 
 interface FieldProps {
@@ -34,39 +35,44 @@ export function Field({ label, required, error, hint, children }: FieldProps) {
           {label}
           {required ? <span className="ml-0.5 text-kairo-blue">*</span> : null}
         </span>
-        {hint ? <span className="font-normal text-slate-400">{hint}</span> : null}
+        {hint ? <span className="font-normal text-muted/80">{hint}</span> : null}
       </span>
       {children}
-      {error ? <span className="mt-1 block text-xs text-red-600">{error}</span> : null}
+      {error ? <span className="mt-1 block text-xs text-red-600 dark:text-red-400">{error}</span> : null}
     </label>
   );
 }
 
 export function Input({
   error,
-  className = "",
+  className,
   ...rest
 }: InputHTMLAttributes<HTMLInputElement> & { error?: boolean }) {
-  return <input className={`${BASE} ${borderFor(error)} ${className}`} {...rest} />;
+  return <input className={cn(BASE, borderFor(error), className)} {...rest} />;
 }
 
 export function Textarea({
   error,
-  className = "",
+  className,
   ...rest
 }: TextareaHTMLAttributes<HTMLTextAreaElement> & { error?: boolean }) {
-  return <textarea rows={4} className={`${BASE} ${borderFor(error)} ${className}`} {...rest} />;
+  return <textarea rows={4} className={cn(BASE, borderFor(error), className)} {...rest} />;
 }
 
 export function Select({
   error,
-  className = "",
+  className,
   children,
   ...rest
 }: SelectHTMLAttributes<HTMLSelectElement> & { error?: boolean }) {
   return (
     <select
-      className={`${BASE} ${borderFor(error)} cursor-pointer appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")] bg-[length:12px] bg-[position:right_0.65rem_center] bg-no-repeat pr-8 ${className}`}
+      className={cn(
+        BASE,
+        borderFor(error),
+        "cursor-pointer appearance-none bg-[url(\"data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")] bg-[length:12px] bg-[position:right_0.65rem_center] bg-no-repeat pr-8",
+        className,
+      )}
       {...rest}
     >
       {children}
@@ -89,7 +95,7 @@ export function Checkbox({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-slate-300 accent-kairo-blue"
+        className="h-4 w-4 rounded border-line accent-kairo-blue"
       />
       {label}
     </label>

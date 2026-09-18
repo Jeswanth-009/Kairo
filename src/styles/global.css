@@ -4,7 +4,37 @@
   Kairo brand tokens — see spec §1.2.
   Meaning: midnight = trust/depth, blue = primary action/progress,
   violet = intelligence accent, sky = soft highlights, dawn = opportunity (use sparingly).
+
+  Semantic surfaces are CSS variables (flipped by `.dark`) mapped into the
+  Tailwind theme, so one class (bg-card, text-ink, border-line…) tracks the
+  active theme. Brand accents stay constant across themes.
 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --kairo-surface: #f6f8fb;
+  --kairo-card: #ffffff;
+  --kairo-card-muted: #f1f5f9;
+  --kairo-ink: #182238;
+  --kairo-muted: #64748b;
+  --kairo-line: #e2e8f0;
+  --kairo-line-strong: #cbd5e1;
+  --kairo-accent-soft: #f1f5f9;
+  --kairo-sidebar: #0b1020;
+}
+
+.dark {
+  --kairo-surface: #0c1122;
+  --kairo-card: #131a30;
+  --kairo-card-muted: #1a2340;
+  --kairo-ink: #e4e9f5;
+  --kairo-muted: #8e9bb8;
+  --kairo-line: #24304f;
+  --kairo-line-strong: #33406a;
+  --kairo-accent-soft: #1c2544;
+  --kairo-sidebar: #090d1a;
+}
+
 @theme {
   --color-kairo-midnight: #0b1020;
   --color-kairo-midnight-raised: #111a33;
@@ -12,9 +42,26 @@
   --color-kairo-violet: #8b5cf6;
   --color-kairo-sky: #93c5fd;
   --color-kairo-dawn: #f6c177;
-  --color-surface: #f6f8fb;
-  --color-ink: #182238;
-  --color-muted: #64748b;
+
+  /* Semantic surfaces — theme-aware via the variables above. */
+  --color-surface: var(--kairo-surface);
+  --color-card: var(--kairo-card);
+  --color-card-muted: var(--kairo-card-muted);
+  --color-ink: var(--kairo-ink);
+  --color-muted: var(--kairo-muted);
+  --color-line: var(--kairo-line);
+  --color-line-strong: var(--kairo-line-strong);
+  --color-accent-soft: var(--kairo-accent-soft);
+  --color-sidebar: var(--kairo-sidebar);
+
+  /* Status tones — shared accents for badges, pills, and DB status. */
+  --color-ok: #10b981;
+  --color-ok-soft: #d1fae5;
+  --color-warn: #d97706;
+  --color-warn-soft: #fef3c7;
+  --color-bad: #dc2626;
+  --color-bad-soft: #fee2e2;
+  --color-info-soft: #dbeafe;
 
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.03);
   --shadow-raised: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px rgb(15 23 42 / 0.04);
@@ -31,8 +78,8 @@
   body {
     font-family:
       "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
-    background-color: var(--color-surface);
-    color: var(--color-ink);
+    background-color: var(--kairo-surface);
+    color: var(--kairo-ink);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -63,7 +110,7 @@
   *::-webkit-scrollbar-thumb {
     background-color: rgb(148 163 184 / 0.4);
     border-radius: 8px;
-    border: 3px solid transparent;
+    border: 3px transparent solid;
     background-clip: content-box;
   }
   *::-webkit-scrollbar-thumb:hover {

@@ -1,7 +1,8 @@
 import type { ButtonHTMLAttributes } from "react";
+import { cn } from "../../lib/cn";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "danger-outline";
   size?: "sm" | "md";
 }
 
@@ -14,10 +15,12 @@ const VARIANTS: Record<NonNullable<ButtonProps["variant"]>, string> = {
     "focus-visible:ring-kairo-blue",
   ].join(" "),
   secondary:
-    "border border-slate-200 bg-white text-ink shadow-sm hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-px active:translate-y-0 focus-visible:ring-slate-400",
-  ghost: "text-muted hover:bg-slate-100 hover:text-ink focus-visible:ring-slate-400",
+    "border border-line bg-card text-ink shadow-sm hover:border-line-strong hover:bg-accent-soft hover:-translate-y-px active:translate-y-0 focus-visible:ring-slate-400",
+  ghost: "text-muted hover:bg-accent-soft hover:text-ink focus-visible:ring-slate-400",
   danger:
-    "border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50 hover:border-red-300 focus-visible:ring-red-400",
+    "text-white bg-red-600 shadow-sm ring-1 ring-red-500/40 hover:bg-red-500 hover:-translate-y-px active:translate-y-0 focus-visible:ring-red-400",
+  "danger-outline":
+    "border border-red-200 dark:border-red-500/30 bg-card text-red-600 dark:text-red-400 shadow-sm hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-300 dark:hover:border-red-500/50 focus-visible:ring-red-400",
 };
 
 const SIZES: Record<NonNullable<ButtonProps["size"]>, string> = {
@@ -28,22 +31,22 @@ const SIZES: Record<NonNullable<ButtonProps["size"]>, string> = {
 export function Button({
   variant = "primary",
   size = "md",
-  className = "",
+  className,
   type = "button",
   ...rest
 }: ButtonProps) {
   return (
     <button
       type={type}
-      className={[
+      className={cn(
         "inline-flex items-center justify-center gap-2 rounded-lg font-medium",
         "transition-all duration-200 ease-out",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
         "disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none",
         VARIANTS[variant],
         SIZES[size],
         className,
-      ].join(" ")}
+      )}
       {...rest}
     />
   );

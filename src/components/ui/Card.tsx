@@ -1,12 +1,10 @@
 import type { HTMLAttributes } from "react";
+import { cn } from "../../lib/cn";
 
-export function Card({ className = "", ...rest }: HTMLAttributes<HTMLDivElement>) {
+export function Card({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={[
-        "rounded-xl border border-slate-200/80 bg-white shadow-card",
-        className,
-      ].join(" ")}
+      className={cn("rounded-xl border border-line bg-card shadow-card", className)}
       {...rest}
     />
   );
