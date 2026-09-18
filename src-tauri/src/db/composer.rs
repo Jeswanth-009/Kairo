@@ -188,11 +188,15 @@ fn assemble(
         })
         .collect();
 
-    let vault_skills: Vec<String> = super::vault::vault_list::<super::vault::Skill>(conn)?
-        .into_iter()
-        .map(|s| s.canonical_name.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
+    let vault_skills: Vec<crate::composer::ComposerSkill> =
+        super::vault::vault_list::<super::vault::Skill>(conn)?
+            .into_iter()
+            .map(|s| crate::composer::ComposerSkill {
+                name: s.canonical_name.trim().to_string(),
+                category: if s.category.is_empty() { "other".to_string() } else { s.category },
+            })
+            .filter(|s| !s.name.is_empty())
+            .collect();
 
     Ok(ComposerInput {
         profile,

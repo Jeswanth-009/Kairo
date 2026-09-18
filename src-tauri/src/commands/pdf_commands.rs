@@ -17,22 +17,33 @@ pub struct ExportResult {
 pub fn export_pdf(
     state: State<'_, DbState>,
     job_id: i64,
-    template_id: String,
+    mut template_id: String,
     app_data_dir: State<'_, AppDataDir>,
 ) -> Result<ExportResult, String> {
     let started = std::time::Instant::now();
-    // 1. Lock: load the plan and locate the compiler.
-    let (plan, tectonic) = {
+    // 1. Lock: load the plan, overlay accepted tailor suggestions, locate the
+    //    compiler. The overlay keeps the PDF in sync with what the Studio
+    //    preview shows for accepted AI tailoring.
+    let (mut plan, tectonic) = {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-        let plan: crate::composer::ResumePlan = {
+        let mut plan: crate::composer::ResumePlan = {
             let stored = crate::db::composer::get_plan(&conn, job_id)?;
             stored
                 .ok_or_else(|| "No plan for this workspace — compose one in the Plan tab first".to_string())?
                 .plan
         };
+        let _ = crate::db::tailor::apply_accepted_suggestions(&conn, job_id, &mut plan)?;
         let tectonic = pdf::find_tectonic(&conn)?;
         (plan, tectonic)
     }; // DB lock dropped — the compile can take minutes on first run.
+
+    // Template fallback: an empty template id defers to the persisted choice.
+    if template_id.trim().is_empty() {
+        template_id = plan.config.template_id.clone();
+    }
+    if template_id.trim().is_empty() {
+        template_id = "jake".to_string();
+    }
 
     // 2. Write .tex + run Tectonic (no lock held).
     let out = match pdf::compile_locked(plan, job_id, &template_id, &tectonic, &app_data_dir.0) {

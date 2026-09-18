@@ -18,6 +18,21 @@ pub struct ComposerConfig {
     pub max_experience_items: u32,
     pub max_bullets_per_item: u32,
     pub min_font_size_pt: f64,
+    /// Presentational choice persisted with the plan so the Studio and the
+    /// per-job export agree across restarts ("jake" | "expressive" | "plushcv").
+    #[serde(default = "default_template_id")]
+    pub template_id: String,
+    /// Paper size for the compiled PDF ("letter" | "a4").
+    #[serde(default = "default_paper")]
+    pub paper: String,
+}
+
+fn default_template_id() -> String {
+    "jake".to_string()
+}
+
+fn default_paper() -> String {
+    "letter".to_string()
 }
 
 impl Default for ComposerConfig {
@@ -28,6 +43,8 @@ impl Default for ComposerConfig {
             max_experience_items: 2,
             max_bullets_per_item: 3,
             min_font_size_pt: 9.5,
+            template_id: default_template_id(),
+            paper: default_paper(),
         }
     }
 }
@@ -101,11 +118,19 @@ pub struct ComposerInput {
     pub entities: Vec<ComposerEntity>,
     #[serde(default)]
     pub achievements: Vec<ComposerAchievement>,
+    /// Vault skills with their category so templates can group them.
     #[serde(default)]
-    pub vault_skills: Vec<String>,
+    pub vault_skills: Vec<ComposerSkill>,
     /// Requirement texts the bullets are scored against.
     pub requirement_texts: Vec<String>,
     pub config: ComposerConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComposerSkill {
+    pub name: String,
+    pub category: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -183,6 +208,13 @@ pub struct PlanHeader {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PlanSkillGroup {
+    pub category: String,
+    pub skills: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ResumePlan {
     pub composer_version: u32,
     pub config: ComposerConfig,
@@ -193,6 +225,11 @@ pub struct ResumePlan {
     #[serde(default)]
     pub achievements: Vec<PlanAchievement>,
     pub skills: Vec<String>,
+    /// Skills grouped by their Vault category; empty for plans composed
+    /// before categories were carried through (templates then fall back to
+    /// the flat `skills` list).
+    #[serde(default)]
+    pub skills_grouped: Vec<PlanSkillGroup>,
     /// Studio-only: skills hidden from the resume but kept in the plan.
     #[serde(default)]
     pub excluded_skills: Vec<String>,
@@ -218,14 +255,38 @@ fn wrapped_lines(text: &str) -> u32 {
     }
 }
 
-fn item_lines(item: &PlanItem) -> u32 {
-    // title + meta line, then bullets and an optional description block.
-    let mut lines = 2;
-    if !item.description.is_empty() {
-        lines += wrapped_lines(&item.description);
+/// The bullet lines that actually render for an item: the included bullets,
+/// or — for plans composed before canonical bullets existed (or when every
+/// bullet was excluded) — the record's description split on its newlines,
+/// which is how multi-line descriptions are stored. One line ⇒ one bullet.
+pub fn effective_bullets(item: &PlanItem) -> Vec<String> {
+    let included: Vec<String> = item
+        .bullets
+        .iter()
+        .filter(|b| !b.excluded)
+        .map(|b| b.text.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    if !included.is_empty() {
+        return included;
     }
-    for bullet in item.bullets.iter().filter(|b| !b.excluded) {
-        lines += wrapped_lines(&bullet.text);
+    item.description
+        .lines()
+        .map(|l| {
+            l.trim()
+                .trim_start_matches(['•', '-', '*', '▪', '·'])
+                .trim()
+                .to_string()
+        })
+        .filter(|l| l.len() > 5)
+        .collect()
+}
+
+fn item_lines(item: &PlanItem) -> u32 {
+    // title + meta line, then one line-block per rendered bullet.
+    let mut lines = 2;
+    for text in effective_bullets(item) {
+        lines += wrapped_lines(&text);
     }
     lines
 }
@@ -447,8 +508,10 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
     }
 
     // Skills: linked to selected records, requirement mentions first,
-    // followed by all other skills from the Vault.
+    // followed by all other skills from the Vault. Categories are tracked
+    // alongside so templates can render grouped skill lines.
     let mut skills: Vec<String> = Vec::new();
+    let mut skill_category: HashMap<String, String> = HashMap::new();
     let req_token_sets: Vec<std::collections::HashSet<String>> = input
         .requirement_texts
         .iter()
@@ -481,8 +544,13 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         }
     }
     // Also include all vault skills so they are not lost
-    for name in &input.vault_skills {
+    for vs in &input.vault_skills {
+        let name = vs.name.trim();
+        if name.is_empty() {
+            continue;
+        }
         let lower = name.to_lowercase();
+        skill_category.entry(lower.clone()).or_insert_with(|| vs.category.clone());
         if skills.iter().any(|s| s.to_lowercase() == lower) {
             continue;
         }
@@ -491,14 +559,21 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             .iter()
             .any(|set| set.contains(&lower) || set.contains(&stem));
         if hits_requirements {
-            mentioned.push(name.clone());
+            mentioned.push(name.to_string());
         } else {
-            other.push(name.clone());
+            other.push(name.to_string());
         }
-        skills.push(name.clone());
+        skills.push(name.to_string());
+    }
+    // Entity-linked skills without a vault match default to "other".
+    for name in &skills {
+        skill_category
+            .entry(name.to_lowercase())
+            .or_insert_with(|| "other".to_string());
     }
     mentioned.extend(other);
     let skills = mentioned;
+    let skills_grouped = group_skills(&skills, &skill_category);
 
     let achievements: Vec<PlanAchievement> = input
         .achievements
@@ -609,11 +684,50 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         projects,
         achievements,
         skills,
+        skills_grouped,
         excluded_skills: Vec::new(),
         estimated_lines,
         fits_one_page,
         warnings,
     }
+}
+
+/// Canonical display order for skill categories (matches the Vault picker).
+const CATEGORY_ORDER: &[(&str, &str)] = &[
+    ("language", "Languages"),
+    ("framework", "Frameworks"),
+    ("database", "Databases"),
+    ("cloud", "Cloud"),
+    ("devops", "DevOps"),
+    ("tool", "Tools"),
+    ("soft", "Soft Skills"),
+    ("other", "Other"),
+];
+
+/// Groups flat skills into canonical category buckets, preserving each
+/// category's internal order (requirement mentions first). Categories with no
+/// skills are omitted.
+fn group_skills(skills: &[String], category_of: &HashMap<String, String>) -> Vec<PlanSkillGroup> {
+    let mut groups: Vec<PlanSkillGroup> = Vec::new();
+    for (cat, label) in CATEGORY_ORDER {
+        let names: Vec<String> = skills
+            .iter()
+            .filter(|s| {
+                category_of
+                    .get(&s.to_lowercase())
+                    .map(|c| c == cat)
+                    .unwrap_or(*cat == "other")
+            })
+            .cloned()
+            .collect();
+        if !names.is_empty() {
+            groups.push(PlanSkillGroup {
+                category: label.to_string(),
+                skills: names,
+            });
+        }
+    }
+    groups
 }
 
 #[cfg(test)]

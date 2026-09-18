@@ -1,13 +1,20 @@
 // ---------------------------------------------------------------------------
+// Shared preamble notes: Kairo compiles through Tectonic, whose engine is
+// XeTeX — pdfTeX-only primitives (\pdfgentounicode, \input{glyphtounicode})
+// and T1 fontenc (which downgrades to Type1 ec fonts and breaks Unicode
+// punctuation) are deliberately absent. The XeTeX/LaTeX default TU encoding
+// with Latin Modern gives full Unicode text. `__PAPER__` is substituted with
+// "letterpaper" or "a4paper" at render time.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // Jake (ATS-friendly, from github.com/jakegut/resume)
 // All packages available in standard TeX Live / Tectonic.
 // ---------------------------------------------------------------------------
-pub const JAKE_PREAMBLE: &str = r#"\documentclass[letterpaper,11pt]{article}
+pub const JAKE_PREAMBLE: &str = r#"\documentclass[__PAPER__,11pt]{article}
 
-\usepackage{latexsym}
 \usepackage[empty]{fullpage}
 \usepackage{titlesec}
-\usepackage{marvosym}
 \usepackage[usenames,dvipsnames]{color}
 \usepackage{verbatim}
 \usepackage{enumitem}
@@ -15,7 +22,8 @@ pub const JAKE_PREAMBLE: &str = r#"\documentclass[letterpaper,11pt]{article}
 \usepackage{fancyhdr}
 \usepackage[english]{babel}
 \usepackage{tabularx}
-\input{glyphtounicode}
+\usepackage{needspace}
+\PassOptionsToPackage{hyphens}{url}
 
 \pagestyle{fancy}
 \fancyhf{}
@@ -34,11 +42,14 @@ pub const JAKE_PREAMBLE: &str = r#"\documentclass[letterpaper,11pt]{article}
 \raggedright
 \setlength{\tabcolsep}{0in}
 
+% Keep entries from stranding across page breaks.
+\widowpenalty=10000
+\clubpenalty=10000
+\emergencystretch=3em
+
 \titleformat{\section}{
   \vspace{-4pt}\scshape\raggedright\large
 }{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
-
-\pdfgentounicode=1
 
 \newcommand{\resumeItem}[1]{
   \item\small{{#1 \vspace{-2pt}}}
@@ -71,29 +82,36 @@ pub const JAKE_PREAMBLE: &str = r#"\documentclass[letterpaper,11pt]{article}
 // Expressive — narrative style with objective, replicated from
 // github.com/RyanDaDeng/expressive-resume using only standard packages.
 // ---------------------------------------------------------------------------
-pub const EXPRESSIVE_PREAMBLE: &str = r#"\documentclass[11pt, letterpaper]{article}
-\usepackage[T1]{fontenc}
+pub const EXPRESSIVE_PREAMBLE: &str = r#"\documentclass[11pt, __PAPER__]{article}
 \usepackage[margin=0.75in, top=0.6in, bottom=0.6in]{geometry}
 \usepackage[hidelinks]{hyperref}
+\PassOptionsToPackage{hyphens}{url}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{titlesec}
 \usepackage{parskip}
 \usepackage{tabularx}
-\usepackage{lmodern}
+\usepackage{needspace}
 
 \pagestyle{empty}
 \setlength{\parindent}{0pt}
+
+% Keep entries from stranding across page breaks.
+\widowpenalty=10000
+\clubpenalty=10000
+\emergencystretch=3em
+
 \definecolor{accentblue}{RGB}{30, 64, 175}
 
 % ---------- header ----------
-\newcommand{\resumeheader}[5]{%
+\newcommand{\resumeheader}[6]{%
   {\Huge\bfseries #1}\par\vspace{4pt}
   \small
-  \href{mailto:#2}{#2}
+  \href{mailto:#2}{#2}%
   \ifx&#3&\else\quad|\quad\href{https://linkedin.com/in/#3}{linkedin.com/in/#3}\fi
   \ifx&#4&\else\quad|\quad\href{https://github.com/#4}{github.com/#4}\fi
   \ifx&#5&\else\quad|\quad #5\fi
+  \ifx&#6&\else\quad|\quad #6\fi
   \vspace{6pt}\par
   \rule{\linewidth}{0.4pt}\par
 }
@@ -109,6 +127,7 @@ pub const EXPRESSIVE_PREAMBLE: &str = r#"\documentclass[11pt, letterpaper]{artic
 
 % ---------- experience ----------
 \newcommand{\experience}[3]{%
+  \needspace{3\baselineskip}
   {\bfseries\large #1}\hfill{\small #2}\par
   #3
 }
@@ -124,44 +143,39 @@ pub const EXPRESSIVE_PREAMBLE: &str = r#"\documentclass[11pt, letterpaper]{artic
 
 % ---------- project ----------
 \newcommand{\project}[3]{%
+  \needspace{3\baselineskip}
   \vspace{2pt}{\bfseries #1}\hfill{\small\itshape #2}\par
   \begin{itemize}[leftmargin=1.2em, itemsep=1pt, topsep=2pt, parsep=0pt]
     #3
   \end{itemize}
 }
-
-% ---------- education ----------
-\newcommand{\degree}[4]{%
-  \vspace{2pt}{\bfseries #1}\quad{\small #2}\hfill{\small\itshape #3}\par
-  \begin{itemize}[leftmargin=1.2em, itemsep=1pt, topsep=2pt, parsep=0pt]
-    #4
-  \end{itemize}
-}
-
-% ---------- tech highlight ----------
-\newcommand{\tech}[1]{{\bfseries #1}}
 "#;
 
 // ---------------------------------------------------------------------------
 // PlushCV — two-column layout (left: experience + projects; right: skills +
 // education). Replicated from github.com/subidit/plushcv using standard
-// packages only: paracol (in TeX Live), xcolor, fontawesome5 omitted for
+// packages only: paracol (in TeX Live), xcolor; fontawesome5 omitted for
 // portability.
 // ---------------------------------------------------------------------------
-pub const PLUSHCV_PREAMBLE: &str = r#"\documentclass[10pt, letterpaper]{article}
-\usepackage[T1]{fontenc}
+pub const PLUSHCV_PREAMBLE: &str = r#"\documentclass[10pt, __PAPER__]{article}
 \usepackage[margin=0.5in, top=0.5in, bottom=0.5in]{geometry}
 \usepackage[hidelinks]{hyperref}
+\PassOptionsToPackage{hyphens}{url}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{titlesec}
 \usepackage{tabularx}
 \usepackage{paracol}
-\usepackage{lmodern}
+\usepackage{needspace}
 
 \pagestyle{empty}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0pt}
+
+% Keep entries from stranding across page breaks.
+\widowpenalty=10000
+\clubpenalty=10000
+\emergencystretch=3em
 
 \definecolor{sidecolor}{RGB}{240, 240, 240}
 \definecolor{maintext}{RGB}{30, 30, 30}
@@ -192,14 +206,11 @@ pub const PLUSHCV_PREAMBLE: &str = r#"\documentclass[10pt, letterpaper]{article}
 
 % ---------- experience ----------
 \newcommand{\runsubsection}[1]{{\bfseries\large #1}}
-\newcommand{\descript}[1]{{\normalsize #1}}
+\newcommand{\descript}[1]{{\small#1}}
 \newcommand{\location}[1]{{\small\itshape #1}\par\vspace{2pt}}
 \newcommand{\sectionsep}{\vspace{6pt}}
 
 \newenvironment{tightemize}{%
   \begin{itemize}[leftmargin=1em, itemsep=1pt, topsep=2pt, parsep=0pt]
 }{\end{itemize}}
-
-% ---------- skills (right column) ----------
-\newcommand{\skilllocation}[1]{{\small\bfseries #1:}\par}
 "#;

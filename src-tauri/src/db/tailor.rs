@@ -124,6 +124,33 @@ pub fn list_suggestions(conn: &Connection, job_id: i64) -> Result<Vec<TailorSugg
     sql_err(mapped.collect::<rusqlite::Result<Vec<_>>>())
 }
 
+/// Overlays accepted tailor suggestions onto the plan's bullets so the
+/// exported PDF matches what the Studio preview shows. Bullets are matched
+/// by canonical bullet id; the accepted (possibly manually edited) text wins.
+pub fn apply_accepted_suggestions(
+    conn: &Connection,
+    job_id: i64,
+    plan: &mut crate::composer::ResumePlan,
+) -> Result<usize, String> {
+    let accepted: Vec<TailorSuggestion> = list_suggestions(conn, job_id)?
+        .into_iter()
+        .filter(|s| s.status == "accepted" && !s.suggested_text.trim().is_empty())
+        .collect();
+    if accepted.is_empty() {
+        return Ok(0);
+    }
+    let mut applied = 0;
+    for item in plan.experience.iter_mut().chain(plan.projects.iter_mut()) {
+        for bullet in item.bullets.iter_mut() {
+            if let Some(s) = accepted.iter().find(|s| s.bullet_id == bullet.id) {
+                bullet.text = s.suggested_text.clone();
+                applied += 1;
+            }
+        }
+    }
+    Ok(applied)
+}
+
 pub fn set_suggestion_status(
     conn: &Connection,
     id: i64,

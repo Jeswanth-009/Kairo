@@ -399,12 +399,18 @@ export interface MatchReport {
 
 // --- Composer (Phase 6) -----------------------------------------------------
 
+export type ResumeTemplateId = "jake" | "expressive" | "plushcv";
+
 export interface ComposerConfig {
   targetPages: number;
   maxProjects: number;
   maxExperienceItems: number;
   maxBulletsPerItem: number;
   minFontSizePt: number;
+  /** Persisted so the Studio and exports agree across restarts. */
+  templateId?: ResumeTemplateId | string;
+  /** Paper size for the compiled PDF: "letter" | "a4". */
+  paper?: string;
 }
 
 export interface PlanBullet {
@@ -460,6 +466,11 @@ export interface PlanHeader {
   linkedin: string;
 }
 
+export interface PlanSkillGroup {
+  category: string;
+  skills: string[];
+}
+
 export interface ResumePlan {
   composerVersion: number;
   config: ComposerConfig;
@@ -469,6 +480,7 @@ export interface ResumePlan {
   projects: PlanItem[];
   achievements?: PlanAchievement[];
   skills: string[];
+  skillsGrouped?: PlanSkillGroup[];
   excludedSkills?: string[];
   estimatedLines: number;
   fitsOnePage: boolean;
