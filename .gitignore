@@ -16,3 +16,5 @@ Thumbs.db
 
 .zcode/
 tmp_baseline/
+.zcode/
+.zcodeignore
