@@ -33,20 +33,11 @@ pub fn save_plan(
 ) -> Result<MutationOk, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     let plan_json = serde_json::to_string(&plan).map_err(|e| e.to_string())?;
-    let existing_config: Option<String> = {
-        let mut stmt = conn
-            .prepare("SELECT config_json FROM resume_plans WHERE job_id = ?1")
-            .map_err(|e| e.to_string())?;
-        match stmt.query_row([job_id], |row| row.get(0)) {
-            Ok(v) => Some(v),
-            Err(rusqlite::Error::QueryReturnedNoRows) => None,
-            Err(e) => return Err(e.to_string()),
-        }
-    };
-    let config_json = existing_config
-        .unwrap_or_else(|| serde_json::to_string(&ComposerConfig::default()).unwrap());
+    // The plan embeds its config (caps, template, paper); persist it as the
+    // authoritative config mirror so Studio choices survive restarts.
+    let config_json = serde_json::to_string(&plan.config).map_err(|e| e.to_string())?;
     sql_err(conn.execute(
-        "INSERT INTO resume_plans (job_id, config_json, plan_json, composer_version)          VALUES (?1, ?2, ?3, ?4)          ON CONFLICT(job_id) DO UPDATE SET plan_json = excluded.plan_json,            updated_at = datetime('now')",
+        "INSERT INTO resume_plans (job_id, config_json, plan_json, composer_version)          VALUES (?1, ?2, ?3, ?4)          ON CONFLICT(job_id) DO UPDATE SET plan_json = excluded.plan_json,            config_json = excluded.config_json,            updated_at = datetime('now')",
         params![job_id, config_json, plan_json, plan.composer_version],
     ))?;
     Ok(MutationOk { ok: true })
