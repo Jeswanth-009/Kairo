@@ -54,6 +54,15 @@ pub fn ai_test_connection(state: State<'_, DbState>) -> Result<String, String> {
     crate::ai::test_connection(&config, &key)
 }
 
+/// Lists models from the provider's OpenAI-compatible /models endpoint so
+/// Settings can offer a picker (works with Ollama and LM Studio).
+#[tauri::command]
+pub fn ai_list_models(state: State<'_, DbState>, base_url: String) -> Result<Vec<String>, String> {
+    let _conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    let key = crate::ai::load_api_key()?.unwrap_or_default();
+    crate::ai::list_models(&base_url, &key)
+}
+
 #[tauri::command]
 pub fn tailor_suggest(
     state: State<'_, DbState>,

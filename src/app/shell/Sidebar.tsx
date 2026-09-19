@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { BrandMark } from "../../components/BrandMark";
+import { useAppStore } from "../../stores/appStore";
 
 interface NavItem {
   to: string;
@@ -61,6 +62,7 @@ function NavItemLink({ item }: { item: NavItem }) {
 }
 
 export function Sidebar() {
+  const appVersion = useAppStore((s) => s.diagnostics?.appVersion);
   return (
     <aside className="relative flex w-60 shrink-0 flex-col overflow-hidden bg-sidebar">
       {/* Ambient brand glow — decoration only, keeps nav text on solid contrast. */}
@@ -100,7 +102,9 @@ export function Sidebar() {
         <NavItemLink
           item={{ to: "/settings", label: "Settings", icon: Settings }}
         />
-        <div className="px-3 pt-2.5 text-[11px] text-muted">v0.1.0 · Local-first</div>
+        <div className="px-3 pt-2.5 text-[11px] text-muted">
+          {appVersion ? `v${appVersion}` : "v3.0.0"} · Local-first
+        </div>
       </div>
     </aside>
   );

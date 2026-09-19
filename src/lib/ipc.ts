@@ -168,6 +168,8 @@ export const ipc = {
   aiSaveConfig: (baseUrl: string, model: string, apiKey?: string): Promise<AiConfigView> =>
     invoke<AiConfigView>("ai_save_config", { baseUrl, model, apiKey }),
   aiTestConnection: (): Promise<string> => invoke("ai_test_connection"),
+  aiListModels: (baseUrl: string): Promise<string[]> =>
+    invoke<string[]>("ai_list_models", { baseUrl }),
   tailorSuggest: (jobId: number, bulletId: number): Promise<TailorSuggestion> =>
     invoke<TailorSuggestion>("tailor_suggest", { jobId, bulletId }),
   tailorList: (jobId: number): Promise<TailorSuggestion[]> =>

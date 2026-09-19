@@ -76,10 +76,11 @@ pub fn build_user_prompt(ctx: &TailorContext) -> String {
     user
 }
 
-/// Strict schema validation: exactly the three contract fields, newClaims empty.
+/// Schema validation: the three contract fields, newClaims empty. Unknown
+/// extra keys are tolerated — small local models often add commentary fields
+/// and json_object guarantees valid JSON, not our exact schema.
 pub fn parse_response(raw: &str) -> Result<RewriteOutput, String> {
     #[derive(Deserialize)]
-    #[serde(deny_unknown_fields)]
     struct Raw {
         #[serde(rename = "text")]
         text: serde_json::Value,
@@ -100,8 +101,27 @@ pub fn parse_response(raw: &str) -> Result<RewriteOutput, String> {
             .strip_suffix("```")
             .unwrap_or(trimmed)
             .trim();
-        serde_json::from_str(stripped)
-            .map_err(|e| format!("response is not valid JSON: {e}"))?
+        // Thinking models (qwen, deepseek-r1, …) prepend <think>…</think>
+        // reasoning — drop the whole block before parsing.
+        let without_think = match stripped.find("</think>") {
+            Some(idx) => stripped[idx + "</think>".len()..].trim(),
+            None => stripped,
+        };
+        // Some models prepend commentary before the JSON object — parse from
+        // the first '{' if a direct parse fails.
+        match serde_json::from_str(without_think) {
+            Ok(v) => v,
+            Err(_) => {
+                let from_brace = without_think.find('{').ok_or_else(|| {
+                    format!(
+                        "response is not valid JSON: no JSON object found in {:.140}",
+                        without_think
+                    )
+                })?;
+                serde_json::from_str(&without_think[from_brace..])
+                    .map_err(|e| format!("response is not valid JSON: {e}"))
+            }
+        }?
     };
     let raw: Raw = serde_json::from_value(value).map_err(|e| format!("schema violation: {e}"))?;
 
@@ -255,9 +275,19 @@ mod tests {
     }
 
     #[test]
-    fn rejects_extra_fields() {
+    fn tolerates_extra_fields() {
+        // Small local models add commentary keys; json_object guarantees valid
+        // JSON, not our exact schema — extras are ignored, contract still holds.
         let raw = r#"{"text": "x", "factsUsed": [1], "newClaims": [], "score": 92}"#;
-        assert!(parse_response(raw).is_err());
+        let out = parse_response(raw).expect("extra keys should be tolerated");
+        assert_eq!(out.text, "x");
+        assert_eq!(out.facts_used, vec![1]);
+    }
+
+    #[test]
+    fn parses_json_prefixed_by_commentary() {
+        let raw = r#"Here is the rewrite: {"text": "ok", "factsUsed": [], "newClaims": []}"#;
+        assert!(parse_response(raw).is_ok());
     }
 
     #[test]

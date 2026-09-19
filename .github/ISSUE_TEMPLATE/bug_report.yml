@@ -1,0 +1,52 @@
+name: Bug report
+description: Something broke or behaves unexpectedly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file a bug! Please fill in the details below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See error
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Resume Studio / PDF export
+        - Career Vault
+        - Jobs / Match / Plan / Tailor
+        - Applications
+        - Interview Prep
+        - AI provider / local models
+        - Settings / backups
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Kairo version
+      description: Shown in the sidebar and Settings → About
+      placeholder: v3.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant tail of `%APPDATA%/com.kairo.app/logs/kairo.log` (secrets are already redacted)

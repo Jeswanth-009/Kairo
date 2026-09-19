@@ -100,6 +100,7 @@ pub fn run() {
             commands::ai_commands::ai_get_config,
             commands::ai_commands::ai_save_config,
             commands::ai_commands::ai_test_connection,
+            commands::ai_commands::ai_list_models,
             commands::ai_commands::tailor_suggest,
             commands::ai_commands::tailor_list,
             commands::ai_commands::tailor_set_status,

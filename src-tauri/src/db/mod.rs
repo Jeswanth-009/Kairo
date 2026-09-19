@@ -102,7 +102,8 @@ mod tests {
                 "0007_tailor".to_string(),
                 "0008_pdf".to_string(),
                 "0009_versions".to_string(),
-                "0010_applications".to_string()
+                "0010_applications".to_string(),
+                "0011_artifact_template".to_string()
             ]
         );
     }
@@ -169,7 +170,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
         assert_eq!(names.len(), MIGRATIONS.len());
-        assert_eq!(names.last().unwrap(), "0010_applications");
+        assert_eq!(names.last().unwrap(), "0011_artifact_template");
 
         // Pre-upgrade data survives byte-for-byte.
         let title: String = conn

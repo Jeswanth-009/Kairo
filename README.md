@@ -31,7 +31,7 @@ review every change, and produce a reproducible application artifact.
    - [Interview prep](#interview-prep)
    - [Imports](#imports)
    - [LaTeX / PDF renderer](#latex--pdf-renderer)
-   - [AI provider](#ai-provider)
+   - [AI provider & local models](#ai-provider--local-models)
 6. [Versioning](#versioning)
 7. [Frontend](#frontend)
 8. [Security model](#security-model)
@@ -299,6 +299,16 @@ preview:
   meta override → `PATH` → `~/.kairo-dev/bin/tectonic.exe`. The compile runs **without the DB
   lock** (first run downloads the whole TeX bundle).
 
+### AI provider & local models
+
+Tailoring (Phase 7) talks to **any OpenAI-compatible endpoint**. Ships with
+presets for OpenAI, **Ollama** (`http://localhost:11434/v1`) and LM Studio —
+local providers need no API key (none is sent). Settings can fetch the
+provider's model list, so pointing Kairo at a local `qwen`, `llama` or `mistral`
+model is a three-click setup. The request enforces a JSON contract and the
+response passes the same validation gates as cloud models; thinking-model
+output (`<think>…</think>`, prose prefixes) is stripped before parsing.
+
 ## Versioning
 
 `db/versions.rs` — spec §9.2. Each **Save version** freezes a self-contained snapshot:
@@ -364,7 +374,7 @@ need connectivity — each degrades with a clear error.
 
 ## Testing
 
-77 Rust tests across the domain modules + integration tests:
+95 Rust unit tests across the domain modules + integration tests:
 
 - **Unit** — escaping, section extraction, tokenization, score components, date ordering, alias
   handling, validation gates.
@@ -414,32 +424,30 @@ npm run tauri dev        # dev window (vite :5173 + cargo)
 npm run build            # frontend type-check + production bundle
 
 cd src-tauri
-cargo test               # 62 unit + integration tests
+cargo test               # 95 unit + integration tests
 ```
 
 In-app quick tour: Settings → AI provider (optional) → Vault (profile + records + evidence +
 bullets) → Jobs (paste JD → review requirements) → Match → Plan → Studio (exclude/reorder/edit) →
 **Export PDF** → **Save version** → Applications (track it) → Interview Prep.
 
-## Toolchain on this machine
+## Building from source
 
-No admin-elevated MSVC install was possible, so Rust uses the official `stable-msvc` toolchain with
-a **portable MSVC + Windows SDK** (official Microsoft packages extracted to the user profile) at
-`~/.kairo-dev/msvc`. Every shell that runs cargo/tauri must first activate it:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full setup (Node, Rust MSVC,
+Visual Studio Build Tools, Tectonic) and conventions. The short version:
 
 ```bash
-. ~/.kairo-dev/msvc-env.sh   # sets PATH, INCLUDE, LIB, and CC/CXX=cl.exe
-npm run tauri dev
+npm install
+npm run tauri dev        # dev window (vite :5173 + cargo)
 ```
 
-Notes:
-
-- The `CC=cl.exe` override matters — without it the `cc` crate falls back to msys64's `gcc` for
-  bundled SQLite.
-- **Tectonic** is a portable binary at `~/.kairo-dev/bin/tectonic.exe`; the app auto-discovers it.
-  First compile downloads the TeX bundle (~100 MB, once).
-- If a normal admin VS Build Tools install happens later, delete the env file — nothing in the repo
-  depends on it.
+- `dev.ps1` / `scripts/dev-env.sh` activate a portable MSVC toolchain for
+  machines where Visual Studio Build Tools are not on `PATH`; on a normal
+  admin install of the Build Tools you don't need them.
+- **Tectonic** is auto-discovered from `PATH`; first compile downloads the
+  TeX bundle (~100 MB, once).
+- Frontend-only UI work can run against fixtures with `npm run dev` →
+  `http://localhost:5173/mock.html` (no backend needed).
 
 ## Engineering rules
 

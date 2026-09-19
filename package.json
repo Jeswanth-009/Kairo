@@ -1,7 +1,8 @@
 {
   "name": "kairo",
-  "private": true,
-  "version": "0.1.0",
+  "license": "MIT",
+  "repository": "github:Jeswanth-009/Kairo",
+  "version": "3.0.0",
   "description": "Kairo — local-first career intelligence workspace",
   "type": "module",
   "scripts": {

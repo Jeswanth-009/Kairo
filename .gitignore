@@ -13,5 +13,6 @@ src-tauri/gen/schemas/
 # OS
 .DS_Store
 Thumbs.db
-sample-resume
+
 .zcode/
+tmp_baseline/

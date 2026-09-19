@@ -4,6 +4,7 @@ import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Field, Input } from "../../components/ui/inputs";
+import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
 import type { BackupInfo } from "../../lib/types";
 import { useAppStore } from "../../stores/appStore";
@@ -184,6 +185,12 @@ function BackupsCard() {
 }
 
 
+const PROVIDER_PRESETS: { label: string; baseUrl: string; hint: string }[] = [
+  { label: "OpenAI", baseUrl: "https://api.openai.com/v1", hint: "Cloud — API key required" },
+  { label: "Ollama (local)", baseUrl: "http://localhost:11434/v1", hint: "No key needed — run `ollama serve`" },
+  { label: "LM Studio (local)", baseUrl: "http://localhost:1234/v1", hint: "No key needed — start the local server" },
+];
+
 function AiProviderCard() {
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
@@ -192,6 +199,8 @@ function AiProviderCard() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -206,17 +215,35 @@ function AiProviderCard() {
     })();
   }, []);
 
-  const save = async () => {
+  const save = async (clearKey = false) => {
     setSaving(true);
     try {
-      const saved = await ipc.aiSaveConfig(baseUrl, model, apiKey.trim() ? apiKey : undefined);
+      // An explicitly cleared key removes the stored credential so local
+      // providers run without auth.
+      const saved = await ipc.aiSaveConfig(baseUrl, model, clearKey ? "" : apiKey.trim() ? apiKey : undefined);
       setHasKey(saved.hasApiKey);
       setApiKey("");
-      toast.ok("AI provider settings saved");
+      toast.ok(clearKey ? "Stored API key cleared" : "AI provider settings saved");
     } catch (e) {
       toast.error(String(e));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const fetchModels = async () => {
+    if (!baseUrl.trim()) return;
+    setLoadingModels(true);
+    try {
+      const list = await ipc.aiListModels(baseUrl);
+      setModels(list);
+      if (list.length === 0) {
+        toast.error("The provider listed no models — is the server running with a model installed?");
+      }
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setLoadingModels(false);
     }
   };
 
@@ -242,29 +269,60 @@ function AiProviderCard() {
         files. Tailoring is optional; everything else in Kairo works without it.
       </p>
       <div className="mt-4 space-y-4">
+        <div className="flex flex-wrap gap-1.5">
+          {PROVIDER_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              title={preset.hint}
+              onClick={() => setBaseUrl(preset.baseUrl)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
+                baseUrl === preset.baseUrl
+                  ? "border-kairo-blue/50 bg-kairo-blue/10 text-kairo-blue"
+                  : "border-line bg-card text-muted hover:bg-accent-soft hover:text-ink",
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
         <Field label="Base URL">
           <Input
             value={baseUrl}
-            placeholder="https://api.openai.com/v1"
+            placeholder="http://localhost:11434/v1"
             onChange={(e) => setBaseUrl(e.target.value)}
           />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Model">
-            <Input value={model} placeholder="gpt-4o-mini" onChange={(e) => setModel(e.target.value)} />
+          <Field label="Model" hint={models.length > 0 ? `${models.length} available` : undefined}>
+            <Input
+              value={model}
+              placeholder="llama3.1:8b"
+              list="ai-model-list"
+              onChange={(e) => setModel(e.target.value)}
+            />
+            <datalist id="ai-model-list">
+              {models.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
           </Field>
           <Field
             label="API key"
-            hint={hasKey ? "a key is stored — leave blank to keep it" : "not set"}
+            hint={hasKey ? "a key is stored — leave blank to keep it" : "not set (fine for local providers)"}
           >
             <Input
               type="password"
               value={apiKey}
-              placeholder={hasKey ? "••••••••" : "sk-…"}
+              placeholder={hasKey ? "••••••••" : "not needed for local models"}
               onChange={(e) => setApiKey(e.target.value)}
             />
           </Field>
         </div>
+        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => void fetchModels()} disabled={loadingModels || !baseUrl.trim()}>
+          {loadingModels ? "Fetching…" : "Fetch model list from provider"}
+        </Button>
         <div className="flex items-center gap-3">
           <Button size="sm" onClick={() => void save()} disabled={saving || !baseUrl.trim() || !model.trim()}>
             {saving ? "Saving…" : "Save settings"}
@@ -272,6 +330,11 @@ function AiProviderCard() {
           <Button size="sm" variant="secondary" onClick={() => void test()} disabled={testing}>
             {testing ? "Testing…" : "Test connection"}
           </Button>
+          {hasKey ? (
+            <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400" onClick={() => void save(true)} disabled={saving}>
+              Clear stored key
+            </Button>
+          ) : null}
           {testResult ? (
             <span className={testResult.ok ? "text-xs text-emerald-600" : "text-xs text-red-600"}>
               {testResult.ok ? "✓ " : "✕ "}

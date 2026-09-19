@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Kairo's design constraints
+      description: Please confirm your idea fits them (or explain the trade-off).
+      options:
+        - label: Works offline or degrades with a clear error
+        - label: Does not fabricate resume content (evidence-backed facts only)
+        - label: Keeps data local-first

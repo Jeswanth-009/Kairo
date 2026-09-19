@@ -31,7 +31,11 @@ pub fn get_ai_config(conn: &Connection) -> Result<(AiConfig, bool), String> {
 
 pub fn save_ai_config(conn: &Connection, config: &AiConfig, api_key: Option<&str>) -> Result<(), String> {
     if let Some(key) = api_key {
-        if !key.trim().is_empty() {
+        if key.trim().is_empty() {
+            // Explicitly blanked out in the UI — clear the stored credential
+            // so local providers (Ollama, LM Studio) run without auth.
+            crate::ai::delete_api_key()?;
+        } else {
             crate::ai::store_api_key(key.trim())?;
         }
     }
