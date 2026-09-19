@@ -11,7 +11,9 @@ import {
   EyeOff,
   FileDown,
   FolderOpen,
+  Pencil,
   Plus,
+  RefreshCw,
   Sparkles,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
@@ -23,6 +25,7 @@ import { Tabs } from "../../components/ui/Tabs";
 import { Select } from "../../components/ui/inputs";
 import { SectionLabel } from "../../components/ui/SectionLabel";
 import { Skeleton, Spinner } from "../../components/ui/Feedback";
+import { ProfileDialog } from "../vault/ProfileDialog";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
 import { fmtAgo, fmtRange } from "../../lib/dateFmt";
@@ -31,9 +34,11 @@ import type {
   Job,
   PdfArtifact,
   PlanItem,
+  Profile,
   ResumePlan,
   ResumeTemplateId,
   ResumeVersion,
+  Skill,
   TailorSuggestion,
 } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
@@ -317,6 +322,28 @@ export default function ResumeStudioPage() {
 
   const templateId = (plan?.config.templateId ?? "jake") as ResumeTemplateId;
   const paper = plan?.config.paper ?? "letter";
+  const [syncing, setSyncing] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [showVaultSkills, setShowVaultSkills] = useState(false);
+  const [vaultSkills, setVaultSkills] = useState<Skill[]>([]);
+  const [vaultQuery, setVaultQuery] = useState("");
+
+  useEffect(() => {
+    ipc
+      .getProfile()
+      .then(setProfile)
+      .catch(() => setProfile(null));
+  }, []);
+
+  useEffect(() => {
+    if (showVaultSkills && vaultSkills.length === 0) {
+      ipc
+        .listSkills()
+        .then(setVaultSkills)
+        .catch((e) => toast.error(String(e)));
+    }
+  }, [showVaultSkills, vaultSkills.length]);
 
   useEffect(() => {
     void (async () => {
@@ -367,6 +394,64 @@ export default function ResumeStudioPage() {
         toast.error(String(e));
       }
     })();
+  };
+
+  /**
+   * Re-runs the composer against the current Vault and merges the user's
+   * curation back in: exclusions per item/bullet/achievement (matched by id)
+   * and custom skills survive, so a sync never wipes manual work.
+   */
+  const syncFromVault = async () => {
+    if (!plan || jobId === null) return;
+    setSyncing(true);
+    try {
+      const fresh = await ipc.runComposer(jobId, plan.config);
+      const prev = plan;
+      const mergeItem = (item: PlanItem): PlanItem => {
+        const old = [...prev.experience, ...prev.projects].find(
+          (i) => i.entityType === item.entityType && i.id === item.id,
+        );
+        if (!old) return item;
+        return {
+          ...item,
+          excluded: old.excluded,
+          bullets: item.bullets.map((b) => ({
+            ...b,
+            excluded: old.bullets.find((ob) => ob.id === b.id)?.excluded ?? false,
+          })),
+        };
+      };
+      const merged: ResumePlan = {
+        ...fresh,
+        experience: fresh.experience.map(mergeItem),
+        projects: fresh.projects.map(mergeItem),
+        achievements: fresh.achievements?.map((a) => ({
+          ...a,
+          excluded: prev.achievements?.find((pa) => pa.id === a.id)?.excluded ?? false,
+        })),
+        skills: [...fresh.skills],
+        excludedSkills: prev.excludedSkills ?? [],
+      };
+      // Custom skills that no longer exist in the Vault stay in the plan.
+      for (const sk of prev.skills) {
+        if (!merged.skills.some((x) => x.toLowerCase() === sk.toLowerCase())) {
+          merged.skills.push(sk);
+        }
+      }
+      merged.excludedSkills = (merged.excludedSkills ?? []).filter((sk) =>
+        merged.skills.some((x) => x.toLowerCase() === sk.toLowerCase()),
+      );
+      setPlan(merged);
+      await ipc.savePlan(jobId, merged);
+      setEstimatedLines(await ipc.estimatePlanLines(merged));
+      toast.ok(
+        `Synced from Vault — ${merged.skills.length} skills, ${merged.achievements?.length ?? 0} achievements, ${merged.experience.length + merged.projects.length} records`,
+      );
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const findItem = (p: ResumePlan, entityType: string, id: number) =>
@@ -471,8 +556,15 @@ export default function ResumeStudioPage() {
   // Computed
   // ---------------------------------------------------------------------------
 
-  const capacity = CAPACITY[templateId] ?? 56;
+  const pages = Math.min(3, Math.max(1, plan?.config.targetPages ?? 1));
+  const capacity = (CAPACITY[templateId] ?? 56) * pages;
   const overflows = estimatedLines !== null && estimatedLines > capacity;
+  // The compiled PDF can lag behind the current picks (same file path, older
+  // template/paper) — surface that instead of silently showing stale output.
+  const artifactStale =
+    artifact != null &&
+    ((artifact.templateId != null && artifact.templateId !== "" && artifact.templateId !== templateId) ||
+      (artifact.paper != null && artifact.paper !== "" && artifact.paper !== paper));
 
   const excludedCount = useMemo(
     () =>
@@ -516,8 +608,28 @@ export default function ResumeStudioPage() {
     return (
       <div className="mx-auto max-w-3xl p-8">
         <Card className="p-8 text-center">
-          <p className="text-sm text-muted">No plan for this workspace yet — compose one in the Plan tab.</p>
-          <div className="mt-4"><Button onClick={() => navigate(`/jobs/${jobId}`)}>Open workspace</Button></div>
+          <p className="text-sm text-muted">No plan for this workspace yet — compose one from the Vault right here.</p>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <Button
+              onClick={() =>
+                jobId !== null
+                  ? void (async () => {
+                      try {
+                        const fresh = await ipc.runComposer(jobId);
+                        setPlan(fresh);
+                        setEstimatedLines(await ipc.estimatePlanLines(fresh));
+                        toast.ok("Plan composed from the Vault");
+                      } catch (e) {
+                        toast.error(String(e));
+                      }
+                    })()
+                  : undefined
+              }
+            >
+              Compose from Vault
+            </Button>
+            <Button variant="secondary" onClick={() => navigate(`/jobs/${jobId}`)}>Open workspace</Button>
+          </div>
         </Card>
       </div>
     );
@@ -561,13 +673,23 @@ export default function ResumeStudioPage() {
         {/* ------------------------------------------------------------- */}
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1 lg:row-span-2 xl:row-span-1">
           {/* Page fit meter */}
-          <div className="flex items-center justify-between rounded-xl border border-line bg-card px-4 py-2.5 shadow-card">
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-card px-4 py-2.5 shadow-card">
             <span className="text-xs font-medium text-muted">Page fit</span>
-            <Badge tone={estimatedLines === null ? "neutral" : overflows ? "amber" : "green"}>
-              {estimatedLines === null
-                ? "no estimate"
-                : `~${estimatedLines}/${capacity} lines${overflows ? " · may overflow" : " · fits"}`}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge tone={estimatedLines === null ? "neutral" : overflows ? "amber" : "green"}>
+                {estimatedLines === null
+                  ? "no estimate"
+                  : `~${estimatedLines}/${capacity} lines${overflows ? " · may overflow" : " · fits"}`}
+              </Badge>
+              <IconButton
+                label="Sync from Vault"
+                onClick={() => void syncFromVault()}
+                disabled={syncing}
+                title="Re-pull records, skills and achievements from the Vault (keeps your exclusions and custom skills)"
+              >
+                {syncing ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />}
+              </IconButton>
+            </div>
           </div>
 
           {/* Header summary */}
@@ -582,8 +704,13 @@ export default function ResumeStudioPage() {
                   {[plan.header.email, plan.header.phone, plan.header.location].filter(Boolean).join(" · ") || "no contact details"}
                 </p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => navigate("/vault")}>
-                Edit in Vault
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingProfile(true)}
+                title="Edit name, email, phone, GitHub, LinkedIn… (saved to the Vault and applied here)"
+              >
+                <Pencil className="size-3.5" /> Contact details
               </Button>
             </div>
           </Card>
@@ -782,6 +909,84 @@ export default function ResumeStudioPage() {
               </CardTitle>
             </div>
 
+            <div className="mb-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full justify-center"
+                onClick={() => setShowVaultSkills((v) => !v)}
+              >
+                {showVaultSkills ? "Hide vault skills" : "Browse vault skills"}
+              </Button>
+              {showVaultSkills ? (
+                <div className="mt-2 rounded-lg border border-line">
+                  <div className="border-b border-line p-2">
+                    <input
+                      type="text"
+                      placeholder={`Search ${vaultSkills.length} vault skills…`}
+                      value={vaultQuery}
+                      onChange={(e) => setVaultQuery(e.target.value)}
+                      className="h-8 w-full rounded-md border border-line bg-card px-2.5 text-xs text-ink placeholder:text-muted/70 focus:border-kairo-blue focus:outline-none"
+                    />
+                  </div>
+                  <div className="max-h-44 overflow-y-auto p-1.5">
+                    {vaultSkills.length === 0 ? (
+                      <p className="px-2 py-3 text-xs text-muted">
+                        Loading vault skills…
+                      </p>
+                    ) : (
+                      vaultSkills
+                        .filter((sk) =>
+                          sk.canonicalName.toLowerCase().includes(vaultQuery.trim().toLowerCase()),
+                        )
+                        .map((sk) => {
+                          const inPlan = plan.skills.some(
+                            (x) => x.toLowerCase() === sk.canonicalName.toLowerCase(),
+                          );
+                          return (
+                            <label
+                              key={sk.id}
+                              className={cn(
+                                "flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-ink",
+                                inPlan ? "bg-kairo-blue/5 dark:bg-kairo-blue/10" : "hover:bg-accent-soft",
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={inPlan}
+                                  onChange={() => {
+                                    mutatePlan((p) => {
+                                      const lower = sk.canonicalName.toLowerCase();
+                                      if (inPlan) {
+                                        p.skills = p.skills.filter((x) => x.toLowerCase() !== lower);
+                                        p.excludedSkills = (p.excludedSkills ?? []).filter(
+                                          (x) => x.toLowerCase() !== lower,
+                                        );
+                                      } else {
+                                        if (!p.skills.some((x) => x.toLowerCase() === lower)) {
+                                          p.skills.push(sk.canonicalName);
+                                        }
+                                        p.excludedSkills = (p.excludedSkills ?? []).filter(
+                                          (x) => x.toLowerCase() !== lower,
+                                        );
+                                      }
+                                    });
+                                  }}
+                                  className="h-4 w-4 rounded border-line-strong accent-kairo-blue"
+                                />
+                                {sk.canonicalName}
+                              </span>
+                              <span className="text-[10px] uppercase tracking-wide text-muted">{sk.category}</span>
+                            </label>
+                          );
+                        })
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <form onSubmit={addCustomSkill} className="mb-3 flex gap-1.5">
               <input
                 type="text"
@@ -843,6 +1048,11 @@ export default function ResumeStudioPage() {
             <div className="flex items-center gap-2">
               <CardTitle>Preview</CardTitle>
               {artifact?.pageCount ? <Badge tone="neutral">{artifact.pageCount} page(s)</Badge> : null}
+              {artifact?.templateId ? (
+                <Badge tone={artifactStale ? "amber" : "blue"}>
+                  {TEMPLATES.find((t) => t.id === artifact.templateId)?.name ?? artifact.templateId}
+                </Badge>
+              ) : null}
             </div>
             {artifact ? (
               <Tabs
@@ -856,8 +1066,22 @@ export default function ResumeStudioPage() {
             ) : null}
           </div>
 
+          {artifactStale ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-warn-soft px-4 py-2.5 text-xs text-amber-800 dark:border-amber-500/30 dark:text-amber-200">
+              <span>
+                The PDF on disk was compiled as{" "}
+                <strong>{TEMPLATES.find((t) => t.id === artifact?.templateId)?.name ?? artifact?.templateId ?? "an older template"}</strong>
+                {artifact?.paper ? <span> · {artifact.paper === "a4" ? "A4" : "Letter"}</span> : null} — your picks changed.
+              </span>
+              <Button size="sm" variant="secondary" onClick={() => void exportPdf()} disabled={exporting}>
+                {exporting ? "Compiling…" : "Recompile"}
+              </Button>
+            </div>
+          ) : null}
+
           {previewMode === "pdf" && artifact ? (
             <PdfViewer
+              key={artifact.compiledAt ?? artifact.pdfPath}
               pdfPath={artifact.pdfPath}
               candidateName={plan.header.fullName}
               className="min-h-0 flex-1"
@@ -913,16 +1137,30 @@ export default function ResumeStudioPage() {
               })}
             </div>
 
-            <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
-              <span className="text-xs font-medium text-muted">Paper</span>
-              <Select
-                value={paper}
-                onChange={(e) => mutatePlan((p) => { p.config.paper = e.target.value; })}
-                className="w-28 py-1 text-xs"
-              >
-                <option value="letter">Letter</option>
-                <option value="a4">A4</option>
-              </Select>
+            <div className="mt-3 space-y-2 border-t border-line pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-muted">Paper</span>
+                <Select
+                  value={paper}
+                  onChange={(e) => mutatePlan((p) => { p.config.paper = e.target.value; })}
+                  className="w-24 py-1 text-xs"
+                >
+                  <option value="letter">Letter</option>
+                  <option value="a4">A4</option>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-muted">Target pages</span>
+                <Select
+                  value={String(pages)}
+                  onChange={(e) => mutatePlan((p) => { p.config.targetPages = Number(e.target.value); })}
+                  className="w-24 py-1 text-xs"
+                >
+                  <option value="1">1 page</option>
+                  <option value="2">2 pages</option>
+                  <option value="3">3 pages</option>
+                </Select>
+              </div>
             </div>
           </Card>
 
@@ -945,7 +1183,7 @@ export default function ResumeStudioPage() {
             </Button>
             {overflows ? (
               <p className="mt-2 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
-                Estimate exceeds one page for this template — check the PDF page count after export.
+                Estimate exceeds {pages} page{pages > 1 ? "s" : ""} for this template — raise "Target pages" or trim content, and check the page count after export.
               </p>
             ) : null}
 
@@ -1003,8 +1241,10 @@ export default function ResumeStudioPage() {
                     size="sm"
                     className="ml-auto"
                     onClick={() => {
-                      void navigator.clipboard.writeText(artifact.pdfPath);
-                      toast.ok("Path copied to clipboard");
+                      navigator.clipboard
+                        .writeText(artifact.pdfPath)
+                        .then(() => toast.ok("Path copied to clipboard"))
+                        .catch((e) => toast.error(`Copy failed: ${String(e)}`));
                     }}
                   >
                     <Copy />
@@ -1053,6 +1293,38 @@ export default function ResumeStudioPage() {
           </Card>
         </div>
       </div>
+
+      <ProfileDialog
+        open={editingProfile}
+        profile={profile ?? {
+          fullName: plan.header.fullName,
+          headline: plan.header.headline,
+          email: plan.header.email,
+          phone: plan.header.phone,
+          location: plan.header.location,
+          website: plan.header.website,
+          github: plan.header.github,
+          linkedin: plan.header.linkedin,
+          summary: "",
+        }}
+        onClose={() => setEditingProfile(false)}
+        onSaved={(p) => {
+          setProfile(p);
+          // Apply immediately to the plan snapshot so the next export uses it.
+          mutatePlan((plan) => {
+            plan.header = {
+              fullName: p.fullName,
+              headline: p.headline,
+              email: p.email,
+              phone: p.phone,
+              location: p.location,
+              website: p.website,
+              github: p.github,
+              linkedin: p.linkedin,
+            };
+          });
+        }}
+      />
     </div>
   );
 }

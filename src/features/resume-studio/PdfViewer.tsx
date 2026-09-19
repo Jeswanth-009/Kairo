@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
-import { Download, ExternalLink, FolderOpen, HardDriveDownload, Maximize2, Minus, Plus } from "lucide-react";
+import { ExternalLink, FolderOpen, HardDriveDownload, Maximize2, Minus, Plus } from "lucide-react";
 import { ipc } from "../../lib/ipc";
 import { toast } from "../../stores/toastStore";
 import { Skeleton, Spinner } from "../../components/ui/Feedback";
@@ -83,7 +83,6 @@ export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps)
   const [fitWidth, setFitWidth] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [savingDownload, setSavingDownload] = useState(false);
-  const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
 
   const suggestedFileName = candidateName
     ? `${candidateName.replace(/\s+/g, "_")}_Resume.pdf`
@@ -103,7 +102,6 @@ export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps)
         const bytes = await ipc.readPdfBytes(pdfPath);
         if (cancelled) return;
         const uint8 = new Uint8Array(bytes);
-        setPdfData(uint8);
         const doc = await pdfjsLib.getDocument({ data: uint8 }).promise;
         if (cancelled) return;
         setPdfDoc(doc);
@@ -161,24 +159,6 @@ export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps)
   const zoomOut = () => {
     setFitWidth(false);
     setScale((s) => Math.max(MIN_SCALE, +((s ?? 1) - 0.15).toFixed(2)));
-  };
-
-  const handleBrowserDownload = () => {
-    if (!pdfData) return;
-    try {
-      const blob = new Blob([pdfData], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = suggestedFileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.ok(`Downloading ${suggestedFileName}`);
-    } catch (e) {
-      toast.error(String(e));
-    }
   };
 
   const handleSaveToDownloads = async () => {
@@ -259,15 +239,6 @@ export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps)
           >
             <HardDriveDownload className="size-3.5" />
             Save to Downloads
-          </button>
-          <button
-            type="button"
-            onClick={handleBrowserDownload}
-            className="flex items-center gap-1.5 rounded-md border border-line bg-card px-2 py-1.5 text-[11px] font-medium text-ink hover:bg-accent-soft"
-            title="Download PDF"
-          >
-            <Download className="size-3.5" />
-            Download
           </button>
           <button
             type="button"

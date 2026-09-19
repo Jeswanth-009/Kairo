@@ -37,6 +37,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ("0008_pdf", include_str!("../../migrations/0008_pdf.sql")),
     ("0009_versions", include_str!("../../migrations/0009_versions.sql")),
     ("0010_applications", include_str!("../../migrations/0010_applications.sql")),
+    ("0011_artifact_template", include_str!("../../migrations/0011_artifact_template.sql")),
 ];
 
 pub fn open_and_migrate(path: &Path) -> Result<Connection, Box<dyn Error>> {
@@ -112,7 +113,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
-        assert_eq!(names.len(), 10);
+        assert_eq!(names.len(), 11);
     }
 
     #[test]

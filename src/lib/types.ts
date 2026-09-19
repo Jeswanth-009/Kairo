@@ -495,6 +495,9 @@ export interface PdfArtifact {
   pdfPath: string;
   pageCount: number | null;
   compiledAt: string | null;
+  /** Template the PDF was compiled with (empty for pre-3.0 artifacts). */
+  templateId?: string;
+  paper?: string;
 }
 
 // --- Versions (Phase 10) -------------------------------------------------------

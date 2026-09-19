@@ -17,12 +17,18 @@ pub struct PdfArtifact {
     pub pdf_path: String,
     pub page_count: Option<i64>,
     pub compiled_at: Option<String>,
+    /// Template the PDF was compiled with, so the UI can flag staleness when
+    /// the Studio's picked template moves on. Empty for pre-3.0 artifacts.
+    #[serde(default)]
+    pub template_id: String,
+    #[serde(default)]
+    pub paper: String,
 }
 
 pub fn get_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfArtifact>, String> {
     let mut stmt = sql_err(conn.prepare(
-        "SELECT job_id, tex_path, pdf_path, page_count, compiled_at FROM resume_plans \
-         WHERE job_id = ?1 AND pdf_path IS NOT NULL",
+        "SELECT job_id, tex_path, pdf_path, page_count, compiled_at, artifact_template_id, artifact_paper \
+         FROM resume_plans WHERE job_id = ?1 AND pdf_path IS NOT NULL",
     ))?;
     match stmt.query_row([job_id], |row| {
         Ok(PdfArtifact {
@@ -31,6 +37,8 @@ pub fn get_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfArtifact
             pdf_path: row.get(2)?,
             page_count: row.get(3)?,
             compiled_at: row.get(4)?,
+            template_id: row.get(5)?,
+            paper: row.get(6)?,
         })
     }) {
         Ok(a) => Ok(Some(a)),
@@ -45,8 +53,16 @@ pub fn save_artifact(
 ) -> Result<(), String> {
     sql_err(conn.execute(
         "UPDATE resume_plans SET pdf_path = ?1, tex_path = ?2, page_count = ?3, \
-           compiled_at = datetime('now') WHERE job_id = ?4",
-        params![artifact.pdf_path, artifact.tex_path, artifact.page_count, artifact.job_id],
+           artifact_template_id = ?4, artifact_paper = ?5, \
+           compiled_at = datetime('now') WHERE job_id = ?6",
+        params![
+            artifact.pdf_path,
+            artifact.tex_path,
+            artifact.page_count,
+            artifact.template_id,
+            artifact.paper,
+            artifact.job_id
+        ],
     ))?;
     Ok(())
 }
@@ -224,6 +240,8 @@ pub fn compile_locked(
             pdf_path: pdf_path.display().to_string(),
             page_count,
             compiled_at: None,
+            template_id: template_id.to_string(),
+            paper: plan.config.paper.clone(),
         },
         log_tail,
     })
