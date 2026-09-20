@@ -22,7 +22,20 @@ pub fn get_ai_config(conn: &Connection) -> Result<(AiConfig, bool), String> {
         }
     };
     let config = match config_json {
-        Some(json) => serde_json::from_str(&json).unwrap_or_default(),
+        Some(json) => match serde_json::from_str(&json) {
+            Ok(config) => config,
+            Err(e) => {
+                // Never silently fall back to the OpenAI default: the stored
+                // key would then be used against a paid endpoint the user
+                // never chose.
+                crate::logging::log_event(
+                    "warn",
+                    "ai_config_corrupt",
+                    &[("error", e.to_string())],
+                );
+                return Err("Stored AI provider config is corrupt — re-enter it in Settings.".to_string());
+            }
+        },
         None => AiConfig::default(),
     };
     let has_key = crate::ai::load_api_key()?.is_some();
@@ -218,11 +231,14 @@ pub fn save_manual_edit(
 ) -> Result<TailorSuggestion, String> {
     let grounding = assemble_grounding(conn, job_id, bullet_id)?;
     let report = claim_change_report(conn, job_id, bullet_id, text)?;
-    sql_err(conn.execute(
+    // Replace-then-insert atomically — a failed insert must not lose the
+    // previously accepted wording.
+    let tx = sql_err(conn.unchecked_transaction())?;
+    sql_err(tx.execute(
         "DELETE FROM tailor_suggestions WHERE job_id = ?1 AND bullet_id = ?2 AND status = 'accepted'",
         params![job_id, bullet_id],
     ))?;
-    sql_err(conn.execute(
+    sql_err(tx.execute(
         "INSERT INTO tailor_suggestions (job_id, bullet_id, original_text, suggested_text, status, validation, model)          VALUES (?1, ?2, ?3, ?4, 'accepted', ?5, 'manual')",
         params![
             job_id,
@@ -232,6 +248,7 @@ pub fn save_manual_edit(
             serde_json::to_string(&report).map_err(|e| e.to_string())?
         ],
     ))?;
+    tx.commit().map_err(|e| e.to_string())?;
     let id = conn.last_insert_rowid();
     let mut stmt = sql_err(conn.prepare(&format!(
         "SELECT {SUGGESTION_COLS} FROM tailor_suggestions WHERE id = ?1"

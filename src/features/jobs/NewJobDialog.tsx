@@ -108,6 +108,7 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
       navigate(`/jobs/${created.job.id}`);
     } catch (e) {
       setError(String(e));
+    } finally {
       setBusy(false);
     }
   };

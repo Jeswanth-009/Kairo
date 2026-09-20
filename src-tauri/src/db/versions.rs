@@ -6,6 +6,7 @@
 //! "reopen what I sent" must stay possible forever.
 
 use super::vault::sql_err;
+use crate::composer::ResumePlan;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
@@ -47,12 +48,10 @@ fn hydrate(row: &rusqlite::Row) -> rusqlite::Result<ResumeVersion> {
     let pdf_path: String = row.get(4)?;
     let created_at: String = row.get(5)?;
     let snapshot: VersionSnapshot = serde_json::from_str(&snapshot_json).unwrap_or_else(|_| {
-        // Corrupt snapshot: keep the metadata, expose an empty body rather than failing.
-        serde_json::from_value(serde_json::json!({
-            "versionNumber": version_number,
-            "pdfPath": pdf_path,
-        }))
-        .unwrap_or(VersionSnapshot {
+        // Corrupt snapshot: keep the metadata, expose an empty body rather
+        // than failing the whole list. Constructed directly — a JSON
+        // round-trip cannot build a valid default (required fields).
+        VersionSnapshot {
             version_number,
             job: super::jobs::Job {
                 id: job_id,
@@ -66,25 +65,38 @@ fn hydrate(row: &rusqlite::Row) -> rusqlite::Result<ResumeVersion> {
             },
             requirements: vec![],
             match_report: None,
-            plan: serde_json::from_value(serde_json::json!({
-                "composerVersion": 0,
-                "config": {},
-                "header": {},
-                "education": [],
-                "experience": [],
-                "projects": [],
-                "skills": [],
-                "estimatedLines": 0,
-                "fitsOnePage": false,
-                "warnings": []
-            }))
-            .unwrap(),
+            plan: ResumePlan {
+                composer_version: 0,
+                config: crate::composer::ComposerConfig::default(),
+                header: crate::composer::PlanHeader {
+                    full_name: String::new(),
+                    headline: String::new(),
+                    email: String::new(),
+                    phone: String::new(),
+                    location: String::new(),
+                    website: String::new(),
+                    github: String::new(),
+                    linkedin: String::new(),
+                },
+                education: vec![],
+                experience: vec![],
+                projects: vec![],
+                achievements: vec![],
+                skills: vec![],
+                skills_grouped: vec![],
+                excluded_skills: vec![],
+                estimated_lines: 0,
+                fits_one_page: false,
+                warnings: vec![format!(
+                    "This version's snapshot could not be read (corrupt row) — metadata is intact."
+                )],
+            },
             accepted_tailorings: vec![],
             matching_version: 0,
             composer_version: 0,
             template_version: 0,
             pdf_path: pdf_path.clone(),
-        })
+        }
     });
     Ok(ResumeVersion { id, job_id, version_number, created_at, pdf_path, snapshot })
 }

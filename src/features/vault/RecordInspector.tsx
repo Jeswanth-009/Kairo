@@ -362,6 +362,25 @@ function EvidenceDialog({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Re-sync the form on every open — the dialog stays mounted inside its tab.
+  useEffect(() => {
+    if (open) {
+      setValues(
+        evidence ?? {
+          id: 0,
+          entityType,
+          entityId,
+          kind: "repository",
+          title: "",
+          reference: "",
+          note: "",
+          verified: false,
+        },
+      );
+      setError(null);
+    }
+  }, [open, evidence, entityType, entityId]);
+
   if (!open) return null;
 
   const set = <K extends keyof Evidence>(name: K, value: Evidence[K]) =>
@@ -600,6 +619,16 @@ function BulletDialog({
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Re-sync the form on every open — the dialog stays mounted inside its tab.
+  useEffect(() => {
+    if (open) {
+      setText(bullet?.text ?? "");
+      setApproved(bullet?.approved ?? false);
+      setEvidenceIds(bullet?.evidence.map((r) => r.id) ?? []);
+      setError(null);
+    }
+  }, [open, bullet]);
 
   if (!open) return null;
 
@@ -854,6 +883,23 @@ function RuleDialog({
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Re-sync the form on every open — the dialog stays mounted inside its tab.
+  useEffect(() => {
+    if (open) {
+      setValues(
+        rule ?? {
+          id: 0,
+          entityType,
+          entityId,
+          ruleType: "forbidden_claim",
+          pattern: "",
+          note: "",
+        },
+      );
+      setError(null);
+    }
+  }, [open, rule, entityType, entityId]);
 
   if (!open) return null;
 

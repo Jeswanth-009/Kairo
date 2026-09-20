@@ -15,6 +15,9 @@ pub const KEEP_BACKUPS: usize = 10;
 /// Backup file names are generated here and restore resolves them strictly
 /// against this pattern — anything else is rejected before touching disk.
 const NAME_PATTERN: &str = "kairo-backup-";
+/// Suffix marking automatic pre-restore safety snapshots — always restorable,
+/// never pruned by the rolling window.
+const PRE_RESTORE_SUFFIX: &str = "-pre-restore";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,11 +42,20 @@ pub fn backups_dir(app_data_dir: &Path) -> PathBuf {
 
 /// Create a consistent backup of `conn` in `dir` and prune old ones.
 pub fn create_backup(conn: &Connection, dir: &Path) -> Result<BackupInfo, String> {
+    create_backup_inner(conn, dir, None)
+}
+
+/// Shared backup writer; `prefix` distinguishes user backups from the
+/// automatic pre-restore safety snapshot (which pruning must never delete).
+fn create_backup_inner(conn: &Connection, dir: &Path, suffix: Option<&str>) -> Result<BackupInfo, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create backups dir: {e}"))?;
     let stamp: String = sql_err(
         conn.query_row("SELECT strftime('%Y%m%d-%H%M%S', 'now')", [], |r| r.get(0)),
     )?;
-    let file_name = format!("{NAME_PATTERN}{stamp}.db");
+    let file_name = match suffix {
+        Some(suffix) => format!("{NAME_PATTERN}{stamp}{suffix}.db"),
+        None => format!("{NAME_PATTERN}{stamp}.db"),
+    };
     let path = dir.join(&file_name);
 
     let mut dst = Connection::open(&path).map_err(|e| format!("cannot open backup file: {e}"))?;
@@ -62,7 +74,9 @@ pub fn create_backup(conn: &Connection, dir: &Path) -> Result<BackupInfo, String
     }
     drop(dst);
 
-    prune_old_backups(dir)?;
+    if suffix.is_none() {
+        prune_old_backups(dir)?;
+    }
     let bytes = file_size(&path)?;
     Ok(BackupInfo {
         file_name,
@@ -116,6 +130,12 @@ pub fn restore_backup(live: &mut Connection, dir: &Path, file_name: &str) -> Res
     }
     let src = Connection::open(&path).map_err(|e| format!("cannot open backup: {e}"))?;
     validate_kairo_db(&src)?;
+
+    // Safety net: snapshot the current live state first, so restoring the
+    // wrong backup (or an older-schema one) is always reversible. The safety
+    // snapshot is exempt from pruning.
+    let safety = create_backup_inner(live, dir, Some(PRE_RESTORE_SUFFIX))?;
+    let _ = safety;
 
     {
         let backup = rusqlite::backup::Backup::new(&src, live)
@@ -183,6 +203,7 @@ fn is_backup_name(name: &str) -> bool {
         Some(stem) => stem,
         None => return false,
     };
+    let stem = stem.strip_suffix(PRE_RESTORE_SUFFIX).unwrap_or(stem);
     let stamp = match stem.strip_prefix(NAME_PATTERN) {
         Some(stamp) => stamp,
         None => return false,
@@ -202,6 +223,11 @@ fn is_backup_name(name: &str) -> bool {
 fn prune_old_backups(dir: &Path) -> Result<(), String> {
     let backups = list_backups(dir)?;
     for old in backups.iter().skip(KEEP_BACKUPS) {
+        // Safety snapshots are exempt — they exist precisely for the case
+        // where everything else went wrong.
+        if old.file_name.contains(PRE_RESTORE_SUFFIX) {
+            continue;
+        }
         let _ = std::fs::remove_file(&old.path);
     }
     Ok(())

@@ -138,10 +138,16 @@ pub fn update_application(conn: &Connection, app: &Application) -> Result<Applic
 }
 
 pub fn set_status(conn: &Connection, id: i64, status: &str) -> Result<Application, String> {
-    sql_err(conn.execute(
+    if !STATUSES.contains(&status) {
+        return Err(format!("status must be one of: {}", STATUSES.join(", ")));
+    }
+    let changed = sql_err(conn.execute(
         "UPDATE applications SET status = ?1, updated_at = datetime('now') WHERE id = ?2",
         params![status, id],
     ))?;
+    if changed == 0 {
+        return Err("Application not found".to_string());
+    }
     get_application(conn, id)
 }
 

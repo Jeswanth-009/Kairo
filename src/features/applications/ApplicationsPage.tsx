@@ -55,24 +55,34 @@ function ApplicationDialog({
   onClose: () => void;
   onSaved: (app: Application, isNew: boolean) => void;
 }) {
-  const [values, setValues] = useState<Application>(
-    initial ?? {
-      id: 0,
-      jobId: null,
-      resumeVersionId: null,
-      company: "",
-      role: "",
-      url: "",
-      status: "wishlist",
-      appliedDate: null,
-      nextAction: "",
-      notes: "",
-    },
-  );
+  const empty: Application = {
+    id: 0,
+    jobId: null,
+    resumeVersionId: null,
+    company: "",
+    role: "",
+    url: "",
+    status: "wishlist",
+    appliedDate: null,
+    nextAction: "",
+    notes: "",
+  };
+  const [values, setValues] = useState<Application>(initial ?? empty);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof Application>(name: K, value: Application[K]) =>
     setValues((prev) => ({ ...prev, [name]: value }));
+
+  // The dialog stays mounted in its parent — re-sync the form every time it
+  // opens so "Edit" never starts from a stale first-mount snapshot.
+  useEffect(() => {
+    if (open) {
+      setValues(initial ?? empty);
+      setError(null);
+    }
+    // `initial` is captured when the parent opens the dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial]);
 
   if (!open) return null;
 

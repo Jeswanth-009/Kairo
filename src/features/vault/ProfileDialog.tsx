@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Textarea } from "../../components/ui/inputs";
@@ -33,6 +33,16 @@ export function ProfileDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // The dialog stays mounted in its parent — re-sync the form every time it
+  // opens so edits never start from a stale/blank snapshot.
+  useEffect(() => {
+    if (open) {
+      setValues(profile);
+      setErrors({});
+      setServerError(null);
+    }
+  }, [open, profile]);
 
   const set = (name: keyof Profile, value: string) => {
     setValues((prev) => ({ ...prev, [name]: value }));

@@ -32,9 +32,19 @@ pub fn update_job(state: State<'_, DbState>, job: jobs::Job) -> Result<jobs::Job
 }
 
 #[tauri::command]
-pub fn delete_job(state: State<'_, DbState>, id: i64) -> Result<MutationOk, String> {
+pub fn delete_job(
+    state: State<'_, DbState>,
+    id: i64,
+    app_data_dir: State<'_, crate::commands::pdf_commands::AppDataDir>,
+) -> Result<MutationOk, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     jobs::delete_job(&conn, id)?;
+    drop(conn);
+    // Best-effort cleanup of the job's LaTeX build dir and version copies.
+    let dir = app_data_dir.0.join("pdf").join(format!("job_{id}"));
+    if dir.exists() {
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     Ok(MutationOk { ok: true })
 }
 

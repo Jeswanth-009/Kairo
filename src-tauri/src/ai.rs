@@ -110,6 +110,15 @@ fn agent() -> ureq::Agent {
         .build()
 }
 
+/// Short-timeout agent for cheap GETs (model listing) — a dead endpoint must
+/// not occupy the caller for the full chat timeout.
+fn quick_agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(15))
+        .user_agent("kairo-tailor")
+        .build()
+}
+
 /// Calls POST {base_url}/chat/completions and returns the assistant text.
 /// `api_key` is optional: empty means a local provider without auth.
 pub fn chat(config: &AiConfig, api_key: &str, system: &str, user: &str) -> Result<String, String> {
@@ -122,26 +131,42 @@ pub fn chat(config: &AiConfig, api_key: &str, system: &str, user: &str) -> Resul
     }
     let url = format!("{base}/chat/completions");
 
-    let body = serde_json::json!({
+    let base_body = serde_json::json!({
         "model": config.model,
         "temperature": 0.2,
         "messages": [
             { "role": "system", "content": system },
             { "role": "user", "content": user }
         ],
-        "response_format": { "type": "json_object" }
     });
+    // Structured output when the provider supports it; several
+    // OpenAI-compatible servers reject the field outright.
+    let with_format = {
+        let mut b = base_body.clone();
+        b["response_format"] = serde_json::json!({ "type": "json_object" });
+        b
+    };
 
-    let mut request = agent().post(&url).set("Content-Type", "application/json");
-    if !api_key.trim().is_empty() {
-        request = request.set("Authorization", &format!("Bearer {}", api_key.trim()));
-    }
+    let send = |body: &serde_json::Value| -> Result<ChatResponse, ureq::Error> {
+        let mut request = agent().post(&url).set("Content-Type", "application/json");
+        if !api_key.trim().is_empty() {
+            request = request.set("Authorization", &format!("Bearer {}", api_key.trim()));
+        }
+        request
+            .send_string(&body.to_string())?
+            .into_json()
+            .map_err(ureq::Error::from)
+    };
 
-    let response: ChatResponse = request
-        .send_string(&body.to_string())
-        .map_err(http_error)?
-        .into_json()
-        .map_err(|e| e.to_string())?;
+    let response: ChatResponse = match send(&with_format) {
+        Ok(r) => r,
+        Err(ureq::Error::Status(400, _)) => {
+            // Provider doesn't understand response_format — the prompt already
+            // demands JSON, so retry without the field.
+            send(&base_body).map_err(http_error)?
+        }
+        Err(e) => return Err(http_error(e)),
+    };
 
     response
         .choices
@@ -157,7 +182,7 @@ pub fn list_models(base_url: &str, api_key: &str) -> Result<Vec<String>, String>
     if base.is_empty() {
         return Err("No provider base URL configured.".to_string());
     }
-    let mut request = agent().get(&format!("{base}/models"));
+    let mut request = quick_agent().get(&format!("{base}/models"));
     if !api_key.trim().is_empty() {
         request = request.set("Authorization", &format!("Bearer {}", api_key.trim()));
     }

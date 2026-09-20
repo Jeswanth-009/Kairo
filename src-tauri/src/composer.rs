@@ -124,6 +124,10 @@ pub struct ComposerInput {
     /// Requirement texts the bullets are scored against.
     pub requirement_texts: Vec<String>,
     pub config: ComposerConfig,
+    /// Non-fatal problems gathered while assembling input (e.g. bullet
+    /// creation failures) — merged into the plan's warnings.
+    #[serde(default)]
+    pub extra_warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -368,6 +372,8 @@ pub fn bullet_supports(text: &str, requirement_texts: &[String]) -> Vec<String> 
 
 pub fn compose(input: &ComposerInput) -> ResumePlan {
     let mut warnings: Vec<String> = Vec::new();
+    // Surface assembly-time problems (bullet creation failures, etc.).
+    warnings.extend(input.extra_warnings.iter().cloned());
 
     // 1. Mandatory layout: header + education are reserved first.
     let header = input
@@ -669,10 +675,9 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
 
     let fits_one_page = estimated_lines <= capacity;
     if !fits_one_page {
-        warnings.push(format!(
-            "Content still exceeds one page at the minimum {}pt font — raise targetPages or trim the Vault entries.",
-            input.config.min_font_size_pt
-        ));
+        warnings.push(
+            "Content still exceeds the target page count — raise Target pages in the Studio or trim the Vault entries.".to_string(),
+        );
     }
 
     ResumePlan {
@@ -785,6 +790,7 @@ mod tests {
             entities,
             achievements: vec![],
             vault_skills: vec![],
+        extra_warnings: Vec::new(),
             requirement_texts: requirements.iter().map(|s| s.to_string()).collect(),
             config,
         }

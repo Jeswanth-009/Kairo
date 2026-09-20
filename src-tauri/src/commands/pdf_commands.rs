@@ -96,8 +96,10 @@ pub struct AppDataDir(pub std::path::PathBuf);
 pub fn open_file(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", &path])
+        // `explorer.exe <path>` — never a shell, so frontend-supplied paths
+        // can't reach a command interpreter (cmd metacharacter injection).
+        std::process::Command::new("explorer")
+            .arg(&path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
@@ -119,11 +121,20 @@ pub fn open_file(path: String) -> Result<(), String> {
 }
 
 /// Read a local file into raw binary bytes for frontend PDF rendering.
+/// Scoped to the app data dir — the webview must not become a general file
+/// read primitive.
 #[tauri::command]
-pub fn read_pdf_bytes(path: String) -> Result<Vec<u8>, String> {
+pub fn read_pdf_bytes(path: String, app_data_dir: State<'_, AppDataDir>) -> Result<Vec<u8>, String> {
     let p = std::path::Path::new(&path);
     if !p.exists() {
         return Err(format!("File does not exist: {}", path));
+    }
+    let allowed_root = app_data_dir.0.canonicalize().map_err(|e| e.to_string())?;
+    let requested = p
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve file: {e}"))?;
+    if !requested.starts_with(&allowed_root) {
+        return Err("File is outside the Kairo data directory".to_string());
     }
     std::fs::read(p).map_err(|e| format!("Failed to read file: {e}"))
 }

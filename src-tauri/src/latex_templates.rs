@@ -104,14 +104,13 @@ pub const EXPRESSIVE_PREAMBLE: &str = r#"\documentclass[11pt, __PAPER__]{article
 \definecolor{accentblue}{RGB}{30, 64, 175}
 
 % ---------- header ----------
-\newcommand{\resumeheader}[6]{%
+% #1 = name, #2 = pre-built contact line (the renderer assembles \href links
+% with raw/percent-encoded targets — a macro argument cannot be both a URL
+% target and escaped display text).
+\newcommand{\resumeheader}[2]{%
   {\Huge\bfseries #1}\par\vspace{4pt}
   \small
-  \href{mailto:#2}{#2}%
-  \ifx&#3&\else\quad|\quad\href{https://linkedin.com/in/#3}{linkedin.com/in/#3}\fi
-  \ifx&#4&\else\quad|\quad\href{https://github.com/#4}{github.com/#4}\fi
-  \ifx&#5&\else\quad|\quad #5\fi
-  \ifx&#6&\else\quad|\quad #6\fi
+  #2%
   \vspace{6pt}\par
   \rule{\linewidth}{0.4pt}\par
 }

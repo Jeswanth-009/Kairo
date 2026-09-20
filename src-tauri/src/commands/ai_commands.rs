@@ -48,9 +48,14 @@ pub fn ai_save_config(
 
 #[tauri::command]
 pub fn ai_test_connection(state: State<'_, DbState>) -> Result<String, String> {
-    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    let (config, _) = tailor::get_ai_config(&conn)?;
-    let key = crate::ai::load_api_key()?.unwrap_or_default();
+    // Gather config under the lock, then DROP it before the network call —
+    // a 240s timeout must never freeze every other command.
+    let (config, key) = {
+        let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+        let (config, _) = tailor::get_ai_config(&conn)?;
+        let key = crate::ai::load_api_key()?.unwrap_or_default();
+        (config, key)
+    };
     crate::ai::test_connection(&config, &key)
 }
 
@@ -58,8 +63,11 @@ pub fn ai_test_connection(state: State<'_, DbState>) -> Result<String, String> {
 /// Settings can offer a picker (works with Ollama and LM Studio).
 #[tauri::command]
 pub fn ai_list_models(state: State<'_, DbState>, base_url: String) -> Result<Vec<String>, String> {
-    let _conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    let key = crate::ai::load_api_key()?.unwrap_or_default();
+    // Lock held only for the keyring read, not the network GET.
+    let key = {
+        let _conn = state.0.lock().map_err(|_| DB_LOCK)?;
+        crate::ai::load_api_key()?.unwrap_or_default()
+    };
     crate::ai::list_models(&base_url, &key)
 }
 

@@ -54,17 +54,51 @@ pub fn load_composer_input(
             .iter()
             .map(|r| r.raw_text.clone())
             .collect::<Vec<_>>();
-        return assemble(conn, job_id, profile, education, relevance, requirement_texts, config);
+        let mut extra_warnings = Vec::new();
+        let out = assemble(
+            conn,
+            job_id,
+            &mut extra_warnings,
+            profile,
+            education,
+            relevance,
+            requirement_texts,
+            config,
+        );
+        return out.map(|mut input| {
+            input.extra_warnings = extra_warnings;
+            input
+        });
     }
 
-    assemble(conn, job_id, profile, education, relevance, Vec::new(), config)
+    let mut extra_warnings = Vec::new();
+    let out = assemble(
+        conn,
+        job_id,
+        &mut extra_warnings,
+        profile,
+        education,
+        relevance,
+        Vec::new(),
+        config,
+    );
+    out.map(|mut input| {
+        input.extra_warnings = extra_warnings;
+        input
+    })
 }
 
+/// Ensures the entity has usable bullets: if none exist, canonical bullets are
+/// split out of the record description (trusted — Vault-authored content).
+/// Bullet creation failures are collected as warnings rather than swallowed,
+/// and unapproved bullets are left unapproved (the trust model governs them;
+/// the composer only excludes them, with a warning).
 fn ensure_entity_bullets(
     conn: &Connection,
     entity_type: &str,
     entity_id: i64,
     description: &str,
+    warnings: &mut Vec<String>,
 ) -> Result<Vec<ComposerBullet>, String> {
     let mut bullets = super::trust::list_bullets(conn, entity_type, entity_id)?;
     if bullets.is_empty() && !description.trim().is_empty() {
@@ -85,7 +119,7 @@ fn ensure_entity_bullets(
         let lines: Vec<String> = raw_lines
             .into_iter()
             .map(|l| l.trim_start_matches(['•', '-', '*', '▪', '·']).trim().to_string())
-            .filter(|l| l.len() > 5)
+            .filter(|l| l.chars().count() > 5)
             .collect();
         for (i, line) in lines.into_iter().enumerate() {
             let cb = super::trust::CanonicalBullet {
@@ -98,16 +132,10 @@ fn ensure_entity_bullets(
                 evidence: Vec::new(),
                 evidence_ids: Vec::new(),
             };
-            let _ = super::trust::create_bullet(conn, &cb);
+            if let Err(e) = super::trust::create_bullet(conn, &cb) {
+                warnings.push(format!("Could not create a bullet on “{entity_type} #{entity_id}”: {e}"));
+            }
         }
-        bullets = super::trust::list_bullets(conn, entity_type, entity_id)?;
-    }
-
-    if !bullets.is_empty() && bullets.iter().all(|b| !b.approved) {
-        let _ = conn.execute(
-            "UPDATE canonical_bullets SET approved = 1 WHERE entity_type = ?1 AND entity_id = ?2",
-            params![entity_type, entity_id],
-        );
         bullets = super::trust::list_bullets(conn, entity_type, entity_id)?;
     }
 
@@ -124,6 +152,7 @@ fn ensure_entity_bullets(
 fn assemble(
     conn: &Connection,
     job_id: i64,
+    extra_warnings: &mut Vec<String>,
     profile: Option<ComposerProfile>,
     education: Vec<ComposerEducation>,
     relevance: HashMap<(String, i64), f64>,
@@ -134,7 +163,7 @@ fn assemble(
     let mut entities: Vec<ComposerEntity> = Vec::new();
 
     for project in super::vault::vault_list::<super::vault::Project>(conn)? {
-        let bullets = ensure_entity_bullets(conn, "project", project.id, &project.description)?;
+        let bullets = ensure_entity_bullets(conn, "project", project.id, &project.description, extra_warnings)?;
         entities.push(ComposerEntity {
             entity_type: "project".to_string(),
             id: project.id,
@@ -155,7 +184,7 @@ fn assemble(
     }
 
     for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
-        let bullets = ensure_entity_bullets(conn, "experience", experience.id, &experience.description)?;
+        let bullets = ensure_entity_bullets(conn, "experience", experience.id, &experience.description, extra_warnings)?;
         entities.push(ComposerEntity {
             entity_type: "experience".to_string(),
             id: experience.id,
@@ -206,6 +235,7 @@ fn assemble(
         vault_skills,
         requirement_texts,
         config: config.clone(),
+        extra_warnings: std::mem::take(extra_warnings),
     })
 }
 

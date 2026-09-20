@@ -71,6 +71,38 @@ fn inline(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Prepares a raw URL for a hyperref `\href{...}` target. Display text is
+/// escaped separately; the target must stay raw but percent-encode the few
+/// characters that would otherwise end the argument or start a comment
+/// (`%`, `#`, braces, backslash, spaces). `_`, `&`, `~`, `$` are safe inside
+/// hyperref's verbatim-style URL catcodes — escaping them (as display text
+/// needs) corrupts the link target.
+fn latex_url(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len() + 8);
+    for c in raw.trim().chars() {
+        match c {
+            '%' => out.push_str("%25"),
+            '#' => out.push_str("%23"),
+            ' ' => out.push_str("%20"),
+            '{' => out.push_str("%7B"),
+            '}' => out.push_str("%7D"),
+            '\\' => out.push_str("%5C"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Builds a complete hyperref link: raw/percent-encoded target, escaped text.
+fn latex_href(url: &str, display: &str, underline: bool) -> String {
+    let text = escape_latex(display);
+    if underline {
+        format!("\\href{{{}}}{{\\underline{{{}}}}}", latex_url(url), text)
+    } else {
+        format!("\\href{{{}}}{{{}}}", latex_url(url), text)
+    }
+}
+
 const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
@@ -231,43 +263,29 @@ fn render_jake(plan: &ResumePlan) -> String {
         contact_parts.push(escape_latex(&plan.header.phone));
     }
     if !plan.header.email.is_empty() {
-        contact_parts.push(format!(
-            "\\href{{mailto:{0}}}{{\\underline{{{0}}}}}",
-            escape_latex(&plan.header.email)
-        ));
+        let email = plan.header.email.trim();
+        contact_parts.push(latex_href(&format!("mailto:{email}"), email, true));
     }
     if !plan.header.linkedin.is_empty() {
         let raw = plan.header.linkedin
             .trim_start_matches("https://www.linkedin.com/in/")
             .trim_start_matches("https://linkedin.com/in/")
             .trim_end_matches('/');
-        contact_parts.push(format!(
-            "\\href{{{}}}{{\\underline{{linkedin.com/in/{}}}}}",
-            escape_latex(&plan.header.linkedin),
-            escape_latex(raw)
-        ));
+        contact_parts.push(latex_href(&plan.header.linkedin, &format!("linkedin.com/in/{raw}"), true));
     }
     if !plan.header.github.is_empty() {
         let raw = plan.header.github
             .trim_start_matches("https://www.github.com/")
             .trim_start_matches("https://github.com/")
             .trim_end_matches('/');
-        contact_parts.push(format!(
-            "\\href{{{}}}{{\\underline{{github.com/{}}}}}",
-            escape_latex(&plan.header.github),
-            escape_latex(raw)
-        ));
+        contact_parts.push(latex_href(&plan.header.github, &format!("github.com/{raw}"), true));
     }
     if !plan.header.website.is_empty() {
         let raw = plan.header.website
             .trim_start_matches("https://")
             .trim_start_matches("http://")
             .trim_end_matches('/');
-        contact_parts.push(format!(
-            "\\href{{{}}}{{\\underline{{{}}}}}",
-            escape_latex(&plan.header.website),
-            escape_latex(raw)
-        ));
+        contact_parts.push(latex_href(&plan.header.website, raw, true));
     }
     if !plan.header.location.is_empty() {
         contact_parts.push(escape_latex(&plan.header.location));
@@ -417,26 +435,36 @@ fn render_expressive(plan: &ResumePlan) -> String {
     tex.push_str(&preamble(crate::latex_templates::EXPRESSIVE_PREAMBLE, plan));
     tex.push_str("\n\\begin{document}\n\n");
 
-    // Header: name, email, linkedin, github, phone, location
+    // Header: pre-built contact line with properly linked entries.
     let name = escape_latex(&inline(if plan.header.full_name.is_empty() { "Your Name" } else { &plan.header.full_name }));
-    let email    = escape_latex(&plan.header.email);
-    let linkedin = escape_latex(
-        plan.header.linkedin
+    let mut contact_parts: Vec<String> = Vec::new();
+    if !plan.header.email.is_empty() {
+        contact_parts.push(latex_href(&format!("mailto:{}", plan.header.email.trim()), plan.header.email.trim(), false));
+    }
+    if !plan.header.linkedin.is_empty() {
+        let raw = plan.header.linkedin
             .trim_start_matches("https://www.linkedin.com/in/")
             .trim_start_matches("https://linkedin.com/in/")
-            .trim_end_matches('/')
-    );
-    let github = escape_latex(
-        plan.header.github
+            .trim_end_matches('/');
+        contact_parts.push(latex_href(&plan.header.linkedin, &format!("linkedin.com/in/{raw}"), false));
+    }
+    if !plan.header.github.is_empty() {
+        let raw = plan.header.github
             .trim_start_matches("https://www.github.com/")
             .trim_start_matches("https://github.com/")
-            .trim_end_matches('/')
-    );
-    let phone = escape_latex(&plan.header.phone);
-    let location = escape_latex(&plan.header.location);
+            .trim_end_matches('/');
+        contact_parts.push(latex_href(&plan.header.github, &format!("github.com/{raw}"), false));
+    }
+    if !plan.header.phone.is_empty() {
+        contact_parts.push(escape_latex(&plan.header.phone));
+    }
+    if !plan.header.location.is_empty() {
+        contact_parts.push(escape_latex(&plan.header.location));
+    }
     tex.push_str(&format!(
-        "\\resumeheader{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}{{{}}}\n\n",
-        name, email, linkedin, github, phone, location
+        "\\resumeheader{{{}}}{{{}}}\n\n",
+        name,
+        contact_parts.join(" \\quad|\\quad ")
     ));
 
     // Objective / headline
@@ -818,6 +846,22 @@ mod tests {
         assert!(expr.contains("\\textbf{Languages}: Python \\textbullet{} Rust"));
         let plush = render_plan(&plan, "plushcv");
         assert!(plush.contains("\\subsection{Languages}"));
+    }
+
+    #[test]
+    fn href_targets_stay_raw_and_display_escaped() {
+        let mut plan = sample_plan();
+        plan.header.email = "first_last@e.com".to_string();
+        plan.header.github = "https://github.com/first_last".to_string();
+        plan.header.website = "https://ex.com/a%1#frag".to_string();
+        let tex = render_plan(&plan, "jake");
+        // Targets keep raw underscores (hyperref-safe) and percent-encode
+        // argument-terminating characters.
+        assert!(tex.contains("\\href{mailto:first_last@e.com}"));
+        assert!(tex.contains("\\href{https://github.com/first_last}"));
+        assert!(tex.contains("\\href{https://ex.com/a%251%23frag}"));
+        // Display text is LaTeX-escaped.
+        assert!(tex.contains("\\underline{first\\_last@e.com}"));
     }
 
     #[test]
