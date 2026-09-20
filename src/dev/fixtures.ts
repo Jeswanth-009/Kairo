@@ -291,7 +291,7 @@ export const mockApplications: Application[] = [
 ];
 
 export const mockDiagnostics: Diagnostics = {
-  appVersion: "0.1.0",
+  appVersion: "3.0.0",
   schemaVersion: 10,
   latestMigration: "0010_applications",
   sqliteVersion: "3.46.0",

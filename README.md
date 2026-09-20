@@ -17,6 +17,11 @@ review every change, and produce a reproducible application artifact.
 
 ---
 
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" width="49%" alt="Kairo dashboard" />
+  <img src="docs/screenshots/resume-studio.png" width="49%" alt="Kairo Resume Studio" />
+</p>
+
 ## Table of contents
 
 1. [The one idea](#the-one-idea)
