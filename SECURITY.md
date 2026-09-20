@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report security issues privately via
-[GitHub Security Advisories](https://github.com/alex-rivera-dev/Kairo/security/advisories/new)
+[GitHub Security Advisories](https://github.com/Jeswanth-009/Kairo/security/advisories/new)
 ("Report a vulnerability") rather than a public issue. Include a description,
 steps to reproduce, and the affected version. You can expect an initial
 response within 7 days.

@@ -44,12 +44,19 @@ const handlers: Record<string, Handler> = {
 
   // jobs
   list_jobs: () => jobs,
-  get_job: (a) => ({ job: jobs.find((j) => j.id === a.id), requirements: [] }),
+  get_job: (a) => {
+    const job = jobs.find((j) => j.id === a.id) ?? jobs[0];
+    return { ...job, requirementCount: 12 };
+  },
   create_job_with_requirements: (a) => {
     const job = a.job as (typeof jobs)[number] & { id?: number };
-    const next = { ...job, id: Math.max(...jobs.map((j) => j.id), 0) + 1, requirementCount: (a.requirements as unknown[])?.length ?? 0 };
+    const next = {
+      ...job,
+      id: Math.max(...jobs.map((j) => j.id), 0) + 1,
+      requirementCount: (a.requirements as unknown[])?.length ?? 0,
+    };
     jobs.push(next);
-    return next;
+    return { job: next, requirements: a.requirements };
   },
   update_job: (a) => {
     const job = a.job as (typeof jobs)[number];
@@ -77,9 +84,42 @@ const handlers: Record<string, Handler> = {
   },
   estimate_plan_lines: (a) => estimateLines(a.plan as typeof mockPlan),
 
+  // matching
+  run_job_match: () => ({
+    matchingVersion: 1,
+    weights: { requiredSkills: 0.4, preferredSkills: 0.15, responsibilities: 0.2, domain: 0.1, recency: 0.05, evidenceStrength: 0.1 },
+    overallScore: 0.72,
+    components: { requiredSkills: 0.8, preferredSkills: 0.5, responsibilities: 0.7, domain: 0.6, recency: 0.9, evidenceStrength: 0.66 },
+    results: [],
+    entityRanking: [],
+  }),
+  get_match: () => null,
+
   // tailoring
   tailor_list: () => suggestions,
-  tailor_suggest: () => suggestions[0] ?? null,
+  tailor_suggest: (a) => {
+    const existing = suggestions.find((x) => x.bulletId === a.bulletId);
+    if (existing) return existing;
+    const created = {
+      id: suggestions.length + 1,
+      jobId: 3,
+      bulletId: Number(a.bulletId),
+      originalText: "Original bullet text",
+      suggestedText: "Tailored bullet text (mock)",
+      status: "pending" as const,
+      validation: { ok: true, violations: [] },
+      model: "mock",
+    };
+    suggestions.unshift(created);
+    return created;
+  },
+  tailor_delete: (a) => {
+    const idx = suggestions.findIndex((x) => x.id === a.id);
+    if (idx >= 0) suggestions.splice(idx, 1);
+    return { ok: true };
+  },
+  claim_changes: () => ({ ok: true, violations: [] }),
+  tailor_save_manual_edit: () => ({ ok: true, violations: [] }),
   tailor_set_status: (a) => {
     const s = suggestions.find((x) => x.id === a.id);
     if (s && typeof a.text === "string") s.suggestedText = a.text;
@@ -180,6 +220,7 @@ const handlers: Record<string, Handler> = {
   list_bullets: () => [],
   list_claim_rules: () => [],
   add_skill_alias: (a) => ({ id: 1, alias: String(a.alias ?? "") }),
+  delete_skill_alias: () => ({ ok: true }),
 
   // applications
   list_applications: () => applications,
@@ -217,7 +258,13 @@ const handlers: Record<string, Handler> = {
     inputs: { rawJdChars: 2400, requirementCount: 12, planBulletCount: 9, gapCount: 2, evidenceCount: 18 },
   }),
   get_dashboard: () => mockDashboard,
-  ai_get_config: () => ({ baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", hasApiKey: false }),
+  ai_get_config: () => ({
+    baseUrl: "http://localhost:11434/v1",
+    model: "qwen3.5:9b",
+    hasApiKey: false,
+  }),
+  ai_save_config: (a) => ({ baseUrl: String(a.baseUrl), model: String(a.model), hasApiKey: Boolean(a.apiKey) }),
+  ai_list_models: () => ["qwen3.5:9b", "llama3.1:8b", "mistral:7b"],
   ai_test_connection: () => "ok (mock)",
   list_backups: () => [],
   create_backup: () => ({ fileName: "kairo-backup-mock.db", path: "mock://backups", bytes: 10240, createdAt: new Date().toISOString() }),

@@ -5,7 +5,6 @@ $ErrorActionPreference = "SilentlyContinue"
 $targets = @(
   "$PSScriptRoot\..\src-tauri\target",   # Rust build cache (GBs)
   "$PSScriptRoot\..\dist",               # Vite build output
-  "$PSScriptRoot\..\.qodo"               # empty plugin dir
 )
 
 # Close a running dev-built app so it stops locking target/

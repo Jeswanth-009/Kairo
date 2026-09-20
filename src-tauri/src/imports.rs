@@ -1295,8 +1295,8 @@ mod tests {
 
     const RESUME: &str = r#"
 Alex Rivera
-jeswanth@example.com
-github.com/jeswanth
+alex.rivera@example.com
+github.com/alex-rivera-dev
 
 PROJECTS
 PyKV — in-memory key-value store
@@ -1323,8 +1323,8 @@ Docker | Kubernetes
         let import = parse_resume_text(RESUME);
 
         assert_eq!(import.profile.as_ref().unwrap().full_name, "Alex Rivera");
-        assert_eq!(import.profile.as_ref().unwrap().email, "jeswanth@example.com");
-        assert_eq!(import.profile.as_ref().unwrap().github, "https://github.com/jeswanth");
+        assert_eq!(import.profile.as_ref().unwrap().email, "alex.rivera@example.com");
+        assert_eq!(import.profile.as_ref().unwrap().github, "https://github.com/alex-rivera-dev");
 
         assert_eq!(import.projects.len(), 2);
         assert_eq!(import.projects[0].title, "PyKV");
@@ -1489,14 +1489,14 @@ Bachelor of Technology in Computer Science & Systems Engineering September 2023 
 
     #[test]
     fn certificate_parser_extracts_fields() {
-        let text = "Certificate of Completion\nThis certifies that jeswanth@example.com\n\
+        let text = "Certificate of Completion\nThis certifies that alex.rivera@example.com\n\
                     has successfully completed the Rust Fundamentals course\n\
                     issued by Coursera\nMarch 2025";
         let candidate = parse_certificate_text(text);
         assert_eq!(candidate.title, "Rust Fundamentals course");
         assert_eq!(candidate.issuer, "Coursera");
         assert_eq!(candidate.issue_date.as_deref(), Some("2025-03"));
-        assert_eq!(candidate.email, "jeswanth@example.com");
+        assert_eq!(candidate.email, "alex.rivera@example.com");
         assert!(!candidate.source_snippet.is_empty());
     }
 

@@ -8,9 +8,11 @@ A local-first Windows career intelligence workspace. Store verified career evide
 opportunity, select the strongest relevant proof, improve the wording without changing the facts,
 review every change, and produce a reproducible application artifact.
 
-![status](https://img.shields.io/badge/status-v1%20feature%20complete%20%28phases%200--14%29-2563EB)
-![tests](https://img.shields.io/badge/tests-77%20passing-10B981)
-![migrations](https://img.shields.io/badge/migrations-10%20applied-8B5CF6)
+[![CI](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml/badge.svg)](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml)
+![release](https://img.shields.io/badge/release-v3.0.0-2563EB)
+![license](https://img.shields.io/badge/license-MIT-10B981)
+![tests](https://img.shields.io/badge/tests-97%20passing-10B981)
+![migrations](https://img.shields.io/badge/migrations-11%20applied-8B5CF6)
 ![platform](https://img.shields.io/badge/platform-Windows-64748B)
 
 </div>
@@ -43,7 +45,7 @@ review every change, and produce a reproducible application artifact.
 9. [Testing](#testing)
 10. [Hardening](#hardening)
 11. [Run](#run)
-12. [Toolchain on this machine](#toolchain-on-this-machine)
+12. [Building from source](#building-from-source)
 13. [Engineering rules](#engineering-rules)
 14. [Roadmap](#roadmap)
 
@@ -419,9 +421,16 @@ constants only), full LaTeX escaping, artifacts under the app-owned data dir, re
 pattern-checked and resolved strictly under `backups/`, API key only in Windows Credential
 Manager, Tauri capabilities still `core:default` only, CSP set.
 
+## Download
+
+Grab the signed-off installer for the latest release from
+[GitHub Releases](https://github.com/Jeswanth-009/Kairo/releases) — no build
+toolchain needed. Note: installers are currently unsigned, so Windows
+SmartScreen may ask you to confirm.
+
 ## Run
 
-Prereqs: Node 18+, Rust (stable-msvc), plus the portable MSVC env on this machine (below).
+Prereqs: Node 18+, Rust (stable-msvc), Visual Studio Build Tools (C++ workload) and Tectonic.
 
 ```bash
 npm install
@@ -471,8 +480,16 @@ npm run tauri dev        # dev window (vite :5173 + cargo)
 
 ## Roadmap
 
-**v1 feature-complete: phases 0–14 done** (Foundation → Dashboard → Hardening). The installer
-is produced by `npm run tauri build`; backups and structured logs ship enabled.
+**v3.0.0 shipped**: ATS-grade PDF export (3 LaTeX templates via Tectonic), grounded AI tailoring
+with local-model support (Ollama / LM Studio, no API key needed), deterministic matching and
+planning, resume versioning, application tracking, interview prep, backups, dark mode.
 
-Deliberately out of scope for v1 (per spec): cloud sync, template marketplace, email tracking,
+**Next up**: multi-page estimate refinements, frontend test suite, code-splitting for faster
+first paint, macOS/Linux builds and signing.
+
+Deliberately out of scope (per spec): cloud sync, template marketplace, email tracking,
 vector databases, salary/hiring predictions.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

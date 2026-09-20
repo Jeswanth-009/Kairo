@@ -16,7 +16,7 @@ a running dev environment and explains the conventions the codebase follows.
 ## Setup
 
 ```bash
-git clone https://github.com/alex-rivera-dev/Kairo.git
+git clone https://github.com/Jeswanth-009/Kairo.git
 cd Kairo
 npm install
 npm run tauri dev
