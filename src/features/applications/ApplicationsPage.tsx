@@ -5,14 +5,14 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Dialog } from "../../components/ui/Dialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { Field, Input, Select } from "../../components/ui/inputs";
+import { Field, Input, Select, Textarea } from "../../components/ui/inputs";
 import { ClipboardCheck } from "lucide-react";
 import { Badge } from "../../components/ui/Badge";
 import { Tabs } from "../../components/ui/Tabs";
 import { Skeleton } from "../../components/ui/Feedback";
 import { ipc } from "../../lib/ipc";
 import { APPLICATION_STATUSES } from "../../lib/types";
-import type { Application, ApplicationStatus } from "../../lib/types";
+import type { Application, ApplicationStatus, Job } from "../../lib/types";
 import type { BadgeTone } from "../../components/ui/Badge";
 import { toast } from "../../stores/toastStore";
 
@@ -47,11 +47,13 @@ const STATUS_TONE: Record<ApplicationStatus, BadgeTone> = {
 function ApplicationDialog({
   open,
   initial,
+  jobs,
   onClose,
   onSaved,
 }: {
   open: boolean;
   initial: Application | null;
+  jobs: Job[];
   onClose: () => void;
   onSaved: (app: Application, isNew: boolean) => void;
 }) {
@@ -139,9 +141,45 @@ function ApplicationDialog({
               ))}
             </Select>
           </Field>
+          <Field label="Linked job workspace" hint="optional">
+            <Select
+              value={values.jobId ?? ""}
+              onChange={(e) => set("jobId", e.target.value === "" ? null : Number(e.target.value))}
+            >
+              <option value="">— none —</option>
+              {jobs.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.roleTitle || "Untitled role"}
+                  {j.company ? ` · ${j.company}` : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Applied on" hint="filled when you apply">
+            <Input
+              type="date"
+              value={values.appliedDate ?? ""}
+              onChange={(e) => set("appliedDate", e.target.value === "" ? null : e.target.value)}
+            />
+          </Field>
         </div>
+        <Field label="Next action" hint="what moves this forward">
+          <Input
+            value={values.nextAction}
+            placeholder="Follow up, prep tech round…"
+            onChange={(e) => set("nextAction", e.target.value)}
+          />
+        </Field>
+        <Field label="Notes">
+          <Textarea
+            rows={2}
+            value={values.notes}
+            placeholder="Referrals, contacts, anything worth remembering."
+            onChange={(e) => set("notes", e.target.value)}
+          />
+        </Field>
         {error ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</p>
         ) : null}
         <div className="flex justify-end gap-3">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -158,6 +196,7 @@ function ApplicationDialog({
 
 export default function ApplicationsPage() {
   const [apps, setApps] = useState<Application[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<"all" | ApplicationStatus>("all");
   const [creating, setCreating] = useState(false);
@@ -165,6 +204,7 @@ export default function ApplicationsPage() {
   const [deleting, setDeleting] = useState<Application | null>(null);
 
   useEffect(() => {
+    ipc.listJobs().then(setJobs).catch(() => setJobs([]));
     void (async () => {
       try {
         setApps(await ipc.listApplications());
@@ -308,10 +348,11 @@ export default function ApplicationsPage() {
         </div>
       )}
 
-      <ApplicationDialog open={creating} initial={null} onClose={() => setCreating(false)} onSaved={saveApp} />
+      <ApplicationDialog open={creating} initial={null} jobs={jobs} onClose={() => setCreating(false)} onSaved={saveApp} />
       <ApplicationDialog
         open={!!editing}
         initial={editing}
+        jobs={jobs}
         onClose={() => setEditing(null)}
         onSaved={saveApp}
       />

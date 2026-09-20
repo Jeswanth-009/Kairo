@@ -28,6 +28,7 @@ const trustKey = (entityType: string, entityId: number) => `${entityType}:${enti
 interface VaultStore extends VaultRecords {
   loaded: boolean;
   loading: boolean;
+  error: string | null;
   profile: Profile | null;
   load: () => Promise<void>;
   saveProfile: (profile: Profile) => Promise<void>;
@@ -60,6 +61,7 @@ export const useVaultStore = create<VaultStore>()((set, get) => ({
   skills: [],
   loaded: false,
   loading: false,
+  error: null,
   profile: null,
   evidenceCache: {},
   bulletsCache: {},
@@ -67,7 +69,7 @@ export const useVaultStore = create<VaultStore>()((set, get) => ({
 
   load: async () => {
     if (get().loading) return;
-    set({ loading: true });
+    set({ loading: true, error: null });
     try {
       const [projects, experiences, education, certifications, achievements, skills, profile] =
         await Promise.all([
@@ -80,6 +82,9 @@ export const useVaultStore = create<VaultStore>()((set, get) => ({
           ipc.getProfile(),
         ]);
       set({ projects, experiences, education, certifications, achievements, skills, profile, loaded: true });
+    } catch (e) {
+      set({ error: String(e) });
+      throw e;
     } finally {
       set({ loading: false });
     }

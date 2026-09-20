@@ -8,8 +8,8 @@ import type { PlanItem, ResumePlan, TailorSuggestion } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
 const STATUS_META: Record<TailorSuggestion["status"], { label: string; badge: string }> = {
-  pending: { label: "Pending review", badge: "bg-amber-100 text-amber-700" },
-  accepted: { label: "Accepted", badge: "bg-emerald-100 text-emerald-700" },
+  pending: { label: "Pending review", badge: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" },
+  accepted: { label: "Accepted", badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" },
   rejected: { label: "Rejected", badge: "bg-red-100 text-red-700" },
 };
 
@@ -275,7 +275,7 @@ function AcceptRow({
         <Button
           size="sm"
           variant="ghost"
-          className="text-red-600 hover:bg-red-50"
+          className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
           onClick={() =>
             void (async () => {
               try {

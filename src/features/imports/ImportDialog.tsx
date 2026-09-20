@@ -58,7 +58,7 @@ export function ImportDialog({
             onClick={() => setTab(t)}
             className={[
               "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200",
-              tab === t ? "bg-kairo-midnight text-white" : "bg-accent-soft text-muted hover:bg-slate-200",
+              tab === t ? "bg-kairo-midnight text-white" : "bg-accent-soft text-muted hover:bg-accent-soft",
             ].join(" ")}
           >
             {TAB_LABELS[t]}
@@ -122,7 +122,7 @@ function CandidateShell({
               <Button size="sm" onClick={onAccept} disabled={saving}>
                 {saving ? "Saving…" : acceptLabel}
               </Button>
-              <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50" onClick={onReject}>
+              <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10" onClick={onReject}>
                 Reject
               </Button>
             </>
@@ -308,7 +308,7 @@ function ResumeCandidates({
           <Button
             size="sm"
             variant="ghost"
-            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 hover:text-red-700"
             onClick={() => {
               activeKeys.forEach((k) => dismiss(k));
               toast.ok("All candidates dismissed");
@@ -731,7 +731,7 @@ function AchievementCandidate({
   return (
     <CandidateShell
       badge="Achievement"
-      badgeColor="bg-amber-100 text-amber-800"
+      badgeColor="bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
       source={draft.sourceSnippet}
       editing={editing}
       setEditing={setEditing}
@@ -791,7 +791,7 @@ function EducationCandidate({
   return (
     <CandidateShell
       badge="Education"
-      badgeColor="bg-emerald-100 text-emerald-700"
+      badgeColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
       source={draft.sourceSnippet}
       editing={editing}
       setEditing={setEditing}
@@ -838,11 +838,11 @@ function EducationCandidate({
 }
 
 const CATEGORY_META: Record<SkillCategory, { label: string; badge: string }> = {
-  language: { label: "Languages", badge: "bg-blue-50 text-blue-700 border-blue-200" },
+  language: { label: "Languages", badge: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30" },
   framework: { label: "Frameworks & Libraries", badge: "bg-purple-50 text-purple-700 border-purple-200" },
   tool: { label: "Developer Tools", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   database: { label: "Databases", badge: "bg-amber-50 text-amber-700 border-amber-200" },
-  cloud: { label: "Cloud & Infrastructure", badge: "bg-sky-50 text-sky-700 border-sky-200" },
+  cloud: { label: "Cloud & Infrastructure", badge: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30" },
   devops: { label: "DevOps & CI/CD", badge: "bg-teal-50 text-teal-700 border-teal-200" },
   soft: { label: "Soft Skills", badge: "bg-rose-50 text-rose-700 border-rose-200" },
   other: { label: "Other Skills", badge: "bg-accent-soft text-ink border-line" },
@@ -935,7 +935,7 @@ function SkillsCandidate({
           <Button size="sm" disabled={busy || selectedCount === 0} onClick={handleAccept}>
             {busy ? "Saving…" : `Add ${selectedCount} selected`}
           </Button>
-          <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50" onClick={onReject}>
+          <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10" onClick={onReject}>
             Reject
           </Button>
         </div>
@@ -1041,7 +1041,7 @@ function GithubImportTab({ onDone }: { onDone: () => void }) {
         </div>
       </div>
       {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">{error}</p>
       ) : null}
       {candidate ? <GithubCandidateCard candidate={candidate} onDone={onDone} /> : null}
     </div>
@@ -1233,7 +1233,7 @@ function CertificateCandidateCard({
   return (
     <CandidateShell
       badge="Certification"
-      badgeColor="bg-emerald-100 text-emerald-700"
+      badgeColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
       source={candidate.sourceSnippet}
       editing={editing}
       setEditing={setEditing}

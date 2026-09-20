@@ -145,7 +145,7 @@ function SkillCard({
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:bg-red-50"
+            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
             onClick={() => setConfirming(true)}
           >
             Delete
@@ -161,7 +161,7 @@ function SkillCard({
           {skill.aliases.map((row) => (
             <span
               key={row.id}
-              className="inline-flex items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-xs text-ink ring-1 ring-slate-200"
+              className="inline-flex items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-xs text-ink ring-1 ring-line"
             >
               {row.alias}
               <button

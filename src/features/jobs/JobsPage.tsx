@@ -50,13 +50,14 @@ export default function JobsPage() {
   const loaded = useJobsStore((s) => s.loaded);
   const loading = useJobsStore((s) => s.loading);
   const load = useJobsStore((s) => s.load);
+  const loadError = useJobsStore((s) => s.error);
   const deleteJob = useJobsStore((s) => s.deleteJob);
 
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Job | null>(null);
 
   useEffect(() => {
-    void load();
+    load().catch(() => { /* surfaced via store error */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -78,13 +79,19 @@ export default function JobsPage() {
         actions={<Button onClick={() => setCreating(true)}>New workspace</Button>}
       />
 
+      {loadError ? (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+          Could not load job workspaces: {loadError}
+        </div>
+      ) : null}
+
       {loading && !loaded ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }, (_, i) => (
             <Skeleton key={i} className="h-40" />
           ))}
         </div>
-      ) : jobs.length === 0 ? (
+      ) : jobs.length === 0 && !loadError ? (
         <EmptyState
           icon={<Briefcase className="size-6" />}
           title="Paste a job description to start a workspace."

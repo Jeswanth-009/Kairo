@@ -32,6 +32,7 @@ const TABS: { key: TabKey; label: string }[] = [
 
 export default function VaultPage() {
   const store = useVaultStore();
+  const loadError = useVaultStore((s) => s.error);
   const { loaded, loading } = store;
 
   const [tab, setTab] = useState<TabKey>("projects");
@@ -43,7 +44,7 @@ export default function VaultPage() {
   const [deleting, setDeleting] = useState<AnyVaultRecord | null>(null);
 
   useEffect(() => {
-    void store.load();
+    store.load().catch(() => { /* surfaced via store error */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -142,6 +143,12 @@ export default function VaultPage() {
         description="Your verified history — every record here is the source material the rest of Kairo builds on."
       />
       <ProfileCard />
+
+      {loadError ? (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+          Could not load the Vault: {loadError}
+        </div>
+      ) : null}
 
       {loading && !loaded ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
@@ -45,14 +45,17 @@ export default function JobWorkspacePage() {
   const loadRequirements = useJobsStore((s) => s.loadRequirements);
   const requirements = useJobsStore((s) => s.reqCache[id]) ?? [];
 
+  const loadSeq = useRef(0);
   useEffect(() => {
+    const seq = ++loadSeq.current;
     void (async () => {
       try {
         const job = await ipcGetJob(id);
+        if (seq !== loadSeq.current) return;
         setJob(job);
         await loadRequirements(id);
       } catch (e) {
-        setError(String(e));
+        if (seq === loadSeq.current) setError(String(e));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,7 +263,7 @@ function RequirementsTab({ job }: { job: Job }) {
               onClick={() =>
                 void (async () => {
                   try {
-                    await addRequirement({
+                    const created = await addRequirement({
                       id: 0,
                       jobId: job.id,
                       kind,
@@ -269,6 +272,9 @@ function RequirementsTab({ job }: { job: Job }) {
                       importance: kind === "required_skill" ? 0.8 : kind === "preferred_skill" ? 0.4 : 0.6,
                       userConfirmed: true,
                     });
+                    // Open the editor immediately — an empty requirement must
+                    // not linger in the DB unedited.
+                    setEditingId(created.id);
                   } catch (e) {
                     toast.error(String(e));
                   }

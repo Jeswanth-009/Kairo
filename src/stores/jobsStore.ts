@@ -6,6 +6,7 @@ interface JobsStore {
   jobs: Job[];
   loaded: boolean;
   loading: boolean;
+  error: string | null;
   reqCache: Record<number, JobRequirement[]>;
   load: () => Promise<void>;
   createWorkspace: (job: Job, requirements: JobRequirement[]) => Promise<JobWithRequirements_>;
@@ -34,14 +35,18 @@ export const useJobsStore = create<JobsStore>()((set, get) => ({
   jobs: [],
   loaded: false,
   loading: false,
+    error: null,
   reqCache: {},
 
   load: async () => {
     if (get().loading) return;
-    set({ loading: true });
+    set({ loading: true, error: null });
     try {
       const jobs = await ipc.listJobs();
       set({ jobs, loaded: true });
+    } catch (e) {
+      set({ error: String(e) });
+      throw e;
     } finally {
       set({ loading: false });
     }

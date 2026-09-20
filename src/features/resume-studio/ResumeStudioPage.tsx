@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronDown,
@@ -359,19 +359,30 @@ export default function ResumeStudioPage() {
     })();
   }, []);
 
+  // Stale-response guard: rapidly switching jobs must never interleave
+  // plan/artifact/version state from two different workspaces.
+  const loadSeq = useRef(0);
   useEffect(() => {
     if (jobId === null) return;
+    const seq = ++loadSeq.current;
     void (async () => {
       try {
         const stored = await ipc.getPlan(jobId);
+        if (seq !== loadSeq.current) return;
         setPlan(stored?.plan ?? null);
-        setSuggestions(await ipc.tailorList(jobId));
+        const suggestions = await ipc.tailorList(jobId);
+        if (seq !== loadSeq.current) return;
+        setSuggestions(suggestions);
         setEstimatedLines(stored?.plan ? await ipc.estimatePlanLines(stored.plan) : null);
-        setArtifact(await ipc.getPdfArtifact(jobId));
+        const artifact = await ipc.getPdfArtifact(jobId);
+        if (seq !== loadSeq.current) return;
+        setArtifact(artifact);
         setPreviewMode("pdf");
-        setVersions(await ipc.listResumeVersions(jobId));
+        const versions = await ipc.listResumeVersions(jobId);
+        if (seq !== loadSeq.current) return;
+        setVersions(versions);
       } catch (e) {
-        toast.error(String(e));
+        if (seq === loadSeq.current) toast.error(String(e));
       }
     })();
   }, [jobId]);
@@ -381,15 +392,18 @@ export default function ResumeStudioPage() {
   // so template/paper choices persist through the same path.
   // ---------------------------------------------------------------------------
 
+  const saveSeq = useRef(0);
   const mutatePlan = (mutator: (p: ResumePlan) => void) => {
     if (!plan || jobId === null) return;
     const copy: ResumePlan = structuredClone(plan);
     mutator(copy);
     setPlan(copy);
+    const seq = ++saveSeq.current;
     void (async () => {
       try {
         await ipc.savePlan(jobId, copy);
-        setEstimatedLines(await ipc.estimatePlanLines(copy));
+        const lines = await ipc.estimatePlanLines(copy);
+        if (seq === saveSeq.current) setEstimatedLines(lines);
       } catch (e) {
         toast.error(String(e));
       }

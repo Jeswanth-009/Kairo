@@ -1,6 +1,11 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 
+// Stacked-dialog bookkeeping: only the topmost dialog consumes Esc, so
+// closing an inner editor never discards the outer one.
+let dialogSeq = 0;
+const escStack: number[] = [];
+
 interface DialogProps {
   open: boolean;
   onClose: () => void;
@@ -13,11 +18,22 @@ interface DialogProps {
 export function Dialog({ open, onClose, title, children, maxWidth = "max-w-lg" }: DialogProps) {
   useEffect(() => {
     if (!open) return;
+    const id = ++dialogSeq;
+    escStack.push(id);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (escStack[escStack.length - 1] !== id) return;
+      e.preventDefault();
+      const idx = escStack.indexOf(id);
+      if (idx >= 0) escStack.splice(idx, 1);
+      onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      const idx = escStack.indexOf(id);
+      if (idx >= 0) escStack.splice(idx, 1);
+    };
   }, [open, onClose]);
 
   if (!open) return null;

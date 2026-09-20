@@ -21,7 +21,7 @@ export function ToastHost() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed right-5 bottom-5 z-[60] flex w-80 flex-col gap-2">
+    <div role="status" aria-live="polite" className="pointer-events-none fixed right-5 bottom-5 z-[60] flex w-80 flex-col gap-2">
       {toasts.map((t) => (
         <button
           key={t.id}

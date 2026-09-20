@@ -32,7 +32,7 @@ const KIND_COLORS: Record<string, string> = {
   repository: "bg-kairo-violet/10 text-kairo-violet",
   document: "bg-kairo-blue/10 text-kairo-blue",
   certificate: "bg-kairo-blue/10 text-kairo-blue",
-  metric: "bg-emerald-100 text-emerald-700",
+  metric: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
   note: "bg-accent-soft text-muted",
   link: "bg-kairo-sky/20 text-sky-700",
   other: "bg-accent-soft text-muted",
@@ -98,7 +98,7 @@ export function RecordInspector({
             onClick={() => setTab(t.key)}
             className={[
               "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200",
-              tab === t.key ? "bg-kairo-midnight text-white" : "bg-accent-soft text-muted hover:bg-slate-200",
+              tab === t.key ? "bg-kairo-midnight text-white" : "bg-accent-soft text-muted hover:bg-accent-soft",
             ].join(" ")}
           >
             {t.label}
@@ -281,7 +281,7 @@ function EvidenceTab({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-red-600 hover:bg-red-50"
+                      className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                       onClick={() => setDeleting(item)}
                     >
                       Delete
@@ -544,7 +544,7 @@ function BulletsTab({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-red-600 hover:bg-red-50"
+                  className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                   onClick={() => setDeleting(bullet)}
                 >
                   Delete
@@ -781,7 +781,7 @@ function RulesTab({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-red-600 hover:bg-red-50"
+                  className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                   onClick={() => setDeleting(rule)}
                 >
                   Delete

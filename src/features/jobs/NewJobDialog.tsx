@@ -164,7 +164,7 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
             </Field>
           </div>
           {error ? (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">{error}</p>
           ) : null}
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={close}>
@@ -219,7 +219,7 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                    className="text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 hover:text-red-700"
                     onClick={() => setRequirements([])}
                   >
                     Clear all
@@ -269,7 +269,7 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="shrink-0 text-red-600 hover:bg-red-50"
+                      className="shrink-0 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                       onClick={() => removeReq(req.id)}
                     >
                       ✕
@@ -281,7 +281,7 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
           </div>
 
           {error ? (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">{error}</p>
           ) : null}
 
           <div className="flex justify-between">

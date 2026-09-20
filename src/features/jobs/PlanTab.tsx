@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
-import { Field, Input } from "../../components/ui/inputs";
+import { Field, Input, Select } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
 import { fmtRange } from "../../lib/dateFmt";
 import type { ComposerConfig, PlanItem, ResumePlan, TailorSuggestion } from "../../lib/types";
@@ -177,7 +177,16 @@ export function PlanTab({ jobId }: { jobId: number }) {
             />
           </Field>
           <Field label="Target pages">
-            <Input value="1" disabled />
+            <Select
+              value={String(config.targetPages)}
+              onChange={(e) =>
+                setConfig({ ...config, targetPages: Math.min(3, Math.max(1, Number(e.target.value) || 1)) })
+              }
+            >
+              <option value="1">1 page</option>
+              <option value="2">2 pages</option>
+              <option value="3">3 pages</option>
+            </Select>
           </Field>
         </div>
         <div className="mt-4">
@@ -195,12 +204,14 @@ export function PlanTab({ jobId }: { jobId: number }) {
               <span
                 className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
                   plan.fitsOnePage
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-amber-100 text-amber-700"
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
                 }`}
               >
                 ~{plan.estimatedLines} lines ·{" "}
-                {plan.fitsOnePage ? "fits 1 page" : "does not fit 1 page"}
+                {plan.fitsOnePage
+                  ? `fits ${plan.config.targetPages} page${plan.config.targetPages > 1 ? "s" : ""}`
+                  : `over ${plan.config.targetPages} page${plan.config.targetPages > 1 ? "s" : ""}`}
               </span>
             </div>
 

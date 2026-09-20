@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ExternalLink, FileText, FolderOpen, HardDriveDownload } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { Spinner } from "../../components/ui/Feedback";
+import { Skeleton, Spinner } from "../../components/ui/Feedback";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
 import { fmtAgo } from "../../lib/dateFmt";
@@ -21,22 +21,24 @@ export function ResumeTab({ jobId }: { jobId: number }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    ipc
-      .getPdfArtifact(jobId)
-      .then((a) => {
+    setLoaded(false);
+    void (async () => {
+      try {
+        const a = await ipc.getPdfArtifact(jobId);
         if (a) setArtifact(a);
-      })
-      .catch(console.error);
-    // The Studio persists the template on the plan config; honor it here.
-    ipc
-      .getPlan(jobId)
-      .then((stored) => {
+        // The Studio persists the template on the plan config; honor it here.
+        const stored = await ipc.getPlan(jobId);
         const persisted = stored?.plan.config.templateId;
         if (persisted) setTemplateId(persisted);
-      })
-      .catch(console.error);
+      } catch (e) {
+        toast.error(String(e));
+      } finally {
+        setLoaded(true);
+      }
+    })();
   }, [jobId]);
 
   const chooseTemplate = (id: string) => {
@@ -183,7 +185,9 @@ export function ResumeTab({ jobId }: { jobId: number }) {
 
       {/* Right column — PDF preview */}
       <div className="w-full lg:w-2/3">
-        {artifact ? (
+        {!loaded ? (
+          <Skeleton className="h-[600px] w-full" />
+        ) : artifact ? (
           <PdfViewer pdfPath={artifact.pdfPath} className="w-full" />
         ) : (
           <Card className="flex min-h-[600px] items-center justify-center overflow-hidden bg-accent-soft p-0">

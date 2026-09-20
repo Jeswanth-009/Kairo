@@ -8,13 +8,13 @@ const COVERAGE_META: Record<Coverage, { label: string; dot: string; badge: strin
   covered: {
     label: "Covered",
     dot: "bg-emerald-500",
-    badge: "bg-emerald-100 text-emerald-700",
+    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
     hint: "",
   },
   partial: {
     label: "Partial",
     dot: "bg-amber-500",
-    badge: "bg-amber-100 text-amber-700",
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
     hint: "Strengthen the evidence: add proof or use the skill more prominently.",
   },
   missing: {

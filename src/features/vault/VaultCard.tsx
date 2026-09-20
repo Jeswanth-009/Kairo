@@ -111,7 +111,7 @@ export function VaultCard({
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:bg-red-50"
+            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
             onClick={onDelete}
           >
             Delete
