@@ -73,6 +73,7 @@ fn sample_plan() -> ResumePlan {
         }],
         achievements: vec![],
         skills: vec!["Python".to_string(), "SQL".to_string()],
+        skills_grouped: vec![],
         excluded_skills: vec![],
         estimated_lines: 21,
         fits_one_page: true,
@@ -83,9 +84,10 @@ fn sample_plan() -> ResumePlan {
 #[test]
 fn compile_locked_produces_valid_pdf() {
     let plan = sample_plan();
-    let tex = kairo_lib::latex::render_plan(&plan, "classic");
-    assert!(tex.contains("\\documentclass[10pt,letterpaper]{article}"));
-    assert!(tex.contains("PyKV — in-memory key-value store"));
+    let tex = kairo_lib::latex::render_plan(&plan, "jake");
+    assert!(tex.contains("\\documentclass[letterpaper,11pt]"));
+    // The em-dash is sanitized to a LaTeX en/em-dash escape by the renderer.
+    assert!(tex.contains("PyKV --- in-memory key-value store"));
 
     // Compile with the machine's tectonic if present, else skip.
     let tectonic = dirs_next().unwrap_or_else(|| std::env::temp_dir());
@@ -99,7 +101,7 @@ fn compile_locked_produces_valid_pdf() {
     let out_dir = std::env::temp_dir().join(format!("kairo-pdf-test-{}", std::process::id()));
     std::fs::create_dir_all(&out_dir).unwrap();
 
-    let output = kairo_lib::db::pdf::compile_locked(plan, 999, "classic", &candidate, &out_dir.parent().unwrap().join("kairo-pdf-root")).unwrap_or_else(|e| {
+    let output = kairo_lib::db::pdf::compile_locked(plan, 999, "jake", &candidate, &out_dir.parent().unwrap().join("kairo-pdf-root")).unwrap_or_else(|e| {
         if e.contains("bundle") || e.contains("network") {
             eprintln!("skipping: bundle not reachable: {e}");
             return kairo_lib::db::pdf::CompileOutput {
@@ -109,6 +111,8 @@ fn compile_locked_produces_valid_pdf() {
                     pdf_path: String::new(),
                     page_count: Some(1),
                     compiled_at: None,
+                    template_id: String::new(),
+                    paper: String::new(),
                 },
                 log_tail: String::new(),
             };
