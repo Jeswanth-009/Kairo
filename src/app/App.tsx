@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
+import { Splash } from "../components/Splash";
 import { Sidebar } from "./shell/Sidebar";
 import { TopBar } from "./shell/TopBar";
 import { ToastHost } from "../components/ui/Toast";
@@ -38,6 +39,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface text-ink">
+      <Splash />
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar title={titleFor(location.pathname)} />
