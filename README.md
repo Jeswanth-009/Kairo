@@ -1,17 +1,17 @@
 <div align="center">
 
-# Kairo
+<img src="public/brand/lockup-horizontal-light-800.png" alt="Kairo — Your career. A brighter next step." width="420" />
 
-**Your career. A brighter next step.**
+# Kairo v4
 
 A local-first Windows career intelligence workspace. Store verified career evidence once; for every
 opportunity, select the strongest relevant proof, improve the wording without changing the facts,
 review every change, and produce a reproducible application artifact.
 
 [![CI](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml/badge.svg)](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml)
-![release](https://img.shields.io/badge/release-v3.0.0-2563EB)
+![release](https://img.shields.io/badge/release-v4.0.0-2563EB)
 ![license](https://img.shields.io/badge/license-MIT-10B981)
-![tests](https://img.shields.io/badge/tests-97%20passing-10B981)
+![tests](https://img.shields.io/badge/tests-112%20passing-10B981)
 ![migrations](https://img.shields.io/badge/migrations-11%20applied-8B5CF6)
 ![platform](https://img.shields.io/badge/platform-Windows-64748B)
 
@@ -480,9 +480,12 @@ npm run tauri dev        # dev window (vite :5173 + cargo)
 
 ## Roadmap
 
-**v3.0.0 shipped**: ATS-grade PDF export (3 LaTeX templates via Tectonic), grounded AI tailoring
-with local-model support (Ollama / LM Studio, no API key needed), deterministic matching and
-planning, resume versioning, application tracking, interview prep, backups, dark mode.
+**v4.0.0 shipped**: the v4 "Midnight Sunrise" brand (official logo system, boot splash,
+self-hosted Inter, dark-first theme with an Appearance control), the vault paste crash fix
+(char-boundary-safe parsing, async commands, panic containment, ErrorBoundary), and a
+reliability sweep. **v3.0.0** shipped ATS-grade PDF export (3 LaTeX templates via Tectonic),
+grounded AI tailoring with local-model support (Ollama / LM Studio), deterministic matching and
+planning, resume versioning, application tracking, interview prep and backups.
 
 **Next up**: multi-page estimate refinements, frontend test suite, code-splitting for faster
 first paint, macOS/Linux builds and signing.

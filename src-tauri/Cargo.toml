@@ -1,6 +1,6 @@
 [package]
 name = "kairo"
-version = "3.0.0"
+version = "4.0.0"
 description = "Kairo — local-first career intelligence workspace"
 authors = ["Kairo"]
 license = "MIT"

@@ -4,6 +4,68 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [4.0.0] — 2026-09-22
+
+The v4 overhaul: a hard crash fix in the import pipeline, the official v4
+brand identity, a premium "Midnight Sunrise" theme, and a reliability sweep.
+
+### Fixed — vault paste crash (v4 regression class)
+- Pasting a document containing unspaced em/en dashes (`2024–2025`,
+  `June–July 2025`) into the Vault import or the Jobs JD dialog crashed the
+  entire app: byte-offset slicing after `to_lowercase()`/`find()` landed
+  inside multi-byte UTF-8 characters and the panic unwound through the
+  Windows event loop. All slicing is now char-boundary-safe
+  (`text.rs` helpers: `find_ci`, `rfind_ci`, `strip_ci_prefix`)
+- Import and GitHub commands are `async` — parsing and blocking network I/O
+  (AI provider calls, Tectonic PDF compiles) no longer run on the main
+  thread, so a panic can never cross the FFI boundary and the UI never
+  freezes during a 240 s AI timeout
+- Rust panic hook records every panic into `kairo.log`; a React
+  ErrorBoundary plus global `error`/`unhandledrejection` handlers keep the
+  window usable instead of collapsing to a blank screen
+- Oversized pastes are rejected with a clear message (1 M character cap,
+  frontend and backend) instead of being shipped over IPC unbounded
+- Regression tests for unspaced dashes, case-expanding characters (`İ`),
+  multi-byte certificate text and ~750-line documents (112 backend tests)
+
+### Added — narrative document import
+- The vault importer now understands narrative story dumps (numbered
+  "N. Project" headings with `Period:`/`Stack:`/`What it demonstrates`
+  metadata) in addition to resumes — one such paste extracts every project
+  as a reviewable candidate with its demonstrated skills
+
+### Added — v4 brand identity
+- `brand/` source-of-truth folder with the 16 official logo assets and a
+  usage manifest; `scripts/process_brand.py` generates optimized
+  derivatives (rounded transparent-corner marks, lockups, wave banner,
+  favicon PNG/ICO)
+- New app icon (glowing petal-K on midnight tile) across window, taskbar,
+  installer and store assets
+- In-app brand mark now uses the official artwork, theme-aware (glowing
+  midnight tile on dark, white tile on light)
+- Branded boot splash with the night-sky lockup; Dashboard brand footer
+  with the "Progress Builds Possibilities." wave banner; Settings → About
+  shows the horizontal lockup
+
+### Changed — Midnight Sunrise theme
+- Design tokens match the official palette exactly (Midnight `#0B1020`,
+  Kairo Blue `#2563EB`, Violet `#8B5CF6`, Dawn `#F6C177`, Sky `#93C5FD`,
+  Light `#F8FAFC`, Slate `#475569`, Yellow `#FDE68A`)
+- Self-hosted Inter variable font (offline-safe); refined type rendering
+- Dark is now the default theme on first launch; the light theme stays one
+  click away, and Settings → Appearance offers an explicit Light/Dark
+  control (choice persists)
+- Every raw Tailwind palette class in feature screens migrated to semantic
+  tokens; status pills, badges, buttons, toasts and skeletons share one
+  token system; midnight-tinted elevation shadows and a brand glow shadow
+- Sidebar: aurora glow, gradient active pill with brand glow, refined
+  wordmark; TopBar: frosted-glass blur with token status pill
+
+### Security & reliability sweep
+- Blocking network/subprocess commands audited and moved off the main
+  thread (`ai_test_connection`, `ai_list_models`, `tailor_suggest`,
+  `export_pdf`, `github_repo_candidate`)
+
 ## [3.0.0] — 2026-09-21
 
 The first public release. Everything from the internal 0.x/1.x phases
