@@ -33,7 +33,7 @@ function JobCard({ job, onOpen, onDelete }: { job: Job; onOpen: () => void; onDe
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:text-red-400"
+            className="text-bad hover:bg-bad-soft dark:hover:bg-bad/10 dark:text-red-400"
             onClick={onDelete}
           >
             Delete
@@ -80,7 +80,7 @@ export default function JobsPage() {
       />
 
       {loadError ? (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+        <div className="mb-6 rounded-xl border border-bad/25 bg-bad-soft p-4 text-sm text-bad dark:border-red-500/30 dark:bg-bad/10 dark:text-red-300">
           Could not load job workspaces: {loadError}
         </div>
       ) : null}

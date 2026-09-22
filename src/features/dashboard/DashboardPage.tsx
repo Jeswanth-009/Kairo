@@ -23,10 +23,10 @@ import type { ActivityItem, DashboardOverview, EvidenceReviewItem } from "../../
 
 const KIND_COLORS: Record<string, string> = {
   job: "bg-kairo-blue/10 text-kairo-blue",
-  application: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+  application: "bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300",
   version: "bg-kairo-violet/10 text-kairo-violet",
-  evidence: "bg-kairo-dawn/25 text-amber-700 dark:text-amber-300",
-  bullet: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+  evidence: "bg-kairo-dawn/25 text-warn dark:text-kairo-dawn",
+  bullet: "bg-sky-100 text-sky-700 dark:bg-kairo-sky/15 dark:text-kairo-sky",
   project: "bg-accent-soft text-muted",
   experience: "bg-accent-soft text-muted",
   education: "bg-accent-soft text-muted",
@@ -80,7 +80,7 @@ function EvidenceRow({ item }: { item: EvidenceReviewItem }) {
       to="/vault"
       className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-200 hover:bg-accent-soft"
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warn-soft text-warn dark:bg-warn/15 dark:text-amber-400">
         <TriangleAlert className="size-4" />
       </span>
       <span className="min-w-0 flex-1">
@@ -215,7 +215,7 @@ export default function DashboardPage() {
         </section>
         <Card className="p-6">
           <CardTitle>Dashboard unavailable</CardTitle>
-          <p className="mt-2 rounded-lg bg-warn-soft px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+          <p className="mt-2 rounded-lg bg-warn-soft px-3 py-2 text-xs leading-relaxed text-warn dark:text-kairo-dawn">
             Tauri bridge unavailable ({error}). Launch the desktop app with{" "}
             <code className="font-mono">npm run tauri dev</code> instead of the browser.
           </p>
@@ -247,14 +247,14 @@ export default function DashboardPage() {
       value: counts.projects,
       label: "Projects",
       icon: Folder,
-      iconClass: "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
+      iconClass: "bg-info-soft text-kairo-blue dark:bg-kairo-blue/15 dark:text-blue-400",
     },
     {
       to: "/vault",
       value: counts.experiences,
       label: "Experiences",
       icon: Briefcase,
-      iconClass: "bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400",
+      iconClass: "bg-kairo-violet/10 text-violet-600 dark:bg-kairo-violet/15 dark:text-violet-400",
     },
     {
       to: "/vault",
@@ -273,10 +273,10 @@ export default function DashboardPage() {
           : counts.evidenceTotal === 0
             ? "no evidence yet"
             : "all verified",
-      subClass: counts.evidenceUnverified > 0 ? "text-amber-600" : "text-emerald-600",
+      subClass: counts.evidenceUnverified > 0 ? "text-warn" : "text-ok",
       icon: ShieldCheck,
       iconClass:
-        counts.evidenceUnverified > 0 ? "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400" : "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400",
+        counts.evidenceUnverified > 0 ? "bg-warn-soft text-warn dark:bg-warn/15 dark:text-amber-400" : "bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-400",
     },
   ];
 
@@ -287,7 +287,7 @@ export default function DashboardPage() {
       label: "Job workspaces",
       sub: counts.jobs > 0 ? `${counts.jobsWithPlan} with a resume plan` : "paste a JD to start",
       icon: Briefcase,
-      iconClass: "bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
+      iconClass: "bg-info-soft text-kairo-blue dark:bg-kairo-blue/15 dark:text-blue-400",
     },
     {
       to: "/applications",
@@ -306,7 +306,7 @@ export default function DashboardPage() {
       label: "Resume versions",
       sub: counts.pdfsCompiled > 0 ? `${counts.pdfsCompiled} ${counts.pdfsCompiled === 1 ? "PDF compiled" : "PDFs compiled"}` : "export to create",
       icon: FileText,
-      iconClass: "bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400",
+      iconClass: "bg-kairo-violet/10 text-violet-600 dark:bg-kairo-violet/15 dark:text-violet-400",
     },
     {
       to: "/jobs",
@@ -318,7 +318,7 @@ export default function DashboardPage() {
           : "nothing awaiting review",
       subClass: counts.suggestionsPending > 0 ? "text-kairo-violet" : "text-muted",
       icon: Sparkles,
-      iconClass: "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400",
+      iconClass: "bg-warn-soft text-warn dark:bg-warn/15 dark:text-amber-400",
     },
   ];
 
@@ -395,7 +395,7 @@ export default function DashboardPage() {
           <Card className="p-5 lg:col-span-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-warn-soft text-warn dark:bg-warn/15 dark:text-amber-400">
                   <ShieldCheck className="size-3.5" />
                 </span>
                 <CardTitle>Evidence needing review</CardTitle>
@@ -411,7 +411,7 @@ export default function DashboardPage() {
                   className={`flex items-center gap-2.5 rounded-lg px-3 py-3 text-xs ${
                     counts.evidenceTotal === 0
                       ? "bg-accent-soft text-muted"
-                      : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                      : "bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300"
                   }`}
                 >
                   <CircleCheck className="size-3.5 shrink-0" />
@@ -430,7 +430,7 @@ export default function DashboardPage() {
           <Card className="p-5 lg:col-span-2">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-info-soft text-kairo-blue dark:bg-kairo-blue/15 dark:text-blue-400">
                   <Briefcase className="size-3.5" />
                 </span>
                 <CardTitle>Recent activity</CardTitle>
@@ -453,6 +453,17 @@ export default function DashboardPage() {
           </Card>
         </div>
       )}
+
+      {/* Brand close — the "Progress Builds Possibilities." banner, edge to
+          edge at a reduced height (center crop keeps the wordmark band). */}
+      <div aria-hidden className="mt-8 overflow-hidden rounded-2xl border border-line shadow-card">
+        <img
+          src="/brand/banner-waves-1600.jpg"
+          alt=""
+          draggable={false}
+          className="h-48 w-full object-cover object-center select-none"
+        />
+      </div>
     </div>
   );
 }

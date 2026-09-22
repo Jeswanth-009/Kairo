@@ -277,21 +277,21 @@ export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps)
         ) : null}
 
         {error ? (
-          <div className="m-auto max-w-md rounded-xl border border-red-200 bg-red-50 p-5 text-center dark:border-red-500/30 dark:bg-red-500/10">
-            <p className="text-sm font-semibold text-red-700 dark:text-red-300">Unable to render PDF in-app</p>
-            <p className="mt-1 font-mono text-[11px] break-all text-red-600 dark:text-red-400/80">{error}</p>
+          <div className="m-auto max-w-md rounded-xl border border-bad/25 bg-bad-soft p-5 text-center dark:border-red-500/30 dark:bg-bad/10">
+            <p className="text-sm font-semibold text-bad dark:text-red-300">Unable to render PDF in-app</p>
+            <p className="mt-1 font-mono text-[11px] break-all text-bad dark:text-red-400/80">{error}</p>
             <div className="mt-4 flex justify-center gap-2">
               <button
                 type="button"
                 onClick={handleOpenExternal}
-                className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500"
+                className="rounded-lg bg-bad px-3 py-1.5 text-xs font-medium text-white hover:bg-bad"
               >
                 Open in external PDF reader
               </button>
               <button
                 type="button"
                 onClick={handleReveal}
-                className="rounded-lg border border-red-300 bg-card px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-500/10"
+                className="rounded-lg border border-bad/40 bg-card px-3 py-1.5 text-xs font-medium text-bad hover:bg-bad-soft dark:border-red-500/40 dark:text-red-300 dark:hover:bg-bad/10"
               >
                 Reveal in folder
               </button>

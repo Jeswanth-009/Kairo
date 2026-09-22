@@ -32,7 +32,7 @@ const KIND_COLORS: Record<string, string> = {
   repository: "bg-kairo-violet/10 text-kairo-violet",
   document: "bg-kairo-blue/10 text-kairo-blue",
   certificate: "bg-kairo-blue/10 text-kairo-blue",
-  metric: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+  metric: "bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300",
   note: "bg-accent-soft text-muted",
   link: "bg-kairo-sky/20 text-sky-700",
   other: "bg-accent-soft text-muted",
@@ -246,11 +246,11 @@ function EvidenceTab({
                     </span>
                     <span className="text-sm font-medium text-ink">{item.title}</span>
                     {item.verified ? (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                      <span className="rounded-full bg-ok-soft px-2 py-0.5 text-[11px] font-medium text-ok">
                         ✓ Verified
                       </span>
                     ) : (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                      <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn">
                         Unverified
                       </span>
                     )}
@@ -281,7 +281,7 @@ function EvidenceTab({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                      className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10"
                       onClick={() => setDeleting(item)}
                     >
                       Delete
@@ -509,11 +509,11 @@ function BulletsTab({
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm leading-relaxed text-ink">{bullet.text}</p>
                 {bullet.approved ? (
-                  <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                  <span className="shrink-0 rounded-full bg-ok-soft px-2 py-0.5 text-[11px] font-medium text-ok">
                     ✓ Approved
                   </span>
                 ) : (
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                  <span className="shrink-0 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn">
                     Draft
                   </span>
                 )}
@@ -525,7 +525,7 @@ function BulletsTab({
                       key={ref.id}
                       title={`${ref.kind}${ref.verified ? " · verified" : " · unverified"}`}
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${
-                        ref.verified ? "bg-kairo-blue/10 text-kairo-blue" : "bg-amber-50 text-amber-700"
+                        ref.verified ? "bg-kairo-blue/10 text-kairo-blue" : "bg-warn-soft text-warn"
                       }`}
                     >
                       {ref.verified ? "✓" : "…"} {ref.title}
@@ -533,7 +533,7 @@ function BulletsTab({
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-[11px] text-amber-600">
+                <p className="mt-2 text-[11px] text-warn">
                   No evidence linked — approve only what you can support.
                 </p>
               )}
@@ -544,7 +544,7 @@ function BulletsTab({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                  className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10"
                   onClick={() => setDeleting(bullet)}
                 >
                   Delete
@@ -686,7 +686,7 @@ function BulletDialog({
         <div>
           <h4 className="mb-1.5 text-xs font-medium text-ink">Supporting evidence</h4>
           {evidence.length === 0 ? (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
               No evidence records exist for this record yet — add evidence first so this bullet can
               reference it.
             </p>
@@ -763,7 +763,7 @@ function RulesTab({
                 <span
                   className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                     rule.ruleType === "forbidden_claim"
-                      ? "bg-red-100 text-red-700"
+                      ? "bg-bad-soft text-bad"
                       : "bg-kairo-blue/10 text-kairo-blue"
                   }`}
                 >
@@ -781,7 +781,7 @@ function RulesTab({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                  className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10"
                   onClick={() => setDeleting(rule)}
                 >
                   Delete

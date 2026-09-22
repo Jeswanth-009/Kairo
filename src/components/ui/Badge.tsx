@@ -13,17 +13,17 @@ export type BadgeTone =
 
 const TONES: Record<BadgeTone, string> = {
   neutral: "bg-accent-soft text-muted border-line",
-  blue: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30",
+  blue: "bg-kairo-blue/10 text-kairo-blue border-kairo-blue/30 dark:bg-kairo-blue/15 dark:text-kairo-sky dark:border-kairo-blue/30",
   violet:
-    "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-500/30",
-  sky: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30",
+    "bg-kairo-violet/10 text-violet-700 border-kairo-violet/30 dark:bg-kairo-violet/15 dark:text-violet-300 dark:border-kairo-violet/30",
+  sky: "bg-kairo-sky/25 text-sky-800 border-kairo-sky/40 dark:bg-kairo-sky/10 dark:text-kairo-sky dark:border-kairo-sky/30",
   green:
-    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30",
+    "bg-ok/10 text-ok border-ok/30 dark:bg-ok/10 dark:text-emerald-300 dark:border-ok/30",
   amber:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30",
-  red: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/30",
+    "bg-warn/10 text-warn border-warn/30 dark:bg-warn/10 dark:text-kairo-dawn dark:border-warn/30",
+  red: "bg-bad/10 text-bad border-bad/30 dark:bg-bad/10 dark:text-red-300 dark:border-bad/30",
   dawn:
-    "bg-amber-100/70 text-amber-800 border-amber-300/60 dark:bg-amber-400/10 dark:text-amber-200 dark:border-amber-400/30",
+    "bg-kairo-dawn/25 text-amber-800 border-kairo-dawn/50 dark:bg-kairo-dawn/10 dark:text-kairo-dawn dark:border-kairo-dawn/30",
 };
 
 /** Tinted pill for statuses and kinds — the single source of pill styling. */

@@ -51,7 +51,7 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
                   {accepted ? (
                     <>
                       <span
-                        className="mr-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700"
+                        className="mr-1.5 rounded-full bg-ok-soft px-1.5 py-0.5 text-[10px] font-medium text-ok"
                         title="Accepted AI wording — canonical bullet unchanged"
                       >
                         tailored
@@ -63,7 +63,7 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
                   )}
                   {bullet.supports.length > 0 ? (
                     <span
-                      className="ml-1.5 text-[10px] text-emerald-600"
+                      className="ml-1.5 text-[10px] text-ok"
                       title={`Backs: ${bullet.supports.join(" · ")}`}
                     >
                       ✓ supports {bullet.supports.length} requirement
@@ -76,7 +76,7 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
           })}
         </ul>
       ) : (
-        <p className="mt-2 text-[11px] text-amber-600">
+        <p className="mt-2 text-[11px] text-warn">
           No approved canonical bullets — approve some in the record inspector.
         </p>
       )}
@@ -204,8 +204,8 @@ export function PlanTab({ jobId }: { jobId: number }) {
               <span
                 className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
                   plan.fitsOnePage
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
-                    : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
+                    ? "bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300"
+                    : "bg-warn-soft text-warn dark:bg-warn/15 dark:text-kairo-dawn"
                 }`}
               >
                 ~{plan.estimatedLines} lines ·{" "}
@@ -218,7 +218,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
             {plan.warnings.length > 0 ? (
               <ul className="mt-3 space-y-1">
                 {plan.warnings.map((warning, i) => (
-                  <li key={i} className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
+                  <li key={i} className="rounded-lg bg-warn-soft px-3 py-1.5 text-xs text-warn">
                     {warning}
                   </li>
                 ))}

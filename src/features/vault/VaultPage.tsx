@@ -145,7 +145,7 @@ export default function VaultPage() {
       <ProfileCard />
 
       {loadError ? (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+        <div className="mb-6 rounded-xl border border-bad/25 bg-bad-soft p-4 text-sm text-bad dark:border-red-500/30 dark:bg-bad/10 dark:text-red-300">
           Could not load the Vault: {loadError}
         </div>
       ) : null}

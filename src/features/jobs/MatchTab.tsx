@@ -7,20 +7,20 @@ import { toast } from "../../stores/toastStore";
 const COVERAGE_META: Record<Coverage, { label: string; dot: string; badge: string; hint: string }> = {
   covered: {
     label: "Covered",
-    dot: "bg-emerald-500",
-    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+    dot: "bg-ok",
+    badge: "bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300",
     hint: "",
   },
   partial: {
     label: "Partial",
-    dot: "bg-amber-500",
-    badge: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+    dot: "bg-warn",
+    badge: "bg-warn-soft text-warn dark:bg-warn/15 dark:text-kairo-dawn",
     hint: "Strengthen the evidence: add proof or use the skill more prominently.",
   },
   missing: {
     label: "Missing",
-    dot: "bg-red-500",
-    badge: "bg-red-100 text-red-700",
+    dot: "bg-bad",
+    badge: "bg-bad-soft text-bad",
     hint: "No fabrication — close the gap by learning/building with it, or address it in interviews.",
   },
 };
@@ -116,13 +116,13 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
       <Card className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+            <span className="rounded-full bg-ok-soft px-2.5 py-1 text-[11px] font-medium text-ok">
               {counts.covered} covered
             </span>
-            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+            <span className="rounded-full bg-warn-soft px-2.5 py-1 text-[11px] font-medium text-warn">
               {counts.partial} partial
             </span>
-            <span className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">
+            <span className="rounded-full bg-bad-soft px-2.5 py-1 text-[11px] font-medium text-bad">
               {counts.missing} missing
             </span>
             {domain ? (

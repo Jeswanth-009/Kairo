@@ -253,7 +253,7 @@ export function RecordDialog({
         }}
       >
         {serverError ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{serverError}</p>
+          <p className="rounded-lg bg-bad-soft px-3 py-2 text-xs text-bad">{serverError}</p>
         ) : null}
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-4">

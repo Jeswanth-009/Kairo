@@ -14,7 +14,7 @@ const TONES: Record<Tone, string> = {
   neutral:
     "border border-line bg-card text-muted hover:text-ink hover:border-line-strong hover:bg-accent-soft focus-visible:ring-slate-400",
   danger:
-    "border border-transparent bg-card text-muted hover:text-red-600 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-500/30 hover:bg-red-50 dark:hover:bg-red-500/10 focus-visible:ring-red-400",
+    "border border-transparent bg-card text-muted hover:text-bad dark:hover:text-red-400 hover:border-bad/25 dark:hover:border-red-500/30 hover:bg-bad-soft dark:hover:bg-bad/10 focus-visible:ring-red-400",
 };
 
 const SIZES = {

@@ -13,7 +13,7 @@ import type { InterviewCategory, InterviewPrep, Job } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
 const CATEGORY_ORDER: { key: InterviewCategory; label: string; color: string }[] = [
-  { key: "weak_area", label: "Weak areas — prepare an answer", color: "text-amber-600" },
+  { key: "weak_area", label: "Weak areas — prepare an answer", color: "text-warn" },
   { key: "project_deep_dive", label: "Project deep-dives", color: "text-kairo-blue" },
   { key: "technical_skill", label: "Technical questions", color: "text-kairo-violet" },
   { key: "responsibility", label: "Behavioral / responsibility", color: "text-sky-700" },
@@ -133,8 +133,8 @@ export default function InterviewPrepPage() {
               <span
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
                   prep.inputs.gapCount > 0
-                    ? "bg-warn-soft text-amber-700 dark:text-amber-300"
-                    : "bg-ok-soft text-emerald-700 dark:text-emerald-300"
+                    ? "bg-warn-soft text-warn dark:text-kairo-dawn"
+                    : "bg-ok-soft text-ok dark:text-emerald-300"
                 }`}
               >
                 {prep.inputs.gapCount} match gaps

@@ -30,10 +30,10 @@ const NAV_ITEMS: NavItem[] = [
 
 const linkClasses = ({ isActive }: { isActive: boolean }) =>
   [
-    "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
+    "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium",
     "transition-all duration-200",
     isActive
-      ? "bg-white/[0.09] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.07)]"
+      ? "bg-white/[0.1] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_4px_16px_-6px_rgb(37_99_235/0.5)]"
       : "text-muted hover:bg-white/[0.05] hover:text-slate-100",
   ].join(" ");
 
@@ -43,18 +43,24 @@ function NavItemLink({ item }: { item: NavItem }) {
       {({ isActive }) => (
         <>
           {isActive ? (
-            <span
-              aria-hidden
-              className="absolute top-1/2 left-0 h-5 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-kairo-sky to-kairo-violet"
-            />
+            <>
+              <span
+                aria-hidden
+                className="absolute top-1/2 left-0 h-5 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-kairo-sky to-kairo-violet"
+              />
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-xl bg-gradient-to-r from-kairo-blue/[0.14] to-kairo-violet/[0.08]"
+              />
+            </>
           ) : null}
           <item.icon
             className={[
-              "shrink-0 transition-colors duration-200",
+              "relative shrink-0 transition-colors duration-200",
               isActive ? "text-kairo-sky" : "text-muted group-hover:text-muted/60",
             ].join(" ")}
           />
-          <span>{item.label}</span>
+          <span className="relative">{item.label}</span>
         </>
       )}
     </NavLink>
@@ -71,12 +77,12 @@ export function Sidebar() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(420px 220px at -20% -10%, rgba(37,99,235,0.24), transparent 65%), radial-gradient(380px 260px at 120% 110%, rgba(139,92,246,0.14), transparent 60%)",
+            "radial-gradient(460px 240px at -20% -8%, rgba(37,99,235,0.28), transparent 65%), radial-gradient(420px 280px at 120% 112%, rgba(139,92,246,0.16), transparent 60%), radial-gradient(300px 160px at 50% 55%, rgba(246,193,119,0.05), transparent 70%)",
         }}
       />
 
       <div className="relative flex items-center gap-3 px-5 py-5">
-        <BrandMark size={36} />
+        <BrandMark size={38} glow />
         <div className="min-w-0">
           <div className="text-[15px] leading-tight font-semibold tracking-tight text-white">
             Kairo
@@ -103,7 +109,7 @@ export function Sidebar() {
           item={{ to: "/settings", label: "Settings", icon: Settings }}
         />
         <div className="px-3 pt-2.5 text-[11px] text-muted">
-          {appVersion ? `v${appVersion}` : "v3.0.0"} · Local-first
+          {appVersion ? `v${appVersion}` : "Kairo"} · Local-first
         </div>
       </div>
     </aside>

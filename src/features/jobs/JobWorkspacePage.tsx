@@ -65,7 +65,7 @@ export default function JobWorkspacePage() {
     return (
       <div className="mx-auto max-w-3xl p-8">
         <Card className="p-6">
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-bad">{error}</p>
           <Link to="/jobs" className="mt-3 inline-block text-xs text-kairo-blue hover:underline">
             Back to jobs
           </Link>
@@ -310,7 +310,7 @@ function RequirementsTab({ job }: { job: Job }) {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm text-ink">
-                          {req.rawText || <span className="text-red-500">empty requirement</span>}
+                          {req.rawText || <span className="text-bad">empty requirement</span>}
                         </p>
                         <p className="mt-0.5 text-[11px] text-muted/90">
                           importance {Math.round(req.importance * 100)}%
@@ -324,7 +324,7 @@ function RequirementsTab({ job }: { job: Job }) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:text-red-400"
+                          className="text-bad hover:bg-bad-soft dark:hover:bg-bad/10 dark:text-red-400"
                           onClick={() => {
                             void (async () => {
                               try {
@@ -349,7 +349,7 @@ function RequirementsTab({ job }: { job: Job }) {
       ))}
 
       {requirements.length === 0 ? (
-        <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+        <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn dark:text-kairo-dawn">
           No requirements yet — add them manually or recreate the workspace with the JD text.
         </p>
       ) : null}

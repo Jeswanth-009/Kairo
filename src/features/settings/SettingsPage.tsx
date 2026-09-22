@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrandMark } from "../../components/BrandMark";
+import { Moon, Sun } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
@@ -8,6 +8,7 @@ import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
 import type { BackupInfo } from "../../lib/types";
 import { useAppStore } from "../../stores/appStore";
+import { useThemeStore } from "../../stores/themeStore";
 import { toast } from "../../stores/toastStore";
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -28,27 +29,17 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-8">
-      <Card className="flex items-center gap-4 p-6">
-        <BrandMark size={44} />
-        <div>
-          <h2 className="text-sm font-semibold text-ink">Kairo</h2>
-          <p className="text-xs text-muted">
-            v{diagnostics?.appVersion ?? "0.1.0"} · Local-first career intelligence workspace
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            Tauri 2 · React · TypeScript · SQLite · Rust domain services
-          </p>
-        </div>
-      </Card>
+      <AppearanceCard />
+      <AboutCard version={diagnostics?.appVersion} />
 
       <Card className="p-6">
         <CardTitle>Database</CardTitle>
         {diagnosticsError ? (
-          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <p className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
             Tauri bridge unavailable — run the desktop app to inspect the database.
           </p>
         ) : (
-          <dl className="mt-3 divide-y divide-slate-100">
+          <dl className="mt-3 divide-y divide-line">
             <Row label="Schema version" value={String(diagnostics?.schemaVersion ?? "—")} />
             <Row label="Latest migration" value={diagnostics?.latestMigration ?? "—"} />
             <Row label="SQLite version" value={diagnostics?.sqliteVersion ?? "—"} />
@@ -60,7 +51,7 @@ export default function SettingsPage() {
             {smokeBusy ? "Running…" : "Run read/write smoke test"}
           </Button>
           {smoke ? (
-            <span className={smoke.ok ? "text-xs text-emerald-600" : "text-xs text-red-600"}>
+            <span className={smoke.ok ? "text-xs text-ok" : "text-xs text-bad"}>
               {smoke.ok ? `Verified in ${smoke.durationMs} ms` : `Failed: ${smoke.error ?? "unknown"}`}
             </span>
           ) : null}
@@ -71,6 +62,72 @@ export default function SettingsPage() {
 
       <BackupsCard />
     </div>
+  );
+}
+
+/** Light/Dark segmented control — v4 boots dark (Midnight), user choice persists. */
+function AppearanceCard() {
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.set);
+  const options = [
+    { id: "light" as const, label: "Light", icon: Sun },
+    { id: "dark" as const, label: "Dark", icon: Moon },
+  ];
+  return (
+    <Card className="p-6">
+      <CardTitle>Appearance</CardTitle>
+      <p className="mt-1 text-xs leading-relaxed text-muted">
+        Kairo v4 is designed around the Midnight look. Your choice is remembered on this machine.
+      </p>
+      <div className="mt-4 inline-flex items-center gap-1 rounded-xl border border-line bg-accent-soft p-1">
+        {options.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={theme === id}
+            onClick={() => setTheme(id)}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-4 py-1.5 text-xs font-medium transition-all duration-150",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kairo-blue/50",
+              theme === id
+                ? "bg-kairo-midnight text-white shadow-sm dark:bg-gradient-to-br dark:from-kairo-blue dark:to-kairo-violet"
+                : "text-muted hover:text-ink",
+            )}
+          >
+            <Icon className="size-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/** Brand about card — the horizontal lockup from the v4 brand kit. */
+function AboutCard({ version }: { version?: string }) {
+  const theme = useThemeStore((s) => s.theme);
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex flex-wrap items-center gap-5 p-6">
+        <img
+          src={theme === "dark" ? "/brand/lockup-horizontal-dark-400.png" : "/brand/lockup-horizontal-light-400.png"}
+          alt="Kairo — Your career. A brighter next step."
+          draggable={false}
+          className="h-16 w-auto rounded-xl select-none"
+        />
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-ink">
+            v{version ?? "4.0.0"} · Local-first career intelligence workspace
+          </h2>
+          <p className="mt-1 text-xs text-muted">
+            Tauri 2 · React · TypeScript · SQLite · Rust domain services
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            No fabrication, ever — every resume line traces back to verified evidence.
+          </p>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -150,7 +207,7 @@ function BackupsCard() {
           No backups yet — create one before importing data you care about.
         </p>
       ) : (
-        <ul className="mt-3 divide-y divide-slate-100">
+        <ul className="mt-3 divide-y divide-line">
           {backups.map((backup) => (
             <li key={backup.fileName} className="flex items-center justify-between gap-3 py-2">
               <div className="min-w-0">
@@ -331,12 +388,12 @@ function AiProviderCard() {
             {testing ? "Testing…" : "Test connection"}
           </Button>
           {hasKey ? (
-            <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400" onClick={() => void save(true)} disabled={saving}>
+            <Button size="sm" variant="ghost" className="text-bad dark:text-red-400" onClick={() => void save(true)} disabled={saving}>
               Clear stored key
             </Button>
           ) : null}
           {testResult ? (
-            <span className={testResult.ok ? "text-xs text-emerald-600" : "text-xs text-red-600"}>
+            <span className={testResult.ok ? "text-xs text-ok" : "text-xs text-bad"}>
               {testResult.ok ? "✓ " : "✕ "}
               {testResult.message}
             </span>

@@ -82,7 +82,7 @@ export function VaultCard({
                 : "No evidence attached yet — open the record to add proof"
             }
             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-              evidenceCount > 0 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+              evidenceCount > 0 ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn"
             }`}
           >
             {evidenceCount > 0 ? "✓" : "…"} {evidenceCount} evidence
@@ -111,7 +111,7 @@ export function VaultCard({
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+            className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10"
             onClick={onDelete}
           >
             Delete

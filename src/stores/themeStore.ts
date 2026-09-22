@@ -9,9 +9,11 @@ function initial(): Theme {
     const stored = localStorage.getItem(KEY);
     if (stored === "light" || stored === "dark") return stored;
   } catch {
-    /* storage unavailable — fall through to OS preference */
+    /* storage unavailable — use the v4 default */
   }
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  // v4 boots into the Midnight look — the brand's home theme. Light stays one
+  // click away (top bar toggle / Settings → Appearance).
+  return "dark";
 }
 
 function apply(theme: Theme) {
@@ -21,6 +23,16 @@ function apply(theme: Theme) {
 interface ThemeState {
   theme: Theme;
   toggle: () => void;
+  set: (theme: Theme) => void;
+}
+
+function persist(theme: Theme) {
+  try {
+    localStorage.setItem(KEY, theme);
+  } catch {
+    /* ignore */
+  }
+  apply(theme);
 }
 
 export const useThemeStore = create<ThemeState>((set) => {
@@ -31,13 +43,13 @@ export const useThemeStore = create<ThemeState>((set) => {
     toggle: () =>
       set((s) => {
         const next: Theme = s.theme === "dark" ? "light" : "dark";
-        try {
-          localStorage.setItem(KEY, next);
-        } catch {
-          /* ignore */
-        }
-        apply(next);
+        persist(next);
         return { theme: next };
+      }),
+    set: (theme) =>
+      set(() => {
+        persist(theme);
+        return { theme };
       }),
   };
 });

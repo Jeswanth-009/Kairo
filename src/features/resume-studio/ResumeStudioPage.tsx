@@ -738,7 +738,7 @@ export default function ResumeStudioPage() {
                 <div className="mb-3 flex items-center justify-between">
                   <CardTitle>
                     {label}
-                    <span className={cn("ml-1.5 text-xs font-normal", atCap ? "text-amber-600 dark:text-amber-400" : "text-muted")}>
+                    <span className={cn("ml-1.5 text-xs font-normal", atCap ? "text-warn dark:text-amber-400" : "text-muted")}>
                       {included}/{cap}
                     </span>
                   </CardTitle>
@@ -1081,7 +1081,7 @@ export default function ResumeStudioPage() {
           </div>
 
           {artifactStale ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-warn-soft px-4 py-2.5 text-xs text-amber-800 dark:border-amber-500/30 dark:text-amber-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-warn/30 bg-warn-soft px-4 py-2.5 text-xs text-amber-800 dark:border-warn/30 dark:text-kairo-dawn">
               <span>
                 The PDF on disk was compiled as{" "}
                 <strong>{TEMPLATES.find((t) => t.id === artifact?.templateId)?.name ?? artifact?.templateId ?? "an older template"}</strong>
@@ -1196,28 +1196,28 @@ export default function ResumeStudioPage() {
               )}
             </Button>
             {overflows ? (
-              <p className="mt-2 text-[11px] leading-relaxed text-amber-600 dark:text-amber-400">
+              <p className="mt-2 text-[11px] leading-relaxed text-warn dark:text-amber-400">
                 Estimate exceeds {pages} page{pages > 1 ? "s" : ""} for this template — raise "Target pages" or trim content, and check the page count after export.
               </p>
             ) : null}
 
             {artifact ? (
-              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+              <div className="mt-3 rounded-lg border border-ok/30 bg-ok-soft/70 p-3 dark:border-emerald-500/30 dark:bg-ok/10">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">Compiled</span>
                   {artifact.pageCount ? (
-                    <span className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                    <span className="text-[11px] text-ok dark:text-emerald-400">
                       · {artifact.pageCount} page(s)
                     </span>
                   ) : null}
-                  <span className="text-[11px] text-emerald-600/80 dark:text-emerald-400/70">
+                  <span className="text-[11px] text-ok/80 dark:text-emerald-400/70">
                     · {fmtAgo(artifact.compiledAt)}
                   </span>
                 </div>
                 <p className="mt-2 font-mono text-[10px] break-all text-emerald-800/80 select-all dark:text-emerald-300/70">
                   {artifact.pdfPath}
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-emerald-200/70 pt-2 dark:border-emerald-500/20">
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-ok/30/70 pt-2 dark:border-emerald-500/20">
                   <Button
                     size="sm"
                     variant="secondary"

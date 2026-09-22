@@ -145,7 +145,7 @@ function SkillCard({
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+            className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10"
             onClick={() => setConfirming(true)}
           >
             Delete
@@ -167,7 +167,7 @@ function SkillCard({
               <button
                 type="button"
                 aria-label={`Remove alias ${row.alias}`}
-                className="text-muted hover:text-red-600"
+                className="text-muted hover:text-bad"
                 onClick={() => {
                   void (async () => {
                     try {
@@ -212,7 +212,7 @@ function SkillCard({
             </button>
           )}
         </div>
-        {aliasError ? <p className="mt-1 text-xs text-red-600">{aliasError}</p> : null}
+        {aliasError ? <p className="mt-1 text-xs text-bad">{aliasError}</p> : null}
       </div>
 
       <SkillDialog open={editing} skill={skill} onClose={() => setEditing(false)} />

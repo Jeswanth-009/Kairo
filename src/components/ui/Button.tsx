@@ -15,12 +15,12 @@ const VARIANTS: Record<NonNullable<ButtonProps["variant"]>, string> = {
     "focus-visible:ring-kairo-blue",
   ].join(" "),
   secondary:
-    "border border-line bg-card text-ink shadow-sm hover:border-line-strong hover:bg-accent-soft hover:-translate-y-px active:translate-y-0 focus-visible:ring-slate-400",
-  ghost: "text-muted hover:bg-accent-soft hover:text-ink focus-visible:ring-slate-400",
+    "border border-line bg-card text-ink shadow-sm hover:border-line-strong hover:bg-accent-soft hover:-translate-y-px active:translate-y-0 focus-visible:ring-kairo-blue/50",
+  ghost: "text-muted hover:bg-accent-soft hover:text-ink focus-visible:ring-kairo-blue/50",
   danger:
-    "text-white bg-red-600 shadow-sm ring-1 ring-red-500/40 hover:bg-red-500 hover:-translate-y-px active:translate-y-0 focus-visible:ring-red-400",
+    "text-white bg-bad shadow-sm ring-1 ring-bad/40 hover:bg-bad hover:-translate-y-px active:translate-y-0 focus-visible:ring-bad",
   "danger-outline":
-    "border border-red-200 dark:border-red-500/30 bg-card text-red-600 dark:text-red-400 shadow-sm hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-300 dark:hover:border-red-500/50 focus-visible:ring-red-400",
+    "border border-bad/25 bg-card text-bad shadow-sm hover:bg-bad/5 hover:border-bad/40 dark:border-bad/30 dark:text-red-400 dark:hover:bg-bad/10 focus-visible:ring-bad",
 };
 
 const SIZES: Record<NonNullable<ButtonProps["size"]>, string> = {

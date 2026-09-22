@@ -8,9 +8,9 @@ import type { PlanItem, ResumePlan, TailorSuggestion } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
 const STATUS_META: Record<TailorSuggestion["status"], { label: string; badge: string }> = {
-  pending: { label: "Pending review", badge: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" },
-  accepted: { label: "Accepted", badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" },
-  rejected: { label: "Rejected", badge: "bg-red-100 text-red-700" },
+  pending: { label: "Pending review", badge: "bg-warn-soft text-warn dark:bg-warn/15 dark:text-kairo-dawn" },
+  accepted: { label: "Accepted", badge: "bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300" },
+  rejected: { label: "Rejected", badge: "bg-bad-soft text-bad" },
 };
 
 export function TailorTab({
@@ -125,7 +125,7 @@ export function TailorTab({
             </Button>
           ) : null}
           {plan && bulletsNeedingSuggestions === 0 ? (
-            <span className="self-center text-xs text-emerald-600">All planned bullets have accepted wording</span>
+            <span className="self-center text-xs text-ok">All planned bullets have accepted wording</span>
           ) : null}
         </div>
       </Card>
@@ -176,7 +176,7 @@ export function TailorTab({
                             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                               suggestion.validation.ok
                                 ? STATUS_META[suggestion.status].badge
-                                : "bg-red-100 text-red-700"
+                                : "bg-bad-soft text-bad"
                             }`}
                           >
                             {suggestion.validation.ok
@@ -186,7 +186,7 @@ export function TailorTab({
                         </div>
 
                         {suggestion.status === "rejected" && suggestion.validation.violations.length > 0 ? (
-                          <p className="mt-1.5 text-xs text-red-600">{suggestion.suggestedText}</p>
+                          <p className="mt-1.5 text-xs text-bad">{suggestion.suggestedText}</p>
                         ) : (
                           <p className="mt-1.5 text-sm text-ink">{suggestion.suggestedText}</p>
                         )}
@@ -194,7 +194,7 @@ export function TailorTab({
                         {suggestion.validation.violations.length > 0 ? (
                           <ul className="mt-2 space-y-0.5">
                             {suggestion.validation.violations.map((violation, i) => (
-                              <li key={i} className="text-[11px] text-red-600">
+                              <li key={i} className="text-[11px] text-bad">
                                 ✕ {violation}
                               </li>
                             ))}
@@ -221,7 +221,7 @@ export function TailorTab({
                 );
               })}
               {item.bullets.length === 0 ? (
-                <li className="text-xs text-amber-600">
+                <li className="text-xs text-warn">
                   No approved canonical bullets for this record — nothing to tailor.
                 </li>
               ) : null}
@@ -275,7 +275,7 @@ function AcceptRow({
         <Button
           size="sm"
           variant="ghost"
-          className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+          className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10"
           onClick={() =>
             void (async () => {
               try {

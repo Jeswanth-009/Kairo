@@ -15,7 +15,7 @@ const BASE = [
 
 function borderFor(error?: boolean) {
   return error
-    ? "border-red-300 dark:border-red-500/50 hover:border-red-400 focus:border-red-400"
+    ? "border-bad/40 dark:border-red-500/50 hover:border-red-400 focus:border-red-400"
     : "border-line hover:border-line-strong focus:border-kairo-blue";
 }
 
@@ -38,7 +38,7 @@ export function Field({ label, required, error, hint, children }: FieldProps) {
         {hint ? <span className="font-normal text-muted/80">{hint}</span> : null}
       </span>
       {children}
-      {error ? <span className="mt-1 block text-xs text-red-600 dark:text-red-400">{error}</span> : null}
+      {error ? <span className="mt-1 block text-xs text-bad dark:text-red-400">{error}</span> : null}
     </label>
   );
 }

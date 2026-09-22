@@ -1,9 +1,15 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 
 /*
-  Kairo brand tokens — see spec §1.2.
-  Meaning: midnight = trust/depth, blue = primary action/progress,
-  violet = intelligence accent, sky = soft highlights, dawn = opportunity (use sparingly).
+  Kairo v4 design system — "Midnight Sunrise".
+  See brand/README.md and brand/palette-reference.png for the source of truth.
+
+  Brand palette (constant across themes):
+    midnight #0B1020 (trust/depth) · kairo-blue #2563EB (primary action/progress)
+    violet #8B5CF6 (intelligence) · sky #93C5FD (soft highlight)
+    dawn #F6C177 (opportunity — the K-mark "sun", use sparingly)
+    yellow #FDE68A (highlight) · slate #475569 (neutral ink) · light #F8FAFC
 
   Semantic surfaces are CSS variables (flipped by `.dark`) mapped into the
   Tailwind theme, so one class (bg-card, text-ink, border-line…) tracks the
@@ -15,33 +21,44 @@
   --kairo-surface: #f6f8fb;
   --kairo-card: #ffffff;
   --kairo-card-muted: #f1f5f9;
-  --kairo-ink: #182238;
-  --kairo-muted: #64748b;
+  --kairo-ink: #0f1a30;
+  --kairo-muted: #5b6b85;
   --kairo-line: #e2e8f0;
   --kairo-line-strong: #cbd5e1;
-  --kairo-accent-soft: #f1f5f9;
+  --kairo-accent-soft: #eef2f9;
   --kairo-sidebar: #0b1020;
+  --kairo-glow: rgb(37 99 235 / 0.16);
+  --kairo-shadow-tint: 15 23 42;
 }
 
 .dark {
-  --kairo-surface: #0c1122;
-  --kairo-card: #131a30;
-  --kairo-card-muted: #1a2340;
-  --kairo-ink: #e4e9f5;
+  --kairo-surface: #0b1020;
+  --kairo-card: #111a33;
+  --kairo-card-muted: #16203c;
+  --kairo-ink: #e8edf9;
   --kairo-muted: #8e9bb8;
-  --kairo-line: #24304f;
-  --kairo-line-strong: #33406a;
-  --kairo-accent-soft: #1c2544;
-  --kairo-sidebar: #090d1a;
+  --kairo-line: #223054;
+  --kairo-line-strong: #314273;
+  --kairo-accent-soft: #18234a;
+  --kairo-sidebar: #080c19;
+  --kairo-glow: rgb(99 102 241 / 0.22);
+  --kairo-shadow-tint: 2 6 23;
 }
 
 @theme {
+  --font-sans: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui,
+    -apple-system, "Helvetica Neue", sans-serif;
+
+  /* Brand ramp — matches brand/palette-reference.png exactly. */
   --color-kairo-midnight: #0b1020;
   --color-kairo-midnight-raised: #111a33;
   --color-kairo-blue: #2563eb;
   --color-kairo-violet: #8b5cf6;
   --color-kairo-sky: #93c5fd;
   --color-kairo-dawn: #f6c177;
+  --color-kairo-yellow: #fde68a;
+  --color-kairo-light: #f8fafc;
+  --color-kairo-slate: #475569;
 
   /* Semantic surfaces — theme-aware via the variables above. */
   --color-surface: var(--kairo-surface);
@@ -63,9 +80,11 @@
   --color-bad-soft: #fee2e2;
   --color-info-soft: #dbeafe;
 
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.03);
-  --shadow-raised: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px rgb(15 23 42 / 0.04);
-  --shadow-float: 0 12px 32px -8px rgb(15 23 42 / 0.18), 0 4px 12px -4px rgb(15 23 42 / 0.08);
+  /* Elevation — tinted toward midnight, with an optional brand glow ring. */
+  --shadow-card: 0 1px 2px rgb(var(--kairo-shadow-tint) / 0.05), 0 1px 3px rgb(var(--kairo-shadow-tint) / 0.04);
+  --shadow-raised: 0 4px 14px -2px rgb(var(--kairo-shadow-tint) / 0.1), 0 2px 4px rgb(var(--kairo-shadow-tint) / 0.05);
+  --shadow-float: 0 14px 36px -8px rgb(var(--kairo-shadow-tint) / 0.22), 0 4px 12px -4px rgb(var(--kairo-shadow-tint) / 0.1);
+  --shadow-glow: 0 0 0 1px rgb(37 99 235 / 0.18), 0 6px 24px -6px var(--kairo-glow);
 }
 
 @layer base {
@@ -76,8 +95,8 @@
   }
 
   body {
-    font-family:
-      "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+    font-family: var(--font-sans);
+    font-feature-settings: "cv05" 1, "ss01" 1;
     background-color: var(--kairo-surface);
     color: var(--kairo-ink);
     -webkit-font-smoothing: antialiased;
@@ -119,7 +138,9 @@
   }
 }
 
-/* Motion: quick, small, purposeful. prefers-reduced-motion flattens all of it. */
+/* ---------------------------------------------------------------------------
+ * Motion: quick, small, purposeful. prefers-reduced-motion flattens all of it.
+ * -------------------------------------------------------------------------*/
 @keyframes kairo-fade-up {
   from {
     opacity: 0;
@@ -162,6 +183,27 @@
   }
 }
 
+/* Slow ambient pulse for the brand mark (splash, empty states). */
+@keyframes kairo-glow-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 10px rgb(37 99 235 / 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 22px rgb(139 92 246 / 0.45));
+  }
+}
+
+/* Skeleton shimmer for loading states. */
+@keyframes kairo-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
 @utility page-enter {
   animation: kairo-fade-up 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -176,6 +218,21 @@
 
 @utility toast-enter {
   animation: kairo-slide-left 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility glow-pulse {
+  animation: kairo-glow-pulse 3.2s ease-in-out infinite;
+}
+
+@utility shimmer {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in srgb, var(--color-kairo-sky) 16%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: kairo-shimmer 1.8s linear infinite;
 }
 
 /* Motion policy: 160-220ms normal, 350-500ms major; respect OS reduced-motion preference. */

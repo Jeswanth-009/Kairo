@@ -128,7 +128,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
             </Button>
 
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 whitespace-pre-wrap font-mono dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+              <div className="rounded-lg border border-bad/25 bg-bad-soft p-3 text-xs text-bad whitespace-pre-wrap font-mono dark:border-red-500/30 dark:bg-bad/10 dark:text-red-300">
                 {error}
               </div>
             )}

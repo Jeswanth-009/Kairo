@@ -179,7 +179,7 @@ function ApplicationDialog({
           />
         </Field>
         {error ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</p>
+          <p className="rounded-lg bg-bad-soft px-3 py-2 text-xs text-bad dark:border-red-500/30 dark:bg-bad/10 dark:text-red-300">{error}</p>
         ) : null}
         <div className="flex justify-end gap-3">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -336,7 +336,7 @@ export default function ApplicationsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 dark:text-red-400"
+                    className="text-bad hover:bg-bad-soft dark:hover:bg-bad/10 dark:text-red-400"
                     onClick={() => setDeleting(app)}
                   >
                     Delete
