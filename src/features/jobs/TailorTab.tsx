@@ -4,7 +4,7 @@ import { Input } from "../../components/ui/inputs";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { ipc } from "../../lib/ipc";
 import { fmtRange } from "../../lib/dateFmt";
-import type { PlanItem, ResumePlan, TailorSuggestion } from "../../lib/types";
+import type { PlanItem, ResumePlan, TailorBatchReport, TailorSuggestion } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
 const STATUS_META: Record<TailorSuggestion["status"], { label: string; badge: string }> = {
@@ -12,6 +12,12 @@ const STATUS_META: Record<TailorSuggestion["status"], { label: string; badge: st
   accepted: { label: "Accepted", badge: "bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300" },
   rejected: { label: "Rejected", badge: "bg-bad-soft text-bad" },
 };
+
+/** "42.3s" style elapsed formatting for run timers. */
+function fmtSeconds(ms: number): string {
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
 
 export function TailorTab({
   jobId,
@@ -24,6 +30,8 @@ export function TailorTab({
   const [plan, setPlan] = useState<ResumePlan | null>(null);
   const [busyBullet, setBusyBullet] = useState<number | null>(null);
   const [runningAll, setRunningAll] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [report, setReport] = useState<TailorBatchReport | null>(null);
 
   const reload = async () => {
     try {
@@ -41,11 +49,26 @@ export function TailorTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
+  // Live elapsed timer while a tailor run is in flight.
+  useEffect(() => {
+    if (!runningAll) return;
+    setElapsedMs(0);
+    const timer = window.setInterval(() => setElapsedMs((e) => e + 1000), 1000);
+    return () => window.clearInterval(timer);
+  }, [runningAll]);
+
+  const mergeSuggestions = (incoming: TailorSuggestion[]) =>
+    setSuggestions((prev) => {
+      const byId = new Map(prev.map((s) => [s.id, s]));
+      for (const s of incoming) byId.set(s.id, s);
+      return [...byId.values()].sort((a, b) => b.id - a.id);
+    });
+
   const suggest = async (bulletId: number) => {
     setBusyBullet(bulletId);
     try {
       const suggestion = await ipc.tailorSuggest(jobId, bulletId);
-      setSuggestions((prev) => [suggestion, ...prev.filter((s) => s.id !== suggestion.id)]);
+      mergeSuggestions([suggestion]);
       if (suggestion.validation.ok) {
         toast.ok("Rewrite suggestion ready — review before accepting");
       } else {
@@ -58,42 +81,31 @@ export function TailorTab({
     }
   };
 
-  const suggestAll = async () => {
-    if (!plan) return;
+  const tailorAll = async () => {
     setRunningAll(true);
+    setReport(null);
     try {
-      const bullets = [...plan.experience, ...plan.projects].flatMap((item) =>
-        item.bullets.map((b) => b.id),
+      const result = await ipc.tailorPlanBatch(jobId);
+      mergeSuggestions(result.suggestions);
+      setReport(result);
+      const ok = result.suggestions.filter((s) => s.validation.ok).length;
+      toast.ok(
+        `${ok} rewrite(s) ready in ${fmtSeconds(result.durationMs)}${
+          result.batchUsed ? "" : " (per-bullet fallback)"
+        }`,
       );
-      let ok = 0;
-      let rejected = 0;
-      for (const bulletId of bullets) {
-        try {
-          const suggestion = await ipc.tailorSuggest(jobId, bulletId);
-          setSuggestions((prev) => [suggestion, ...prev.filter((s) => s.id !== suggestion.id)]);
-          if (suggestion.validation.ok) ok += 1;
-          else rejected += 1;
-        } catch (e) {
-          rejected += 1;
-          // Surface the rejection reason per bullet in the card itself.
-          setSuggestions((prev) => [
-            {
-              id: -Date.now() - bulletId,
-              jobId,
-              bulletId,
-              originalText: "",
-              suggestedText: String(e),
-              status: "rejected",
-              validation: { ok: false, violations: [String(e)] },
-              model: "",
-            },
-            ...prev,
-          ]);
-        }
-      }
-      toast.ok(`${ok} suggestion(s) ready, ${rejected} rejected by validation`);
+    } catch (e) {
+      toast.error(String(e));
     } finally {
       setRunningAll(false);
+    }
+  };
+
+  const stop = async () => {
+    try {
+      await ipc.tailorCancel();
+    } catch {
+      /* best effort — the run finishes on its own timeout */
     }
   };
 
@@ -109,25 +121,70 @@ export function TailorTab({
       <Card className="p-6">
         <CardTitle>Grounded tailoring</CardTitle>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          The AI rewrites only this workspace's approved bullets, one at a time, with the target
-          requirement, your evidence notes and your claim rules as its only inputs. Every rewrite
-          passes the validation pipeline — new technologies, new metrics, forbidden claims and
-          uncited facts are rejected before you ever see them. Nothing is applied without your
-          Accept.
+          One AI pass rewrites every planned bullet — each with its target requirement, evidence
+          notes and claim rules as the only inputs. Every rewrite passes the validation pipeline —
+          new technologies, new metrics, forbidden claims and uncited facts are rejected before you
+          ever see them. Nothing is applied without your Accept.
         </p>
-        <div className="mt-4 flex gap-2">
-          <Button onClick={() => void suggestAll()} disabled={runningAll || !plan || items.length === 0}>
-            {runningAll ? "Rewriting…" : "Suggest for all bullets"}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => void tailorAll()}
+            disabled={runningAll || !plan || items.length === 0}
+          >
+            {runningAll ? "Rewriting…" : "Tailor all — one pass"}
           </Button>
+          {runningAll ? (
+            <Button variant="danger-outline" onClick={() => void stop()}>
+              Stop
+            </Button>
+          ) : null}
           {!plan ? (
             <Button variant="secondary" onClick={onComposePlan}>
               Compose a plan first
             </Button>
           ) : null}
-          {plan && bulletsNeedingSuggestions === 0 ? (
-            <span className="self-center text-xs text-ok">All planned bullets have accepted wording</span>
+          {runningAll ? (
+            <span className="text-xs text-muted">
+              {fmtSeconds(elapsedMs)} elapsed — one call, the whole plan
+            </span>
+          ) : null}
+          {plan && !runningAll && bulletsNeedingSuggestions === 0 ? (
+            <span className="text-xs text-ok">All planned bullets have accepted wording</span>
           ) : null}
         </div>
+
+        {report && !runningAll ? (
+          <div className="mt-4 rounded-lg border border-line bg-surface p-3 text-xs">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-medium text-ink">
+                Last run: {report.batchUsed ? "one AI call" : "per-bullet fallback"}
+              </span>
+              <span className="text-muted">{report.model}</span>
+              <span className="text-muted">{fmtSeconds(report.durationMs)}</span>
+              {report.promptTokens !== null ? (
+                <span className="text-muted">
+                  {report.promptTokens.toLocaleString()} in ·{" "}
+                  {report.completionTokens?.toLocaleString() ?? "?"} out
+                </span>
+              ) : null}
+              <span className="text-ok">
+                {report.suggestions.filter((s) => s.validation.ok).length} ready
+              </span>
+              {report.suggestions.some((s) => !s.validation.ok) ? (
+                <span className="text-bad">
+                  {report.suggestions.filter((s) => !s.validation.ok).length} rejected
+                </span>
+              ) : null}
+            </div>
+            {report.durationMs > 30_000 ? (
+              <p className="mt-1.5 text-warn">
+                The model took {fmtSeconds(report.durationMs)}. Free-tier and large local models are
+                the usual cause — a smaller or paid-tier model in Settings → AI provider rewrites in
+                seconds.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </Card>
 
       {!plan ? (
@@ -149,6 +206,7 @@ export function TailorTab({
               {item.bullets.map((bullet) => {
                 const suggestion = suggestions.find((s) => s.bulletId === bullet.id);
                 const busy = busyBullet === bullet.id;
+                const running = runningAll;
                 return (
                   <li key={bullet.id} className="rounded-lg border border-line p-3.5">
                     <div className="flex items-start justify-between gap-3">
@@ -159,7 +217,7 @@ export function TailorTab({
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={busy || runningAll}
+                        disabled={busy || running}
                         onClick={() => void suggest(bullet.id)}
                       >
                         {busy ? "Rewriting…" : suggestion ? "Re-suggest" : "Suggest rewrite"}
@@ -216,6 +274,8 @@ export function TailorTab({
                           />
                         ) : null}
                       </div>
+                    ) : running ? (
+                      <p className="mt-2 text-xs text-muted">Queued for the one-pass rewrite…</p>
                     ) : null}
                   </li>
                 );

@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-pub const PROMPT_VERSION: u32 = 1;
+pub const PROMPT_VERSION: u32 = 2;
 
 pub const SYSTEM_PROMPT: &str = "You tailor a single resume bullet for one job requirement. \
 Hard rules: keep the same factual meaning; never introduce technologies, tools, numbers, \
@@ -16,7 +16,19 @@ metrics, percentages, user counts, scale, or responsibilities that are not in th
 bullet or its evidence notes; never use any forbidden claim; keep it under 25 words. \
 Respond with ONLY a JSON object of shape {\"text\": string, \"factsUsed\": number[], \
 \"newClaims\": []} where factsUsed lists the evidence ids you relied on (leave empty if no evidence ids are provided) and newClaims is \
-always an empty array.";
+always an empty array. \
+Output only the JSON object — no explanations, no reasoning, no <think> blocks, no markdown.";
+
+pub const BATCH_SYSTEM_PROMPT: &str = "You tailor resume bullets for one job. You receive \
+numbered bullets, each with its evidence notes, target requirements and allowed evidence ids. \
+Rewrite every bullet towards its own target requirements. Hard rules: keep the same factual \
+meaning; never introduce technologies, tools, numbers, metrics, percentages, user counts, \
+scale, or responsibilities that are not in that bullet or its evidence notes; never use any \
+forbidden claim; keep each rewrite under 25 words; rewrite every bullet independently. \
+Respond with ONLY a JSON object of shape {\"rewrites\": [{\"bulletId\": number, \"text\": string, \
+\"factsUsed\": number[]}]} where factsUsed lists that bullet's evidence ids you relied on \
+(empty if none provided) and every provided bulletId appears exactly once. \
+Output only the JSON object — no explanations, no reasoning, no <think> blocks, no markdown.";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -90,39 +102,7 @@ pub fn parse_response(raw: &str) -> Result<RewriteOutput, String> {
         new_claims: serde_json::Value,
     }
 
-    let value: serde_json::Value = {
-        // The model may wrap the JSON in code fences; strip them defensively.
-        let trimmed = raw.trim();
-        let stripped = trimmed
-            .strip_prefix("```json")
-            .or_else(|| trimmed.strip_prefix("```"))
-            .unwrap_or(trimmed)
-            .trim()
-            .strip_suffix("```")
-            .unwrap_or(trimmed)
-            .trim();
-        // Thinking models (qwen, deepseek-r1, …) prepend <think>…</think>
-        // reasoning — drop the whole block before parsing.
-        let without_think = match stripped.find("</think>") {
-            Some(idx) => stripped[idx + "</think>".len()..].trim(),
-            None => stripped,
-        };
-        // Some models prepend commentary before the JSON object — parse from
-        // the first '{' if a direct parse fails.
-        match serde_json::from_str(without_think) {
-            Ok(v) => v,
-            Err(_) => {
-                let from_brace = without_think.find('{').ok_or_else(|| {
-                    format!(
-                        "response is not valid JSON: no JSON object found in {:.140}",
-                        without_think
-                    )
-                })?;
-                serde_json::from_str(&without_think[from_brace..])
-                    .map_err(|e| format!("response is not valid JSON: {e}"))
-            }
-        }?
-    };
+    let value: serde_json::Value = extract_json_object(raw)?;
     let raw: Raw = serde_json::from_value(value).map_err(|e| format!("schema violation: {e}"))?;
 
     if !raw.new_claims.as_array().map(|a| a.is_empty()).unwrap_or(false) {
@@ -231,6 +211,169 @@ pub fn check(raw: &str, ctx: &TailorContext) -> Result<RewriteOutput, String> {
     } else {
         Err(validation.violations.join("; "))
     }
+}
+
+// ---------------------------------------------------------------------------
+// Batch tailoring: one call rewrites the whole plan
+// ---------------------------------------------------------------------------
+
+/// One bullet's grounding as it appears in the batch prompt.
+pub struct BatchItemInput {
+    pub bullet_id: i64,
+    pub bullet_text: String,
+    pub evidence_notes: Vec<String>,
+    pub target_requirements: Vec<String>,
+    pub allowed_fact_ids: Vec<i64>,
+}
+
+/// One parsed rewrite coming back from the batch call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchRewriteItem {
+    pub bullet_id: i64,
+    pub text: String,
+    pub facts_used: Vec<i64>,
+}
+
+/// Builds the single batch prompt covering every planned bullet. Evidence is
+/// trimmed per bullet so a 20-bullet plan stays within a few thousand tokens.
+pub fn build_batch_user_prompt(
+    role_line: &str,
+    forbidden_patterns: &[String],
+    items: &[BatchItemInput],
+) -> String {
+    let mut user = String::new();
+    user.push_str(&format!("Job: {role_line}\n\n"));
+    user.push_str("Forbidden claims (never include these phrases or anything similar):\n");
+    if forbidden_patterns.is_empty() {
+        user.push_str("(none configured)\n");
+    } else {
+        for pattern in forbidden_patterns {
+            user.push_str(&format!("- {pattern}\n"));
+        }
+    }
+    user.push_str("\nBullets to rewrite:\n");
+    for (i, item) in items.iter().enumerate() {
+        user.push_str(&format!(
+            "\n[{}] bulletId {} — \"{}\"\n",
+            i + 1,
+            item.bullet_id,
+            item.bullet_text
+        ));
+        user.push_str("Evidence notes (the only facts you may rely on):\n");
+        if item.evidence_notes.is_empty() {
+            user.push_str("(none)\n");
+        } else {
+            for (j, note) in item.evidence_notes.iter().enumerate() {
+                user.push_str(&format!("{}. {}\n", j + 1, note));
+            }
+        }
+        user.push_str("Target requirement(s):\n");
+        for requirement in &item.target_requirements {
+            user.push_str(&format!("- {requirement}\n"));
+        }
+        if item.allowed_fact_ids.is_empty() {
+            user.push_str("Evidence ids: none (set factsUsed to [])\n");
+        } else {
+            user.push_str(&format!("Evidence ids: {:?}\n", item.allowed_fact_ids));
+        }
+    }
+    user.push_str(&format!(
+        "\nRewrite every bullet {} and respond with only the JSON object.\n",
+        items.len()
+    ));
+    user
+}
+
+/// Shared defensive JSON extraction (code fences, <think> blocks, leading
+/// commentary) reused by the single-bullet and batch parsers.
+fn extract_json_object(raw: &str) -> Result<serde_json::Value, String> {
+    let trimmed = raw.trim();
+    let stripped = trimmed
+        .strip_prefix("```json")
+        .or_else(|| trimmed.strip_prefix("```"))
+        .unwrap_or(trimmed)
+        .trim()
+        .strip_suffix("```")
+        .unwrap_or(trimmed)
+        .trim();
+    // Thinking models (qwen, deepseek-r1, …) prepend <think>…</think>
+    // reasoning — drop the whole block before parsing.
+    let without_think = match stripped.find("</think>") {
+        Some(idx) => stripped[idx + "</think>".len()..].trim(),
+        None => stripped,
+    };
+    match serde_json::from_str(without_think) {
+        Ok(v) => Ok(v),
+        Err(_) => {
+            let from_brace = without_think.find('{').ok_or_else(|| {
+                format!(
+                    "response is not valid JSON: no JSON object found in {:.140}",
+                    without_think
+                )
+            })?;
+            serde_json::from_str(&without_think[from_brace..])
+                .map_err(|e| format!("response is not valid JSON: {e}"))
+        }
+    }
+}
+
+/// Parses the batch response. `expected_ids` guards against hallucinated
+/// bullet ids: unknown ids are reported instead of silently accepted.
+pub fn parse_batch_response(
+    raw: &str,
+    expected_ids: &[i64],
+) -> Result<Vec<BatchRewriteItem>, String> {
+    let value = extract_json_object(raw)?;
+    // Tolerate a bare array as well as the wrapped {"rewrites": [...]} form.
+    let rewrites = if value.is_array() {
+        value
+    } else {
+        value
+            .get("rewrites")
+            .ok_or("response is missing the \"rewrites\" array")?
+            .clone()
+    };
+    let list = rewrites
+        .as_array()
+        .ok_or("\"rewrites\" must be an array of rewrite objects")?;
+
+    let mut out = Vec::new();
+    for item in list {
+        let bullet_id = item
+            .get("bulletId")
+            .and_then(|v| v.as_i64())
+            .ok_or("each rewrite needs a numeric bulletId")?;
+        if !expected_ids.contains(&bullet_id) {
+            return Err(format!("response cites unknown bulletId {bullet_id}"));
+        }
+        let text = item
+            .get("text")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+            .ok_or_else(|| format!("rewrite for bulletId {bullet_id} needs a string \"text\""))?;
+        if text.is_empty() {
+            return Err(format!("rewrite for bulletId {bullet_id} is empty"));
+        }
+        let mut facts_used = Vec::new();
+        match item.get("factsUsed") {
+            Some(serde_json::Value::Array(items)) => {
+                for id in items {
+                    facts_used.push(
+                        id.as_i64()
+                            .ok_or("factsUsed must contain only evidence ids (numbers)")?,
+                    );
+                }
+            }
+            _ => return Err(format!("rewrite for bulletId {bullet_id} needs a factsUsed array")),
+        }
+        out.push(BatchRewriteItem {
+            bullet_id,
+            text,
+            facts_used,
+        });
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -380,5 +523,78 @@ mod tests {
         assert!(prompt.contains("Original bullet:"));
         assert!(prompt.contains("production-scale distributed system"));
         assert!(prompt.contains("[1]"));
+    }
+
+    // --- Batch tailoring -----------------------------------------------------
+
+    fn batch_items() -> Vec<BatchItemInput> {
+        vec![
+            BatchItemInput {
+                bullet_id: 11,
+                bullet_text: "Built an in-memory key-value store in Python".to_string(),
+                evidence_notes: vec!["GitHub repository with benchmarks".to_string()],
+                target_requirements: vec!["Strong Python skills".to_string()],
+                allowed_fact_ids: vec![7],
+            },
+            BatchItemInput {
+                bullet_id: 12,
+                bullet_text: "Shipped a monitoring dashboard in Flask".to_string(),
+                evidence_notes: vec![],
+                target_requirements: vec!["Dashboards".to_string()],
+                allowed_fact_ids: vec![],
+            },
+        ]
+    }
+
+    #[test]
+    fn batch_prompt_covers_every_bullet() {
+        let prompt = build_batch_user_prompt("(role: Engineer at Acme; seniority: Senior)", &["rocket scientist".to_string()], &batch_items());
+        assert!(prompt.contains("bulletId 11"));
+        assert!(prompt.contains("bulletId 12"));
+        assert!(prompt.contains("rocket scientist"));
+        assert!(prompt.contains("GitHub repository with benchmarks"));
+        assert!(prompt.contains("Evidence ids: [7]"));
+        assert!(prompt.contains("Evidence ids: none"));
+    }
+
+    #[test]
+    fn batch_parser_accepts_wrapped_and_bare_arrays() {
+        let ids = [11, 12];
+        let wrapped = r#"{"rewrites": [
+            {"bulletId": 11, "text": "Python key-value store with WAL persistence", "factsUsed": [7]},
+            {"bulletId": 12, "text": "Flask dashboard for host signals", "factsUsed": []}
+        ]}"#;
+        let items = parse_batch_response(wrapped, &ids).unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].bullet_id, 11);
+        assert_eq!(items[0].facts_used, vec![7]);
+
+        let bare = r#"[{"bulletId": 11, "text": "x", "factsUsed": []}]"#;
+        assert_eq!(parse_batch_response(bare, &ids).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn batch_parser_strips_fences_and_think_blocks() {
+        let ids = [11];
+        let raw = "<think>long reasoning the user should never need</think>```json\n\
+                   {\"rewrites\": [{\"bulletId\": 11, \"text\": \"ok rewrite\", \"factsUsed\": []}]}\n```";
+        let items = parse_batch_response(raw, &ids).unwrap();
+        assert_eq!(items[0].text, "ok rewrite");
+    }
+
+    #[test]
+    fn batch_parser_rejects_unknown_and_malformed_items() {
+        let ids = [11];
+        let hallucinated = r#"{"rewrites": [{"bulletId": 99, "text": "x", "factsUsed": []}]}"#;
+        assert!(parse_batch_response(hallucinated, &ids).is_err());
+
+        let no_text = r#"{"rewrites": [{"bulletId": 11, "factsUsed": []}]}"#;
+        assert!(parse_batch_response(no_text, &ids).is_err());
+
+        let empty_text = r#"{"rewrites": [{"bulletId": 11, "text": "  ", "factsUsed": []}]}"#;
+        assert!(parse_batch_response(empty_text, &ids).is_err());
+
+        let not_json = "no json here";
+        assert!(parse_batch_response(not_json, &ids).is_err());
     }
 }

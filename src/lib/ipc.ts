@@ -24,6 +24,7 @@ import type {
   ResumePlan,
   Skill,
   SmokeTestResult,
+  TailorBatchReport,
   TailorSuggestion,
   PdfArtifact,
   ResumeVersion,
@@ -181,6 +182,9 @@ export const ipc = {
   ): Promise<TailorSuggestion> =>
     invoke<TailorSuggestion>("tailor_set_status", { id, status, text }),
   tailorDelete: (id: number): Promise<void> => invoke("tailor_delete", { id }),
+  tailorPlanBatch: (jobId: number): Promise<TailorBatchReport> =>
+    invoke<TailorBatchReport>("tailor_plan_batch", { jobId }),
+  tailorCancel: (): Promise<void> => invoke("tailor_cancel"),
 
   // Interview Prep (Phase 12)
   generateInterviewPrep: (jobId: number): Promise<InterviewPrep> =>

@@ -118,6 +118,16 @@ const handlers: Record<string, Handler> = {
     if (idx >= 0) suggestions.splice(idx, 1);
     return { ok: true };
   },
+  tailor_plan_batch: () => ({
+    suggestions,
+    model: "mock",
+    batchUsed: true,
+    cancelled: false,
+    durationMs: 1400,
+    promptTokens: 950,
+    completionTokens: 320,
+  }),
+  tailor_cancel: () => ({ ok: true }),
   claim_changes: () => ({ ok: true, violations: [] }),
   tailor_save_manual_edit: () => ({ ok: true, violations: [] }),
   tailor_set_status: (a) => {

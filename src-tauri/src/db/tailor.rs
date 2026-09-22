@@ -258,7 +258,7 @@ pub fn save_manual_edit(
 }
 
 // ---------------------------------------------------------------------------
-// Grounding assembly: everything the prompt needs for one bullet
+// Grounding assembly: everything the prompts need for the plan's bullets
 // ---------------------------------------------------------------------------
 
 pub struct BulletGrounding {
@@ -269,74 +269,84 @@ pub struct BulletGrounding {
     pub context: TailorContext,
 }
 
-pub fn assemble_grounding(
-    conn: &Connection,
-    job_id: i64,
-    bullet_id: i64,
-) -> Result<BulletGrounding, String> {
-    // Locate the bullet across projects and experiences.
-    let mut found: Option<(String, i64, String, String, Vec<String>)> = None;
+/// Everything needed to ground any bullet of one job, read from SQLite in a
+/// single pass. Building this once per tailor run replaces the per-bullet
+/// full-vault rescans the old flow paid for every suggestion.
+pub struct GroundingIndex {
+    pub job_role_line: String,
+    requirement_texts: Vec<String>,
+    skill_vocabulary: Vec<String>,
+    bullets: std::collections::HashMap<i64, (String, i64, String)>,
+    entities: std::collections::HashMap<(String, i64), (String, Vec<String>)>,
+    evidence: std::collections::HashMap<(String, i64), (Vec<String>, Vec<i64>)>,
+    /// Entity-scoped forbidden claims (globals included) — resolved per bullet.
+    forbidden_by_entity: std::collections::HashMap<(String, i64), Vec<String>>,
+}
+
+fn evidence_notes_for(
+    kind: &str,
+    title: &str,
+    note: &str,
+) -> String {
+    if note.is_empty() {
+        format!("{kind}: {title}")
+    } else {
+        format!("{kind}: {title} — {note}")
+    }
+}
+
+pub fn build_grounding_index(conn: &Connection, job_id: i64) -> Result<GroundingIndex, String> {
+    let mut bullets = std::collections::HashMap::new();
+    let mut entities = std::collections::HashMap::new();
+
     for project in super::vault::vault_list::<super::vault::Project>(conn)? {
+        let skills = project.skills.iter().map(|s| s.canonical_name.clone()).collect();
+        entities.insert(("project".to_string(), project.id), (project.title.clone(), skills));
         for bullet in super::trust::list_bullets(conn, "project", project.id)? {
-            if bullet.id == bullet_id {
-                let skills = project.skills.iter().map(|s| s.canonical_name.clone()).collect();
-                found = Some(("project".to_string(), project.id, bullet.text, project.title.clone(), skills));
-            }
-        }
-        if found.is_some() {
-            break;
+            bullets.insert(bullet.id, ("project".to_string(), project.id, bullet.text));
         }
     }
-    if found.is_none() {
-        for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
-            for bullet in super::trust::list_bullets(conn, "experience", experience.id)? {
-                if bullet.id == bullet_id {
-                    let skills = experience.skills.iter().map(|s| s.canonical_name.clone()).collect();
-                    found = Some(("experience".to_string(), experience.id, bullet.text, format!("{} at {}", experience.role, experience.organization), skills));
-                }
-                if found.is_some() {
-                    break;
-                }
-            }
-            if found.is_some() {
-                break;
-            }
+    for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
+        let skills = experience.skills.iter().map(|s| s.canonical_name.clone()).collect();
+        entities.insert(
+            ("experience".to_string(), experience.id),
+            (
+                format!("{} at {}", experience.role, experience.organization),
+                skills,
+            ),
+        );
+        for bullet in super::trust::list_bullets(conn, "experience", experience.id)? {
+            bullets.insert(bullet.id, ("experience".to_string(), experience.id, bullet.text));
         }
     }
-    let (entity_type, entity_id, bullet_text, entity_title, entity_skills) =
-        found.ok_or_else(|| "Bullet not found in the Vault".to_string())?;
 
-    let mut evidence_notes: Vec<String> =
-        super::trust::list_evidence(conn, &entity_type, entity_id)?
-            .into_iter()
-            .map(|e| {
-                if e.note.is_empty() {
-                    format!("{}: {}", e.kind, e.title)
-                } else {
-                    format!("{}: {} — {}", e.kind, e.title, e.note)
-                }
-            })
+    let mut evidence: std::collections::HashMap<(String, i64), (Vec<String>, Vec<i64>)> =
+        std::collections::HashMap::new();
+    for key in entities.keys() {
+        let list = super::trust::list_evidence(conn, &key.0, key.1)?;
+        let notes: Vec<String> = list
+            .iter()
+            .map(|e| evidence_notes_for(&e.kind, &e.title, &e.note))
             .collect();
-
-    if evidence_notes.is_empty() {
-        evidence_notes.push(format!("Record context: {}", entity_title));
-        if !entity_skills.is_empty() {
-            evidence_notes.push(format!("Verified technologies for this record: {}", entity_skills.join(", ")));
-        }
+        let ids: Vec<i64> = list.iter().map(|e| e.id).collect();
+        evidence.insert(key.clone(), (notes, ids));
     }
 
-    let allowed_fact_ids: Vec<i64> =
-        super::trust::list_evidence(conn, &entity_type, entity_id)?
-            .into_iter()
-            .map(|e| e.id)
-            .collect();
-
-    let claim_rules = super::trust::list_claim_rules(conn, Some(&entity_type), Some(entity_id))?;
-    let forbidden_patterns: Vec<String> = claim_rules
-        .iter()
-        .filter(|r| r.rule_type == "forbidden_claim")
-        .map(|r| r.pattern.clone())
-        .collect();
+    let mut forbidden_by_entity: std::collections::HashMap<(String, i64), Vec<String>> =
+        std::collections::HashMap::new();
+    for key in entities.keys() {
+        // Scoped query returns global rules plus the entity's own rules —
+        // the same set the old per-bullet path used.
+        let rules = super::trust::list_claim_rules(conn, Some(&key.0), Some(key.1))?;
+        forbidden_by_entity.insert(
+            key.clone(),
+            rules
+                .iter()
+                .filter(|r| r.rule_type == "forbidden_claim")
+                .map(|r| r.pattern.clone())
+                .collect(),
+        );
+    }
 
     let skill_vocabulary: Vec<String> = super::vault::vault_list::<super::vault::Skill>(conn)?
         .into_iter()
@@ -347,23 +357,69 @@ pub fn assemble_grounding(
         })
         .collect();
 
-    // Target requirements: the ones this bullet supports per the composer's
-    // overlap heuristic, falling back to the job's most relevant requirements.
-    let requirement_texts: Vec<String> = {
-        let job = super::jobs::get_job_enriched(conn, job_id)?;
-        let requirements = super::jobs::list_requirements(conn, job_id)?;
-        
-        let all_req_texts: Vec<String> = requirements.iter().map(|r| r.raw_text.clone()).collect();
-        let mut supported = crate::composer::bullet_supports(&bullet_text, &all_req_texts);
-        
+    let job = super::jobs::get_job_enriched(conn, job_id)?;
+    let job_role_line = format!(
+        "(role: {} at {}; seniority: {})",
+        job.role_title, job.company, job.seniority
+    );
+    let requirement_texts: Vec<String> =
+        super::jobs::list_requirements(conn, job_id)?.iter().map(|r| r.raw_text.clone()).collect();
+
+    Ok(GroundingIndex {
+        job_role_line,
+        requirement_texts,
+        skill_vocabulary,
+        bullets,
+        entities,
+        evidence,
+        forbidden_by_entity,
+    })
+}
+
+impl GroundingIndex {
+    pub fn for_bullet(&self, bullet_id: i64) -> Result<BulletGrounding, String> {
+        let (entity_type, entity_id, bullet_text) = self
+            .bullets
+            .get(&bullet_id)
+            .ok_or_else(|| "Bullet not found in the Vault".to_string())?;
+        let entity_type = entity_type.clone();
+        let entity_id = *entity_id;
+        let bullet_text = bullet_text.clone();
+        let (entity_title, entity_skills) = self
+            .entities
+            .get(&(entity_type.clone(), entity_id))
+            .cloned()
+            .unwrap_or_else(|| (String::new(), Vec::new()));
+        let key = (entity_type.clone(), entity_id);
+        let (mut evidence_notes, allowed_fact_ids) = self
+            .evidence
+            .get(&key)
+            .cloned()
+            .unwrap_or_else(|| (Vec::new(), Vec::new()));
+        let forbidden_patterns = self
+            .forbidden_by_entity
+            .get(&key)
+            .cloned()
+            .unwrap_or_default();
+
+        if evidence_notes.is_empty() {
+            evidence_notes.push(format!("Record context: {entity_title}"));
+            if !entity_skills.is_empty() {
+                evidence_notes.push(format!(
+                    "Verified technologies for this record: {}",
+                    entity_skills.join(", ")
+                ));
+            }
+        }
+
+        let mut supported = crate::composer::bullet_supports(&bullet_text, &self.requirement_texts);
         if supported.is_empty() {
-            // Rank requirements by token overlap against bullet_text, take top 2
-            let mut scored: Vec<(String, usize)> = requirements
+            let mut scored: Vec<(String, usize)> = self
+                .requirement_texts
                 .iter()
-                .map(|r| {
-                    let text = r.raw_text.clone();
-                    let hits = crate::composer::bullet_overlap_count(&bullet_text, &text);
-                    (text, hits)
+                .map(|text| {
+                    let hits = crate::composer::bullet_overlap_count(&bullet_text, text);
+                    (text.clone(), hits)
                 })
                 .collect();
             scored.sort_by(|a, b| b.1.cmp(&a.1));
@@ -374,39 +430,57 @@ pub fn assemble_grounding(
                 .map(|(text, _)| text)
                 .collect();
         }
-
         if supported.is_empty() {
-            supported = requirements
+            supported = self
+                .requirement_texts
                 .iter()
-                .filter(|r| r.kind == "required_skill")
                 .take(2)
-                .map(|r| r.raw_text.clone())
+                .cloned()
                 .collect();
         }
+        supported.push(self.job_role_line.clone());
 
-        supported
-            .into_iter()
-            .chain(std::iter::once(format!(
-                "(role: {} at {}; seniority: {})",
-                job.role_title, job.company, job.seniority
-            )))
-            .collect()
-    };
+        Ok(BulletGrounding {
+            bullet_id,
+            entity_type,
+            entity_id,
+            bullet_text: bullet_text.clone(),
+            context: TailorContext {
+                bullet_text,
+                target_requirements: supported,
+                evidence_notes,
+                forbidden_patterns,
+                allowed_fact_ids,
+                skill_vocabulary: self.skill_vocabulary.clone(),
+            },
+        })
+    }
 
-    Ok(BulletGrounding {
-        bullet_id,
-        entity_type: entity_type.clone(),
-        entity_id,
-        bullet_text: bullet_text.clone(),
-        context: TailorContext {
-            bullet_text,
-            target_requirements: requirement_texts,
-            evidence_notes,
-            forbidden_patterns,
-            allowed_fact_ids,
-            skill_vocabulary,
-        },
-    })
+    /// Grounds every planned bullet with the index built once.
+    pub fn for_plan(
+        &self,
+        plan: &crate::composer::ResumePlan,
+    ) -> Result<Vec<BulletGrounding>, String> {
+        let mut out = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for item in plan.experience.iter().chain(plan.projects.iter()) {
+            for bullet in &item.bullets {
+                if seen.insert(bullet.id) {
+                    out.push(self.for_bullet(bullet.id)?);
+                }
+            }
+        }
+        Ok(out)
+    }
+}
+
+pub fn assemble_grounding(
+    conn: &Connection,
+    job_id: i64,
+    bullet_id: i64,
+) -> Result<BulletGrounding, String> {
+    let index = build_grounding_index(conn, job_id)?;
+    index.for_bullet(bullet_id)
 }
 
 pub const PROMPT_VERSION_CONST: u32 = PROMPT_VERSION;

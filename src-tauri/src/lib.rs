@@ -57,6 +57,9 @@ pub fn run() {
             );
             app.manage(db::DbState(Mutex::new(conn)));
             app.manage(commands::pdf_commands::AppDataDir(data_dir));
+            app.manage(commands::ai_commands::TailorCancel(
+                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -126,6 +129,8 @@ pub fn run() {
             commands::ai_commands::ai_test_connection,
             commands::ai_commands::ai_list_models,
             commands::ai_commands::tailor_suggest,
+            commands::ai_commands::tailor_plan_batch,
+            commands::ai_commands::tailor_cancel,
             commands::ai_commands::tailor_list,
             commands::ai_commands::tailor_set_status,
             commands::ai_commands::tailor_delete,

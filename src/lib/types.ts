@@ -589,6 +589,17 @@ export interface TailorSuggestion {
   model: string;
 }
 
+export interface TailorBatchReport {
+  suggestions: TailorSuggestion[];
+  model: string;
+  /** true = one LLM call covered the whole plan; false = per-bullet fallback. */
+  batchUsed: boolean;
+  cancelled: boolean;
+  durationMs: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+}
+
 export interface AiConfigView {
   baseUrl: string;
   model: string;
