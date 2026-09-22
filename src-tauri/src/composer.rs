@@ -460,8 +460,28 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
     }
     let dropped_count = candidates.len() - (experience.len() + projects.len());
     if dropped_count > 0 {
+        let selected: std::collections::HashSet<(String, i64)> = experience
+            .iter()
+            .chain(projects.iter())
+            .map(|i| (i.entity_type.clone(), i.id))
+            .collect();
+        let mut dropped: Vec<&ComposerEntity> = candidates
+            .iter()
+            .filter(|e| !selected.contains(&(e.entity_type.clone(), e.id)))
+            .collect();
+        dropped.sort_by(|a, b| {
+            b.relevance
+                .partial_cmp(&a.relevance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let names: Vec<String> = dropped
+            .iter()
+            .take(5)
+            .map(|e| format!("{} (relevance {:.2})", e.title, e.relevance))
+            .collect();
         warnings.push(format!(
-            "{dropped_count} record(s) left out by the section caps — raise them if the page allows."
+            "{dropped_count} record(s) left out by the section caps — highest-relevance first: {}. Raise the caps if the page allows.",
+            names.join(", ")
         ));
     }
 
