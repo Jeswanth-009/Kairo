@@ -13,8 +13,10 @@ pub struct ExportResult {
     pub log_tail: String,
 }
 
+/// The Tectonic compile can take minutes on first run — async so it never
+/// blocks the main thread (the DB lock is dropped around the subprocess).
 #[tauri::command]
-pub fn export_pdf(
+pub async fn export_pdf(
     state: State<'_, DbState>,
     job_id: i64,
     mut template_id: String,
@@ -24,7 +26,7 @@ pub fn export_pdf(
     // 1. Lock: load the plan, overlay accepted tailor suggestions, locate the
     //    compiler. The overlay keeps the PDF in sync with what the Studio
     //    preview shows for accepted AI tailoring.
-    let (mut plan, tectonic) = {
+    let (plan, tectonic) = {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
         let mut plan: crate::composer::ResumePlan = {
             let stored = crate::db::composer::get_plan(&conn, job_id)?;
@@ -197,6 +199,6 @@ pub fn save_pdf_to_downloads(src_path: String, custom_name: Option<String>) -> R
     });
 
     let dest = downloads.join(&file_name);
-    std::fs::copy(&src, &dest).map_err(|e| format!("Failed to copy to {}: {e}", dest.display()))?;
+    std::fs::copy(src, &dest).map_err(|e| format!("Failed to copy to {}: {e}", dest.display()))?;
     Ok(dest.to_string_lossy().to_string())
 }

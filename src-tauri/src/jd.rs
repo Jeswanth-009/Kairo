@@ -4,6 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::text::{rfind_ci, strip_ci_prefix};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RequirementKind {
@@ -394,9 +396,11 @@ fn split_title_line(line: &str) -> Option<(String, String)> {
             }
         }
     }
-    if let Some(index) = line.find(['—', '–', '|']) {
+    // match_indices yields char-boundary-aligned offsets; em/en dashes are
+    // 3 bytes wide, so `index + 1` would slice inside the character.
+    if let Some((index, sep)) = line.match_indices(['—', '–', '|']).next() {
         let a = line[..index].trim();
-        let b = line[index + 1..].trim().trim_start_matches('-').trim();
+        let b = line[index + sep.len()..].trim().trim_start_matches('-').trim();
         if !a.is_empty()
             && !b.is_empty()
             && a.len() <= 80
@@ -418,14 +422,21 @@ fn looks_like_role(text: &str) -> bool {
 }
 
 fn labeled_value(line: &str, labels: &[&str]) -> Option<String> {
-    let lower = line.to_lowercase();
     for label in labels {
-        let prefix = format!("{label} ");
-        if lower.starts_with(&prefix) || lower.starts_with(&format!("{label}:")) {
-            let after = line[label.len()..].trim().trim_start_matches(':').trim();
-            if !after.is_empty() {
-                return Some(after.to_string());
-            }
+        // strip_ci_prefix keeps the offset on a char boundary of `line` even
+        // when the text is non-ASCII (to_lowercase() can change byte lengths).
+        let Some(rest) = strip_ci_prefix(line, label) else {
+            continue;
+        };
+        let after = if let Some(stripped) = rest.strip_prefix(':') {
+            stripped.trim()
+        } else if rest.starts_with(char::is_whitespace) {
+            rest.trim()
+        } else {
+            continue;
+        };
+        if !after.is_empty() {
+            return Some(after.to_string());
         }
     }
     None
@@ -442,10 +453,9 @@ fn default_importance(kind: RequirementKind) -> f64 {
 }
 
 fn split_at_marker(line: &str) -> Option<(String, String)> {
-    let lower = line.to_lowercase();
-    let i = lower.rfind(" at ")?;
+    let (i, end) = rfind_ci(line, " at ")?;
     let a = line[..i].trim();
-    let b = line[i + 4..].trim();
+    let b = line[end..].trim();
     if a.is_empty() || b.is_empty() || a.len() > 80 || b.len() > 80 || is_employment_noise(b) {
         return None;
     }
@@ -547,8 +557,8 @@ fn extract_company_from_text(lines: &[&str]) -> Option<String> {
         {
             continue;
         }
-        if looks_like_role(line) {
-            if i + 1 < lines.len() {
+        if looks_like_role(line)
+            && i + 1 < lines.len() {
                 let candidate = lines[i + 1].trim();
                 if !candidate.is_empty()
                     && candidate.len() <= 60
@@ -574,7 +584,6 @@ fn extract_company_from_text(lines: &[&str]) -> Option<String> {
                     }
                 }
             }
-        }
     }
 
     // 4. "<Company> is an equal opportunity employer"
@@ -650,8 +659,8 @@ fn extract_role_from_text(lines: &[&str]) -> Option<String> {
         if lower.starts_with("role id") || lower.starts_with("job id") || lower.starts_with("position id") {
             continue;
         }
-        if trimmed.len() <= 80 && looks_like_role(trimmed) {
-            if !lower.starts_with("you will")
+        if trimmed.len() <= 80 && looks_like_role(trimmed)
+            && !lower.starts_with("you will")
                 && !lower.starts_with("we are")
                 && !lower.starts_with("as an")
                 && !lower.starts_with("about")
@@ -660,7 +669,6 @@ fn extract_role_from_text(lines: &[&str]) -> Option<String> {
             {
                 return Some(trimmed.to_string());
             }
-        }
     }
 
     None
@@ -681,7 +689,7 @@ pub fn parse_jd(text: &str) -> JobExtraction {
     for line in &raw_lines {
         for word in line.split_whitespace() {
             if word.starts_with("https://") || word.starts_with("http://") {
-                url = word.trim_end_matches(|c: char| matches!(c, '.' | ',' | ')' | ';')).to_string();
+                url = word.trim_end_matches(['.', ',', ')', ';']).to_string();
                 break;
             }
         }
@@ -716,7 +724,7 @@ pub fn parse_jd(text: &str) -> JobExtraction {
             continue;
         }
         let is_bullet = starts_with_bullet(line) || content != line;
-        if !is_bullet && content.ends_with(|c: char| c == ':' || c == '?') {
+        if !is_bullet && content.ends_with([':', '?']) {
             continue; // sub-headings inside sections
         }
 
@@ -980,6 +988,39 @@ Electronic Arts is an equal opportunity employer. All employment decisions are m
         assert!(!extraction.requirements.iter().any(|r| r.raw_text.to_lowercase().contains("criminal")));
         assert!(!extraction.requirements.iter().any(|r| r.raw_text.to_lowercase().contains("healthcare")));
         assert!(!extraction.requirements.iter().any(|r| r.raw_text.to_lowercase().contains("portfolio of games")));
+    }
+
+    // --- Regression (v4): UTF-8 char-boundary panics ------------------------
+    // The Jobs "paste a JD" path shared the import parser's byte-slicing bugs.
+
+    #[test]
+    fn jd_parser_survives_unspaced_dashes() {
+        // `split_title_line`'s fallback used to slice inside the 3-byte dash.
+        let text = "Requirements\nRust—Systems Engineer\n2024–2025 Program\n-Ownership of routing\n";
+        let extraction = parse_jd(text);
+        assert!(!extraction.requirements.is_empty());
+    }
+
+    #[test]
+    fn jd_parser_labeled_values_are_boundary_safe() {
+        let text = "Company: İstanbul Teknoloji\nRole Senior Systems Engineer\nRequirements\n- Rust\n";
+        let extraction = parse_jd(text);
+        assert_eq!(extraction.company, "İstanbul Teknoloji");
+    }
+
+    #[test]
+    fn jd_split_at_marker_is_boundary_safe() {
+        assert_eq!(
+            split_at_marker("Lead at Acme at Scale"),
+            Some(("Lead at Acme".to_string(), "Scale".to_string()))
+        );
+        // `İ` expands under to_lowercase(); the old rfind offset from the
+        // lowercased copy sliced out of bounds here.
+        assert_eq!(
+            split_at_marker("İİ Mühendis at X"),
+            Some(("İİ Mühendis".to_string(), "X".to_string()))
+        );
+        assert_eq!(split_at_marker("no marker"), None);
     }
 }
 

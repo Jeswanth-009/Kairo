@@ -10,11 +10,35 @@ pub mod latex_templates;
 mod logging;
 mod matching;
 mod tailor;
+mod text;
 
 use std::sync::Mutex;
 use tauri::Manager;
 
 pub fn run() {
+    // Panic containment: without this, a panic that escapes a command unwinds
+    // through the Windows event loop and kills the process with no trace.
+    // Every panic is now recorded into kairo.log before the abort.
+    std::panic::set_hook(Box::new(|info| {
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown".to_string());
+        let message = match info.payload().downcast_ref::<&str>() {
+            Some(msg) => (*msg).to_string(),
+            None => match info.payload().downcast_ref::<String>() {
+                Some(msg) => msg.clone(),
+                None => "non-string panic payload".to_string(),
+            },
+        };
+        logging::log_event(
+            "error",
+            "rust_panic",
+            &[("location", location), ("message", message.clone())],
+        );
+        eprintln!("Kairo panic: {message}");
+    }));
+
     tauri::Builder::default()
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;

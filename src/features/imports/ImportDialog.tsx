@@ -25,6 +25,10 @@ import { toast } from "../../stores/toastStore";
 
 type ImportTab = "resume" | "github" | "certificate";
 
+/** Mirrors the backend cap in `import_commands.rs` — fail fast with a clear
+ * message instead of shipping megabytes over IPC. */
+const MAX_IMPORT_CHARS = 1_000_000;
+
 const TAB_LABELS: Record<ImportTab, string> = {
   resume: "Resume text",
   github: "GitHub",
@@ -122,7 +126,7 @@ function CandidateShell({
               <Button size="sm" onClick={onAccept} disabled={saving}>
                 {saving ? "Saving…" : acceptLabel}
               </Button>
-              <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10" onClick={onReject}>
+              <Button variant="ghost" size="sm" className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10" onClick={onReject}>
                 Reject
               </Button>
             </>
@@ -200,6 +204,12 @@ function ResumeImportTab({ onDone }: { onDone: () => void }) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   const analyze = async () => {
+    if (text.length > MAX_IMPORT_CHARS) {
+      setError(
+        `Text is too large to analyze (limit ${MAX_IMPORT_CHARS.toLocaleString()} characters). Split it into smaller sections and import them one at a time.`,
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -227,10 +237,16 @@ function ResumeImportTab({ onDone }: { onDone: () => void }) {
         />
       </Field>
       <div className="flex items-center gap-3">
-        <Button onClick={() => void analyze()} disabled={busy || text.trim().length < 10}>
+        <Button
+          onClick={() => void analyze()}
+          disabled={busy || text.trim().length < 10 || text.length > MAX_IMPORT_CHARS}
+        >
           {busy ? "Analyzing…" : "Analyze"}
         </Button>
-        {error ? <span className="text-xs text-red-600">{error}</span> : null}
+        {error ? <span className="text-xs text-bad">{error}</span> : null}
+        {text.length > 100_000 ? (
+          <span className="text-xs text-warn">{text.length.toLocaleString()} characters — large documents may take a moment</span>
+        ) : null}
       </div>
 
       {result ? <ResumeCandidates result={result} show={show} dismiss={dismiss} onDone={onDone} /> : null}
@@ -308,7 +324,7 @@ function ResumeCandidates({
           <Button
             size="sm"
             variant="ghost"
-            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10 hover:text-red-700"
+            className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10 hover:text-bad"
             onClick={() => {
               activeKeys.forEach((k) => dismiss(k));
               toast.ok("All candidates dismissed");
@@ -662,7 +678,7 @@ function ExperienceCandidate({
   return (
     <CandidateShell
       badge="Experience"
-      badgeColor="bg-kairo-dawn/20 text-amber-700"
+      badgeColor="bg-kairo-dawn/20 text-warn"
       source={draft.sourceSnippet}
       editing={editing}
       setEditing={setEditing}
@@ -731,7 +747,7 @@ function AchievementCandidate({
   return (
     <CandidateShell
       badge="Achievement"
-      badgeColor="bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
+      badgeColor="bg-warn-soft text-amber-800 dark:bg-warn/15 dark:text-kairo-dawn"
       source={draft.sourceSnippet}
       editing={editing}
       setEditing={setEditing}
@@ -791,7 +807,7 @@ function EducationCandidate({
   return (
     <CandidateShell
       badge="Education"
-      badgeColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+      badgeColor="bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300"
       source={draft.sourceSnippet}
       editing={editing}
       setEditing={setEditing}
@@ -838,11 +854,11 @@ function EducationCandidate({
 }
 
 const CATEGORY_META: Record<SkillCategory, { label: string; badge: string }> = {
-  language: { label: "Languages", badge: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30" },
+  language: { label: "Languages", badge: "bg-info-soft text-kairo-blue border-kairo-blue/30 dark:bg-kairo-blue/15 dark:text-kairo-sky dark:border-kairo-blue/30" },
   framework: { label: "Frameworks & Libraries", badge: "bg-purple-50 text-purple-700 border-purple-200" },
-  tool: { label: "Developer Tools", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  database: { label: "Databases", badge: "bg-amber-50 text-amber-700 border-amber-200" },
-  cloud: { label: "Cloud & Infrastructure", badge: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30" },
+  tool: { label: "Developer Tools", badge: "bg-ok-soft text-ok border-ok/30" },
+  database: { label: "Databases", badge: "bg-warn-soft text-warn border-warn/30" },
+  cloud: { label: "Cloud & Infrastructure", badge: "bg-kairo-sky/20 text-sky-700 border-kairo-sky/40 dark:bg-kairo-sky/15 dark:text-kairo-sky dark:border-sky-500/30" },
   devops: { label: "DevOps & CI/CD", badge: "bg-teal-50 text-teal-700 border-teal-200" },
   soft: { label: "Soft Skills", badge: "bg-rose-50 text-rose-700 border-rose-200" },
   other: { label: "Other Skills", badge: "bg-accent-soft text-ink border-line" },
@@ -935,7 +951,7 @@ function SkillsCandidate({
           <Button size="sm" disabled={busy || selectedCount === 0} onClick={handleAccept}>
             {busy ? "Saving…" : `Add ${selectedCount} selected`}
           </Button>
-          <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10" onClick={onReject}>
+          <Button variant="ghost" size="sm" className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10" onClick={onReject}>
             Reject
           </Button>
         </div>
@@ -1041,7 +1057,7 @@ function GithubImportTab({ onDone }: { onDone: () => void }) {
         </div>
       </div>
       {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-500/10 dark:text-red-300">{error}</p>
+        <p className="rounded-lg bg-bad-soft px-3 py-2 text-xs text-bad dark:bg-bad/10 dark:text-red-300">{error}</p>
       ) : null}
       {candidate ? <GithubCandidateCard candidate={candidate} onDone={onDone} /> : null}
     </div>
@@ -1157,6 +1173,12 @@ function CertificateImportTab({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
 
   const analyze = async () => {
+    if (text.length > MAX_IMPORT_CHARS) {
+      setError(
+        `Text is too large to analyze (limit ${MAX_IMPORT_CHARS.toLocaleString()} characters).`,
+      );
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -1179,10 +1201,13 @@ function CertificateImportTab({ onDone }: { onDone: () => void }) {
         />
       </Field>
       <div className="flex items-center gap-3">
-        <Button onClick={() => void analyze()} disabled={busy || text.trim().length < 10}>
+        <Button
+          onClick={() => void analyze()}
+          disabled={busy || text.trim().length < 10 || text.length > MAX_IMPORT_CHARS}
+        >
           {busy ? "Analyzing…" : "Analyze"}
         </Button>
-        {error ? <span className="text-xs text-red-600">{error}</span> : null}
+        {error ? <span className="text-xs text-bad">{error}</span> : null}
       </div>
       {candidate ? <CertificateCandidateCard candidate={candidate} onDone={onDone} /> : null}
     </div>
@@ -1233,7 +1258,7 @@ function CertificateCandidateCard({
   return (
     <CandidateShell
       badge="Certification"
-      badgeColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+      badgeColor="bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300"
       source={candidate.sourceSnippet}
       editing={editing}
       setEditing={setEditing}

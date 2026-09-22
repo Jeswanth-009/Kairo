@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 
+use crate::text::{find_ci, strip_ci_prefix};
+
 // ---------------------------------------------------------------------------
 // Candidate models
 // ---------------------------------------------------------------------------
@@ -176,9 +178,14 @@ fn split_pair(line: &str) -> Option<(String, String)> {
             }
         }
     }
-    if let Some(index) = line.find(['—', '–', '|']) {
+    // match_indices yields char-boundary-aligned offsets; em/en dashes are
+    // 3 bytes wide, so `index + 1` would slice inside the character.
+    if let Some((index, sep)) = line.match_indices(['—', '–', '|']).next() {
         let a = line[..index].trim();
-        let b = line[index + 1..].trim().trim_start_matches(['-', ' ']).trim();
+        let b = line[index + sep.len()..]
+            .trim()
+            .trim_start_matches(['-', ' '])
+            .trim();
         if !a.is_empty() && !b.is_empty() {
             return Some((a.to_string(), b.to_string()));
         }
@@ -187,10 +194,8 @@ fn split_pair(line: &str) -> Option<(String, String)> {
 }
 
 fn looks_like_role_at_org(part: &str) -> Option<(String, String)> {
-    let lower = part.to_lowercase();
-    lower
-        .find(" at ")
-        .map(|i| (part[..i].trim().to_string(), part[i + 4..].trim().to_string()))
+    find_ci(part, " at ")
+        .map(|(start, end)| (part[..start].trim().to_string(), part[end..].trim().to_string()))
 }
 
 fn is_probable_name(line: &str) -> bool {
@@ -272,7 +277,7 @@ fn website_url(text: &str) -> String {
             && !word.contains("github.com")
             && word.len() <= 120
         {
-            return word.trim_end_matches(|c: char| matches!(c, '.' | ',' | ';')).to_string();
+            return word.trim_end_matches(['.', ',', ';']).to_string();
         }
     }
     // Bare domains in the contact header ("alexrivera.dev")
@@ -588,8 +593,14 @@ fn extract_location(line: &str) -> (String, String) {
     if let Some(i) = line.rfind(',') {
         let tail = line[i + 1..].trim();
         let before = line[..i].trim();
-        if let Some(j) = before.rfind(|c: char| c == ',' || c == ' ' || c == '-' || c == '–') {
-            let city = before[j + 1..].trim();
+        // char_indices keeps the offset boundary-safe when the matched
+        // separator is a 3-byte en dash.
+        if let Some((j, sep)) = before
+            .char_indices()
+            .rev()
+            .find(|(_, c)| matches!(c, ',' | ' ' | '-' | '–'))
+        {
+            let city = before[j + sep.len_utf8()..].trim();
             let loc = format!("{city}, {tail}");
             let base = before[..j].trim().trim_end_matches([',', '-', '–', '|']).trim();
             if !base.is_empty() && base.split_whitespace().count() >= 2 {
@@ -666,7 +677,7 @@ fn strip_trailing_location(line: &str) -> String {
     if let Some(i) = s.rfind(',') {
         let tail = s[i + 1..].trim();
         let tail_words = tail.split_whitespace().count();
-        if tail_words <= 2 && s[..i].trim().split_whitespace().count() >= 2 {
+        if tail_words <= 2 && s[..i].split_whitespace().count() >= 2 {
             s = s[..i].trim().to_string();
         }
     }
@@ -695,10 +706,9 @@ fn looks_like_degree(line: &str) -> bool {
 
 /// "Bachelor of Technology in Computer Science" -> ("Bachelor of Technology", "Computer Science")
 fn split_degree_field(line: &str) -> (String, String) {
-    let lower = line.to_lowercase();
-    if let Some(i) = lower.find(" in ") {
-        let degree = line[..i].trim();
-        let field = line[i + 4..].trim();
+    if let Some((start, end)) = find_ci(line, " in ") {
+        let degree = line[..start].trim();
+        let field = line[end..].trim();
         if !degree.is_empty() && !field.is_empty() {
             return (degree.to_string(), field.to_string());
         }
@@ -745,7 +755,255 @@ fn is_separator_line(line: &str) -> bool {
             .all(|c| matches!(c, '-' | '=' | '_' | '~' | '—' | '–' | '·' | '•' | '*' | '▪' | '.' | ' ' | '\t'))
 }
 
+// ---------------------------------------------------------------------------
+// Narrative career documents ("project story dumps")
+// ---------------------------------------------------------------------------
+
+/// A numbered story heading: "7. CryptComm", "22. Portfolio Website v2 — Cyberpunk".
+fn is_narrative_heading(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    let mut digits = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() && bytes[i].is_ascii_digit() && digits <= 2 {
+        digits += 1;
+        i += 1;
+    }
+    if digits == 0 || digits > 2 || i >= bytes.len() || bytes[i] != b'.' {
+        return false;
+    }
+    i += 1;
+    let rest = &line[i..];
+    let rest = rest.strip_prefix(' ').unwrap_or(rest);
+    !rest.is_empty() && rest.chars().count() <= 88
+}
+
+fn is_narrative_key_line(line: &str) -> bool {
+    const KEYS: &[&str] = &[
+        "period", "context", "type", "domain", "status", "role", "team", "outcome", "platform",
+        "company", "theme", "category", "problem statement", "full name", "earlier working name",
+        "earlier concepts", "interface", "question", "idea",
+    ];
+    KEYS.iter().any(|k| {
+        strip_ci_prefix(line, k)
+            .map(|rest| rest.starts_with(':') || rest.starts_with(char::is_whitespace))
+            .unwrap_or(false)
+    })
+}
+
+fn is_demonstration_key(line: &str) -> bool {
+    const KEYS: &[&str] = &["what it demonstrates", "kairo tags", "kairo skills"];
+    KEYS.iter().any(|k| strip_ci_prefix(line, k).is_some())
+}
+
+/// Splits a demonstration/tag line into skill tokens ("Rust · Tauri 2, React").
+fn narrative_skill_tokens(line: &str) -> Vec<String> {
+    line.split(['·', ',', ';', '|', '•'])
+        .map(|t| t.trim().trim_end_matches('.').to_string())
+        .filter(|t| !t.is_empty() && t.len() <= 40 && t.split_whitespace().count() <= 4)
+        .collect()
+}
+
+/// Extracts projects from a narrative career document. Used as a fallback when
+/// the text has no resume section headings at all but carries numbered story
+/// headings — a paste of project write-ups rather than a resume. Metadata
+/// lines are folded into the description; demonstration/tag lists and bullet
+/// stacks become per-project skills. Returns None when the shape does not match.
+fn parse_narrative_text(text: &str) -> Option<ResumeImport> {
+    let mut numbered = 0usize;
+    let mut sectioned = 0usize;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if is_narrative_heading(trimmed) {
+            numbered += 1;
+        } else if !starts_with_bullet(trimmed) && detect_section(trimmed).is_some() {
+            // Bulleted section words are list content in story dumps ("- skills"),
+            // not resume headings; only bare headings count against the gate.
+            sectioned += 1;
+        }
+    }
+    // A story dump carries many numbered headings and at most a couple of
+    // bare section words ("Technologies"); a resume is the opposite shape.
+    if numbered < 3 || numbered <= sectioned {
+        return None;
+    }
+
+    let mut projects: Vec<ProjectDraft> = Vec::new();
+    let mut title = String::new();
+    let mut meta: Vec<String> = Vec::new();
+    let mut prose: Vec<String> = Vec::new();
+    let mut skills: Vec<String> = Vec::new();
+    let mut stack_context = false;
+    let mut pending_demonstration = false;
+
+    for raw in text.lines() {
+        let line = raw.trim_end();
+        let trimmed = line.trim();
+        if trimmed.is_empty() || is_separator_line(trimmed) {
+            continue;
+        }
+
+        if is_narrative_heading(trimmed) {
+            // Finish the previous project and start a new one.
+            if !title.is_empty() {
+                push_narrative_project(
+                    &mut projects,
+                    std::mem::take(&mut title),
+                    &mut meta,
+                    &mut prose,
+                    &mut skills,
+                );
+            }
+            let dot = trimmed.find('.').unwrap_or(0);
+            title = trimmed[dot + 1..].trim().to_string();
+            stack_context = false;
+            pending_demonstration = false;
+            continue;
+        }
+        if title.is_empty() {
+            continue; // preamble before the first heading
+        }
+
+        if is_demonstration_key(trimmed) {
+            pending_demonstration = true;
+            stack_context = false;
+            // Inline variant: "What it demonstrates: A · B"
+            let rest = trimmed
+                .split_once(':')
+                .map(|(_, v)| v.trim())
+                .unwrap_or("");
+            if !rest.is_empty() {
+                push_narrative_skills(&mut skills, narrative_skill_tokens(rest));
+                pending_demonstration = false;
+            }
+            continue;
+        }
+        if pending_demonstration {
+            push_narrative_skills(&mut skills, narrative_skill_tokens(trimmed));
+            pending_demonstration = false;
+            continue;
+        }
+
+        // Bare stack headings ("Stack" alone on a line) precede bullet lists.
+        let lower_trimmed = trimmed.to_lowercase();
+        if matches!(
+            lower_trimmed.as_str(),
+            "stack" | "technologies" | "tech stack" | "runtime technologies"
+        ) {
+            stack_context = true;
+            continue;
+        }
+
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim().to_lowercase();
+            if key == "stack" || key == "technologies" || key == "tech stack" {
+                stack_context = true;
+                continue;
+            }
+            if is_narrative_key_line(&key) && !value.trim().is_empty() && meta.len() < 8 {
+                meta.push(format!("{}: {}", capitalize_key(&key), value.trim()));
+                continue;
+            }
+        }
+
+        if stack_context {
+            if starts_with_bullet(trimmed) {
+                let token = trimmed.trim_start_matches(BULLETS).trim();
+                if !token.is_empty() && token.len() <= 40 && token.split_whitespace().count() <= 4 {
+                    push_narrative_skills(&mut skills, vec![token.to_string()]);
+                    continue;
+                }
+            }
+            stack_context = false;
+        }
+
+        // Bare sub-headings ("Problem", "Features") are structure, not prose.
+        if !trimmed.contains(':') && trimmed.chars().count() <= 16 && !trimmed.contains(' ') {
+            continue;
+        }
+        if prose.join(" ").chars().count() < 420 {
+            prose.push(trimmed.to_string());
+        }
+    }
+    if !title.is_empty() {
+        push_narrative_project(
+            &mut projects,
+            std::mem::take(&mut title),
+            &mut meta,
+            &mut prose,
+            &mut skills,
+        );
+    }
+
+    if projects.is_empty() {
+        return None;
+    }
+    Some(ResumeImport {
+        profile: None,
+        projects,
+        experiences: Vec::new(),
+        education: Vec::new(),
+        achievements: Vec::new(),
+        skills: Vec::new(),
+    })
+}
+
+/// Folds the collected block into a `ProjectDraft` (metadata prefixed to the
+/// description, deduplicated skill list) and resets the accumulators.
+fn push_narrative_project(
+    projects: &mut Vec<ProjectDraft>,
+    title: String,
+    meta: &mut Vec<String>,
+    prose: &mut Vec<String>,
+    skills: &mut Vec<String>,
+) {
+    let mut description = meta.join(" · ");
+    let body = prose.join(" ");
+    if !body.is_empty() {
+        if !description.is_empty() {
+            description.push_str(". ");
+        }
+        description.push_str(&body);
+    }
+    if description.chars().count() > 600 {
+        description = description.chars().take(600).collect();
+    }
+    meta.clear();
+    prose.clear();
+    projects.push(ProjectDraft {
+        title,
+        description,
+        skills: std::mem::take(skills),
+        source_snippet: String::new(),
+    });
+}
+
+fn push_narrative_skills(skills: &mut Vec<String>, tokens: Vec<String>) {
+    for token in tokens {
+        let lower = token.to_lowercase();
+        if !skills.iter().any(|s| s.to_lowercase() == lower) {
+            skills.push(token);
+        }
+    }
+}
+
+fn capitalize_key(key: &str) -> String {
+    let mut chars = key.chars();
+    match chars.next() {
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
 pub fn parse_resume_text(text: &str) -> ResumeImport {
+    // Narrative story dumps ("7. CryptComm / Period: …") are not resumes; when
+    // the text matches that shape, extract per-project blocks instead.
+    if let Some(narrative) = parse_narrative_text(text) {
+        return narrative;
+    }
+
     let mut section: Option<Section> = None;
 
     let mut profile_name = String::new();
@@ -831,7 +1089,7 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                         p.description.push_str(content);
                         snippet.push(line.to_string());
                     }
-                } else if !is_header && cur_project.as_ref().map_or(false, |p| !p.description.is_empty()) {
+                } else if !is_header && cur_project.as_ref().is_some_and(|p| !p.description.is_empty()) {
                     if let Some(p) = cur_project.as_mut() {
                         if !p.description.is_empty() {
                             p.description.push(' ');
@@ -877,7 +1135,7 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                         snippet.push(line.to_string());
                     }
                 } else if looks_like_role_line(&clean_content)
-                    && cur_experience.as_ref().map_or(false, |e| e.role.is_empty() && e.description.is_empty())
+                    && cur_experience.as_ref().is_some_and(|e| e.role.is_empty() && e.description.is_empty())
                 {
                     if let Some(e) = cur_experience.as_mut() {
                         e.role = clean_content;
@@ -891,7 +1149,7 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                         }
                         snippet.push(line.to_string());
                     }
-                } else if cur_experience.as_ref().map_or(false, |e| !e.description.is_empty())
+                } else if cur_experience.as_ref().is_some_and(|e| !e.description.is_empty())
                     && start_date.is_none()
                     && !looks_like_role_line(&clean_content)
                     && (trimmed.chars().next().is_some_and(|c| c.is_lowercase())
@@ -999,7 +1257,7 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                         a.description.push_str(content);
                         snippet.push(line.to_string());
                     }
-                } else if cur_achievement.as_ref().map_or(false, |a| !a.description.is_empty())
+                } else if cur_achievement.as_ref().is_some_and(|a| !a.description.is_empty())
                     && (trimmed.chars().next().is_some_and(|c| c.is_lowercase()) || (!has_separator && date.is_none()))
                 {
                     if let Some(a) = cur_achievement.as_mut() {
@@ -1112,17 +1370,19 @@ pub fn parse_certificate_text(text: &str) -> CertificateCandidate {
             continue;
         }
         let lower = line.to_lowercase();
-        if let Some(i) = lower.find("has successfully completed") {
-            let after = line[i + "has successfully completed".len()..]
-                .trim()
-                .trim_matches(|c: char| matches!(c, '"' | '\'' | '.' | ':' | ','))
-                .trim_start_matches("the ")
-                .trim_start_matches("a ")
-                .trim();
-            if !after.is_empty() {
-                title = after.to_string();
-                snippet.push(line.to_string());
-                break;
+        if lower.contains("has successfully completed") {
+            if let Some((_, end)) = find_ci(line, "has successfully completed") {
+                let after = line[end..]
+                    .trim()
+                    .trim_matches(|c: char| matches!(c, '"' | '\'' | '.' | ':' | ','))
+                    .trim_start_matches("the ")
+                    .trim_start_matches("a ")
+                    .trim();
+                if !after.is_empty() {
+                    title = after.to_string();
+                    snippet.push(line.to_string());
+                    break;
+                }
             }
         }
     }
@@ -1135,18 +1395,20 @@ pub fn parse_certificate_text(text: &str) -> CertificateCandidate {
         let lower = line.to_lowercase();
 
         if title.is_empty() && (lower.contains("certificate of") || lower.contains("certificate for")) {
-            title = line.trim_end_matches(|c: char| matches!(c, '.' | ':')).to_string();
+            title = line.trim_end_matches(['.', ':']).to_string();
             snippet.push(line.to_string());
             continue;
         }
 
         if issuer.is_empty() {
             for phrase in ["issued by", "presented by", "provided by", "authorized by", "offered by"] {
-                if let Some(i) = lower.find(phrase) {
-                    let after = line[i + phrase.len()..].trim().trim_start_matches(':');
-                    if !after.is_empty() {
-                        issuer = after.to_string();
-                        snippet.push(line.to_string());
+                if lower.contains(phrase) {
+                    if let Some((_, end)) = find_ci(line, phrase) {
+                        let after = line[end..].trim().trim_start_matches(':');
+                        if !after.is_empty() {
+                            issuer = after.to_string();
+                            snippet.push(line.to_string());
+                        }
                     }
                     break;
                 }
@@ -1174,7 +1436,7 @@ pub fn parse_certificate_text(text: &str) -> CertificateCandidate {
             {
                 continue;
             }
-            title = line.trim_end_matches(|c: char| matches!(c, '.' | ':')).to_string();
+            title = line.trim_end_matches(['.', ':']).to_string();
             break;
         }
     }
@@ -1512,6 +1774,167 @@ Bachelor of Technology in Computer Science & Systems Engineering September 2023 
         // Pure validation path — no network call happens for bad names.
         assert!(github_repo_candidate("../etc", "passwd").is_err());
         assert!(github_repo_candidate("", "repo").is_err());
+    }
+
+    // --- Regression (v4): UTF-8 char-boundary panics ------------------------
+    // A vault paste containing unspaced em/en dashes crashed the whole app:
+    // `split_pair` sliced `line[index + 1..]` one byte past the start of a
+    // 3-byte dash, and the panic crossed the main-thread event loop.
+
+    #[test]
+    fn resume_parser_survives_unspaced_dashes() {
+        // `split_pair` fallback used to panic on the first line; the
+        // experience heading used to panic inside `extract_location`.
+        let text = "\
+Alex Rivera
+PROJECTS
+PyKV—In-memory key-value store
+- WAL persistence and LRU eviction
+2024–2025 Route Optimizer
+- Qiskit experiments
+EXPERIENCE
+Acme–Berlin, Germany — Engineer
+- Worked on routing
+";
+        let import = parse_resume_text(text);
+        assert_eq!(import.projects.len(), 2, "got {:?}", import.projects);
+        assert_eq!(import.projects[0].title, "PyKV");
+        // With an unspaced dash the trailing text becomes the description
+        // (only spaced "|"-style stacks become skill lists).
+        assert!(
+            import.projects[0].description.contains("WAL persistence"),
+            "got {:?}",
+            import.projects[0].description
+        );
+        assert_eq!(import.experiences.len(), 1, "got {:?}", import.experiences);
+        assert_eq!(import.experiences[0].role, "Engineer");
+    }
+
+    #[test]
+    fn role_at_org_is_boundary_safe_with_expanding_chars() {
+        // `İ` grows under to_lowercase(), so byte offsets taken from the
+        // lowercased copy used to slice out of bounds here.
+        assert_eq!(
+            looks_like_role_at_org("İİ at X"),
+            Some(("İİ".to_string(), "X".to_string()))
+        );
+        assert_eq!(
+            looks_like_role_at_org("Engineer at İstanbul Dynamics"),
+            Some(("Engineer".to_string(), "İstanbul Dynamics".to_string()))
+        );
+        assert_eq!(looks_like_role_at_org("no marker"), None);
+    }
+
+    #[test]
+    fn split_degree_field_is_boundary_safe() {
+        assert_eq!(
+            split_degree_field("Bachelor of Technology in Computer Science"),
+            ("Bachelor of Technology".to_string(), "Computer Science".to_string())
+        );
+        let (degree, field) = split_degree_field("İnİ in Math");
+        assert_eq!(degree, "İnİ");
+        assert_eq!(field, "Math");
+    }
+
+    #[test]
+    fn certificate_parser_is_boundary_safe_with_multibyte_text() {
+        // `İ` before the marker expands under to_lowercase(); the old
+        // `line[i + needle.len()..]` offset landed inside the 2-byte `Ö`.
+        let candidate = parse_certificate_text("Xİ HAS SUCCESSFULLY COMPLETED Ön Mühendislik");
+        assert_eq!(candidate.title, "Ön Mühendislik");
+
+        let candidate = parse_certificate_text("İş Geliştirme\nISSUED BY TÜBİTAK\n2026-03");
+        assert_eq!(candidate.issuer, "TÜBİTAK");
+        assert_eq!(candidate.issue_date.as_deref(), Some("2026-03"));
+    }
+
+    #[test]
+    fn resume_parser_handles_large_documents_without_panic() {
+        // ~750-line synthetic document mixing unspaced dashes, non-ASCII text
+        // and every section — must complete without panicking or hanging.
+        let mut text = String::from("Alex Rivera\nPROJECTS\n");
+        for i in 0..250 {
+            text.push_str(&format!("Proje—{i}—Modüler sistem\n- Detay {i}\n- Rüzgar–Rota analizi\n"));
+        }
+        text.push_str("EXPERIENCE\n");
+        for i in 0..125 {
+            text.push_str(&format!("Kurum–{i}, Türkiye — Mühendis\n- Görev {i}\n"));
+        }
+        let import = parse_resume_text(&text);
+        assert_eq!(import.projects.len(), 250, "got {}", import.projects.len());
+        assert_eq!(import.experiences.len(), 125, "got {}", import.experiences.len());
+    }
+
+    // --- Narrative story dumps (v4) -----------------------------------------
+    // A paste of project write-ups ("7. CryptComm / Period: …") is not resume-
+    // shaped; the narrative fallback extracts one project per numbered block.
+
+    #[test]
+    fn narrative_parser_extracts_numbered_project_blocks() {
+        let text = "\
+Intro paragraph about the whole document.
+
+1. Alpha Weather App
+Period: by May 2025
+Type: Personal project
+
+A weather application that retrieved weather information through an external
+weather service and presented current conditions.
+
+Stack
+- Next.js
+- Tailwind CSS
+- Express
+
+What it demonstrates
+API Integration · Next.js · Express · SSR
+
+2. Beta Key Store — with persistence
+Period: February–April 2026
+Context: Virtual internship; presented to engineers
+
+Built an in-memory key-value store with LRU eviction and AOF persistence.
+
+Kairo tags
+Backend Engineering, Caching, Persistence, FastAPI
+
+3. Gamma Route Planner
+Period: 2024–2025
+Context: Hackathon problem statement
+
+Selected cross-border transport routes across multiple modes.
+
+What it demonstrates
+Route Optimization · Algorithms
+";
+        let import = parse_resume_text(text);
+        assert_eq!(import.projects.len(), 3, "got {:?}", import.projects);
+        assert_eq!(import.projects[0].title, "Alpha Weather App");
+        assert!(import.projects[0].description.contains("Period: by May 2025"));
+        assert!(import.projects[0].description.contains("weather service"));
+        assert!(import.projects[0].skills.contains(&"Next.js".to_string()));
+        assert!(import.projects[0].skills.contains(&"API Integration".to_string()));
+        assert!(import.projects[0].skills.contains(&"Tailwind CSS".to_string()));
+        // Deduped across stack + demonstration lists.
+        assert_eq!(
+            import.projects[0]
+                .skills
+                .iter()
+                .filter(|s| s.to_lowercase() == "next.js")
+                .count(),
+            1
+        );
+        assert_eq!(import.projects[1].title, "Beta Key Store — with persistence");
+        assert!(import.projects[1].skills.contains(&"Backend Engineering".to_string()));
+        assert!(import.experiences.is_empty() && import.achievements.is_empty());
+    }
+
+    #[test]
+    fn narrative_parser_ignores_resume_shaped_text() {
+        // Section headings present -> the resume parser handles it, not this.
+        assert!(parse_narrative_text(RESUME).is_none());
+        // Fewer than three numbered headings -> not a story dump.
+        assert!(parse_narrative_text("1. One\n- a\n2. Two\n- b\n").is_none());
     }
 }
 

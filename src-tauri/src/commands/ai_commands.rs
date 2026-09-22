@@ -46,8 +46,10 @@ pub fn ai_save_config(
     Ok(AiConfigView { base_url: config.base_url, model: config.model, has_api_key: has_key })
 }
 
+/// Blocking network call — async so it runs on the command pool, never the
+/// main thread (a 240s timeout must never freeze the window).
 #[tauri::command]
-pub fn ai_test_connection(state: State<'_, DbState>) -> Result<String, String> {
+pub async fn ai_test_connection(state: State<'_, DbState>) -> Result<String, String> {
     // Gather config under the lock, then DROP it before the network call —
     // a 240s timeout must never freeze every other command.
     let (config, key) = {
@@ -62,7 +64,7 @@ pub fn ai_test_connection(state: State<'_, DbState>) -> Result<String, String> {
 /// Lists models from the provider's OpenAI-compatible /models endpoint so
 /// Settings can offer a picker (works with Ollama and LM Studio).
 #[tauri::command]
-pub fn ai_list_models(state: State<'_, DbState>, base_url: String) -> Result<Vec<String>, String> {
+pub async fn ai_list_models(state: State<'_, DbState>, base_url: String) -> Result<Vec<String>, String> {
     // Lock held only for the keyring read, not the network GET.
     let key = {
         let _conn = state.0.lock().map_err(|_| DB_LOCK)?;
@@ -72,7 +74,7 @@ pub fn ai_list_models(state: State<'_, DbState>, base_url: String) -> Result<Vec
 }
 
 #[tauri::command]
-pub fn tailor_suggest(
+pub async fn tailor_suggest(
     state: State<'_, DbState>,
     job_id: i64,
     bullet_id: i64,
