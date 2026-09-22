@@ -553,7 +553,7 @@ fn render_expressive(plan: &ResumePlan) -> String {
                 tex.push_str(&format!("{{\\small {}}}\\par\\vspace{{4pt}}\n", inst));
             }
         }
-        tex.push_str("\n");
+        tex.push('\n');
     }
 
     // Achievements
@@ -570,7 +570,7 @@ fn render_expressive(plan: &ResumePlan) -> String {
                 tex.push_str(&format!("\\vspace{{1pt}}{{\\small {}}}\\par\\vspace{{4pt}}\n", escape_latex(&inline(&a.description))));
             }
         }
-        tex.push_str("\n");
+        tex.push('\n');
     }
 
     // Skills — one line per category
@@ -584,7 +584,7 @@ fn render_expressive(plan: &ResumePlan) -> String {
                 names.iter().map(|s| escape_latex(&inline(s))).collect::<Vec<_>>().join(" \\textbullet{} ")
             ));
         }
-        tex.push_str("\n");
+        tex.push('\n');
     }
 
     tex.push_str("\\end{document}\n");

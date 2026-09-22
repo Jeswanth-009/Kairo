@@ -19,8 +19,8 @@ pub fn create_backup(
     state: State<'_, DbState>,
     app_data_dir: State<'_, AppDataDir>,
 ) -> Result<backup::BackupInfo, String> {
-    let mut conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    let info = backup::create_backup(&mut conn, &backup::backups_dir(&app_data_dir.0))?;
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    let info = backup::create_backup(&conn, &backup::backups_dir(&app_data_dir.0))?;
     crate::logging::log_event(
         "info",
         "backup_created",

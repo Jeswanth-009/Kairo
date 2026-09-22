@@ -90,7 +90,7 @@ fn compile_locked_produces_valid_pdf() {
     assert!(tex.contains("PyKV --- in-memory key-value store"));
 
     // Compile with the machine's tectonic if present, else skip.
-    let tectonic = dirs_next().unwrap_or_else(|| std::env::temp_dir());
+    let tectonic = dirs_next().unwrap_or_else(std::env::temp_dir);
     let exe = tectonic.join("tectonic.exe");
     let candidate = if exe.exists() { exe } else { tectonic.join("tectonic") };
     if !candidate.exists() {

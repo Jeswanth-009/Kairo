@@ -177,7 +177,7 @@ pub fn compile_locked(
     let tex_path = out_dir.join("resume.tex");
     std::fs::write(&tex_path, &tex).map_err(|e| format!("could not write .tex: {e}"))?;
 
-    let output = std::process::Command::new(&tectonic)
+    let output = std::process::Command::new(tectonic)
         .arg("--outdir")
         .arg(&out_dir)
         .arg("--keep-logs")

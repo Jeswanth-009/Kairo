@@ -234,7 +234,7 @@ fn vault_get_job(conn: &Connection, id: i64) -> Result<Job, String> {
         Job::TABLE
     );
     let mut stmt = sql_err(conn.prepare(&sql))?;
-    sql_err(stmt.query_row([id], |row| Job::from_row(row)))
+    sql_err(stmt.query_row([id], Job::from_row))
 }
 
 pub fn get_job_enriched(conn: &Connection, id: i64) -> Result<Job, String> {
@@ -255,7 +255,7 @@ pub fn update_requirement(conn: &Connection, req: &JobRequirement) -> Result<Job
     let sql = "UPDATE job_requirements SET kind = ?1, raw_text = ?2, normalized_key = ?3, \
                importance = ?4, user_confirmed = ?5, updated_at = datetime('now') WHERE id = ?6";
     let changed = sql_err(conn.execute(
-        &sql,
+        sql,
         params![
             req.kind,
             req.raw_text,

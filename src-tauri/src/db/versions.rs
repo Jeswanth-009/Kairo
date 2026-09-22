@@ -87,9 +87,7 @@ fn hydrate(row: &rusqlite::Row) -> rusqlite::Result<ResumeVersion> {
                 excluded_skills: vec![],
                 estimated_lines: 0,
                 fits_one_page: false,
-                warnings: vec![format!(
-                    "This version's snapshot could not be read (corrupt row) — metadata is intact."
-                )],
+                warnings: vec!["This version's snapshot could not be read (corrupt row) — metadata is intact.".to_string()],
             },
             accepted_tailorings: vec![],
             matching_version: 0,

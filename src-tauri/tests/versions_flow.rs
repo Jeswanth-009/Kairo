@@ -3,7 +3,6 @@
 
 use kairo_lib::db::versions;
 use rusqlite::Connection;
-use std::path::PathBuf;
 
 fn real_db_copy() -> Option<Connection> {
     let src = std::path::Path::new(
@@ -25,7 +24,7 @@ fn real_db_copy() -> Option<Connection> {
             let _ = std::fs::copy(wal, std::path::Path::new(&dst).with_extension(format!("db{ext}")));
         }
     }
-    Some(Connection::open(dst).ok()?)
+    Connection::open(dst).ok()
 }
 
 #[test]

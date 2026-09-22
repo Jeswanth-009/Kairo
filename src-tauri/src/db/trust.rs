@@ -6,7 +6,7 @@
 //! explicit allowed/forbidden boundaries used by the later claim validator.
 
 use rusqlite::types::Value;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 pub const EVIDENCE_ENTITY_TYPES: &[&str] =
@@ -140,7 +140,7 @@ pub fn create_evidence(conn: &Connection, evidence: &Evidence) -> Result<Evidenc
                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
     let values: Vec<Value> = evidence.values();
     let tx = str_err(conn.unchecked_transaction())?;
-    str_err(tx.execute(&sql, params_from_iter(values.iter())))?;
+    str_err(tx.execute(sql, params_from_iter(values.iter())))?;
     let id = tx.last_insert_rowid();
     str_err(tx.commit())?;
     get_evidence(conn, id)
@@ -152,7 +152,7 @@ pub fn update_evidence(conn: &Connection, evidence: &Evidence) -> Result<Evidenc
                reference = ?5, note = ?6, verified = ?7, updated_at = datetime('now') WHERE id = ?8";
     let mut values: Vec<Value> = evidence.values();
     values.push(Value::Integer(evidence.id));
-    let changed = str_err(conn.execute(&sql, params_from_iter(values.iter())))?;
+    let changed = str_err(conn.execute(sql, params_from_iter(values.iter())))?;
     if changed == 0 {
         return Err("Evidence not found".to_string());
     }
@@ -359,7 +359,7 @@ pub fn create_bullet(conn: &Connection, bullet: &CanonicalBullet) -> Result<Cano
                VALUES (?1, ?2, ?3, ?4, ?5)";
     let tx = str_err(conn.unchecked_transaction())?;
     str_err(tx.execute(
-        &sql,
+        sql,
         params![
             bullet.entity_type,
             bullet.entity_id,
@@ -369,7 +369,7 @@ pub fn create_bullet(conn: &Connection, bullet: &CanonicalBullet) -> Result<Cano
         ],
     ))?;
     let id = tx.last_insert_rowid();
-    let mut stored = CanonicalBullet {
+    let stored = CanonicalBullet {
         id,
         entity_type: bullet.entity_type.clone(),
         entity_id: bullet.entity_id,
@@ -390,7 +390,7 @@ pub fn update_bullet(conn: &Connection, bullet: &CanonicalBullet) -> Result<Cano
                WHERE id = ?3";
     let tx = str_err(conn.unchecked_transaction())?;
     let changed = str_err(tx.execute(
-        &sql,
+        sql,
         params![bullet.text, bullet.approved as i64, bullet.id],
     ))?;
     if changed == 0 {
@@ -506,7 +506,7 @@ pub fn create_claim_rule(conn: &Connection, rule: &ClaimRule) -> Result<ClaimRul
         Value::Text(rule.note.clone()),
     ];
     let tx = str_err(conn.unchecked_transaction())?;
-    str_err(tx.execute(&sql, params_from_iter(values.iter())))?;
+    str_err(tx.execute(sql, params_from_iter(values.iter())))?;
     let id = tx.last_insert_rowid();
     str_err(tx.commit())?;
     let sql_get = format!("SELECT {RULE_COLS} FROM claim_rules WHERE id = ?1");
@@ -519,7 +519,7 @@ pub fn update_claim_rule(conn: &Connection, rule: &ClaimRule) -> Result<ClaimRul
     let sql = "UPDATE claim_rules SET rule_type = ?1, pattern = ?2, note = ?3, \
                updated_at = datetime('now') WHERE id = ?4";
     let changed = str_err(conn.execute(
-        &sql,
+        sql,
         params![rule.rule_type, rule.pattern, rule.note, rule.id],
     ))?;
     if changed == 0 {
@@ -545,7 +545,7 @@ pub fn delete_claim_rule(conn: &Connection, id: i64) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::vault::{vault_create, vault_delete, Project, SkillRef};
+    use crate::db::vault::{vault_create, vault_delete, Project};
     use crate::db::apply_migrations;
 
     fn mem_db() -> Connection {

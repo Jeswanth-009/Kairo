@@ -343,7 +343,7 @@ pub fn tokenize_filtered(text: &str) -> std::collections::HashSet<String> {
     text.to_lowercase()
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|w| w.len() > 1 && !STOPWORDS.contains(w))
-        .map(|w| stem(w))
+        .map(stem)
         .collect()
 }
 
@@ -836,7 +836,7 @@ mod tests {
         // documentation bullet (no support) and the unapproved one are out.
         assert!(item.bullets.iter().all(|b| !b.text.contains("documentation")));
         assert!(item.bullets.iter().all(|b| !b.text.contains("millions")));
-        assert!(item.bullets.iter().any(|b| b.supports.len() > 0));
+        assert!(item.bullets.iter().any(|b| !b.supports.is_empty()));
     }
 
     #[test]

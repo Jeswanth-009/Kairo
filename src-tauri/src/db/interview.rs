@@ -2,7 +2,6 @@
 //! requirements, match coverage and submitted plan, then hands them to the
 //! pure generator.
 
-use super::vault::sql_err;
 use crate::interview::{generate, PrepEntity, PrepRequirement};
 use rusqlite::Connection;
 

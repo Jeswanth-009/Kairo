@@ -3,7 +3,6 @@
 //! exists to rank the user's own records; the explanations are the product.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 pub const MATCHING_VERSION: u32 = 2;
 
@@ -175,7 +174,7 @@ fn tokens(text: &str) -> Vec<String> {
     text.to_lowercase()
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|t| t.len() > 1 && !STOPWORDS.contains(t))
-        .map(|t| stem(t))
+        .map(stem)
         .collect()
 }
 
@@ -563,7 +562,7 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
 
                 if union_ratio >= RESPONSIBILITY_COVERED {
                     coverage = Coverage::Covered;
-                } else if union_ratio >= RESPONSIBILITY_PARTIAL || scored.first().map_or(false, |(_, r)| *r >= RESPONSIBILITY_PARTIAL) {
+                } else if union_ratio >= RESPONSIBILITY_PARTIAL || scored.first().is_some_and(|(_, r)| *r >= RESPONSIBILITY_PARTIAL) {
                     coverage = Coverage::Partial;
                 } else if !scored.is_empty() {
                     coverage = Coverage::Missing;
@@ -729,8 +728,8 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
             } else {
                 // Topic / content fallback when no canonical skill was matched directly
                 let (union_ratio, scored) = collective_overlap(&req_tokens, &input.entities);
-                if union_ratio >= 0.15 || scored.first().map_or(false, |(_, r)| *r >= 0.15) {
-                    coverage = if union_ratio >= 0.22 || scored.first().map_or(false, |(_, r)| *r >= 0.22) {
+                if union_ratio >= 0.15 || scored.first().is_some_and(|(_, r)| *r >= 0.15) {
+                    coverage = if union_ratio >= 0.22 || scored.first().is_some_and(|(_, r)| *r >= 0.22) {
                         Coverage::Covered
                     } else {
                         Coverage::Partial
@@ -1296,7 +1295,4 @@ mod tests {
         assert!(report.overall_score >= 0.80, "Score was only {:.2}, expected >= 0.80", report.overall_score);
     }
 
-    // Silence unused warnings for helpers used only in some tests.
-    #[allow(dead_code)]
-    fn _unused(_: &HashMap<String, String>) {}
 }
