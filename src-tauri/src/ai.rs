@@ -108,7 +108,10 @@ struct ChatChoice {
 
 #[derive(Debug, Deserialize)]
 struct ChatMessage {
-    content: String,
+    /// Reasoning models (dots-3, deepseek-r1, …) return `content: null` when
+    /// their reasoning consumed the whole token budget — never a hard error.
+    #[serde(default)]
+    content: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -191,7 +194,7 @@ pub fn chat(
         b
     };
 
-    let send = |body: &serde_json::Value, timeout: Duration| -> Result<ChatResponse, ureq::Error> {
+    let send = |body: &serde_json::Value, timeout: Duration| -> Result<ChatResponse, String> {
         let mut request = ureq::AgentBuilder::new()
             .timeout(timeout)
             .user_agent("kairo-tailor")
@@ -201,10 +204,10 @@ pub fn chat(
         if !api_key.trim().is_empty() {
             request = request.set("Authorization", &format!("Bearer {}", api_key.trim()));
         }
-        request
-            .send_string(&body.to_string())?
-            .into_json()
-            .map_err(ureq::Error::from)
+        let response = request.send_string(&body.to_string()).map_err(http_error)?;
+        response.into_json().map_err(|e| {
+            format!("provider response was unreadable JSON: {e} (the model may have failed mid-generation)")
+        })
     };
 
     let started = Instant::now();
@@ -221,12 +224,16 @@ pub fn chat(
 
     let response: ChatResponse = match send(first_body, opts.timeout) {
         Ok(r) => r,
-        Err(ureq::Error::Status(400, _)) => {
+        Err(e) => {
             // The provider rejected the body (usually response_format) — one
-            // retry with the complementary shape.
-            send(fallback_body, opts.timeout).map_err(http_error)?
+            // retry with the complementary shape before giving up.
+            let retryable = e.contains("HTTP 400");
+            if retryable {
+                send(fallback_body, opts.timeout)?
+            } else {
+                return Err(e);
+            }
         }
-        Err(e) => return Err(http_error(e)),
     };
     let duration_ms = started.elapsed().as_millis();
 
@@ -235,7 +242,7 @@ pub fn chat(
         .first()
         .ok_or_else(|| "Provider returned no choices".to_string())?;
     Ok(ChatResult {
-        content: choice.message.content.clone(),
+        content: choice.message.content.clone().unwrap_or_default(),
         finish_reason: choice.finish_reason.clone(),
         prompt_tokens: response.usage.as_ref().and_then(|u| u.prompt_tokens),
         completion_tokens: response.usage.as_ref().and_then(|u| u.completion_tokens),

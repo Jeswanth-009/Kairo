@@ -285,6 +285,14 @@ pub fn build_batch_user_prompt(
     user
 }
 
+fn truncate_chars(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let cut: String = s.chars().take(max).collect();
+    format!("{cut}…")
+}
+
 /// Shared defensive JSON extraction (code fences, <think> blocks, leading
 /// commentary) reused by the single-bullet and batch parsers.
 fn extract_json_object(raw: &str) -> Result<serde_json::Value, String> {

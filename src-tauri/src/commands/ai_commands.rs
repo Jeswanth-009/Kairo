@@ -116,9 +116,15 @@ fn bounded_rewrite(
             }
         }
     };
-    let mut output = crate::tailor::parse_response(&chat.content).map_err(|e| e.to_string());
+    let empty_content = chat.content.trim().is_empty();
+    let mut output = if empty_content {
+        Err("the model returned no content — its reasoning consumed the token budget".to_string())
+    } else {
+        crate::tailor::parse_response(&chat.content).map_err(|e| e.to_string())
+    };
     if output.is_err() {
-        let truncated = chat.finish_reason.as_deref() == Some("length");
+        let truncated =
+            chat.finish_reason.as_deref() == Some("length") || empty_content;
         if truncated {
             opts.max_tokens *= 4;
         } else {
@@ -190,7 +196,7 @@ pub async fn tailor_suggest(
         &key,
         crate::tailor::SYSTEM_PROMPT,
         &crate::tailor::build_user_prompt(&grounding.context),
-        200,
+        700,
         crate::ai::SINGLE_CALL_TIMEOUT,
     );
     log_tailor_call(
@@ -299,7 +305,9 @@ pub async fn tailor_plan_batch(
         }
     }
     let prompt = crate::tailor::build_batch_user_prompt(&role_line, &forbidden_union, &batch_items);
-    let max_tokens = (220 * groundings.len() as u32 + 300).min(4096);
+    // Reasoning models spend budget before the JSON — per-bullet headroom
+    // instead of the theoretical minimum, still bounded.
+    let max_tokens = (500 * groundings.len() as u32 + 500).min(8192);
 
     if cancel.0.load(Ordering::Relaxed) {
         return Err("Tailoring cancelled".to_string());
@@ -421,7 +429,7 @@ pub async fn tailor_plan_batch(
                                     &key,
                                     crate::tailor::SYSTEM_PROMPT,
                                     &crate::tailor::build_user_prompt(&grounding.context),
-                                    200,
+                                    700,
                                     crate::ai::SINGLE_CALL_TIMEOUT,
                                 );
                                 out.push((grounding.bullet_id, outcome, grounding.context.clone()));

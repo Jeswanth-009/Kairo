@@ -88,11 +88,34 @@ pub fn load_composer_input(
     })
 }
 
+/// Narrative-import descriptions summarize their source with "Key: value ·
+/// Key: value" segments; those lines are record metadata, not resume bullets.
+fn looks_like_narrative_meta_line(line: &str) -> bool {
+    let parts: Vec<&str> = line.split(" · ").collect();
+    if parts.len() < 2 {
+        return false;
+    }
+    parts
+        .iter()
+        .filter(|p| match p.find(": ") {
+            Some(i) => {
+                i > 0
+                    && i <= 28
+                    && p[..i]
+                        .chars()
+                        .all(|c| c.is_ascii_alphabetic() || c == ' ')
+            }
+            None => false,
+        })
+        .count()
+        >= 2
+}
+
 /// Ensures the entity has usable bullets: if none exist, canonical bullets are
 /// split out of the record description (trusted — Vault-authored content).
-/// Bullet creation failures are collected as warnings rather than swallowed,
-/// and unapproved bullets are left unapproved (the trust model governs them;
-/// the composer only excludes them, with a warning).
+/// Paragraph-length narrative lines and "Key: value" metadata summaries are
+/// not resume bullets: metadata lines are skipped, paragraphs are created
+/// unapproved so the trust model (not the importer) decides what surfaces.
 fn ensure_entity_bullets(
     conn: &Connection,
     entity_type: &str,
@@ -100,6 +123,8 @@ fn ensure_entity_bullets(
     description: &str,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<ComposerBullet>, String> {
+    const PARAGRAPH_BULLET_CHARS: usize = 320;
+
     let mut bullets = super::trust::list_bullets(conn, entity_type, entity_id)?;
     if bullets.is_empty() && !description.trim().is_empty() {
         let mut raw_lines = Vec::new();
@@ -116,25 +141,38 @@ fn ensure_entity_bullets(
                 raw_lines.push(line.trim().to_string());
             }
         }
+        let mut paragraph_count = 0usize;
         let lines: Vec<String> = raw_lines
             .into_iter()
             .map(|l| l.trim_start_matches(['•', '-', '*', '▪', '·']).trim().to_string())
             .filter(|l| l.chars().count() > 5)
+            .filter(|l| !looks_like_narrative_meta_line(l))
             .collect();
         for (i, line) in lines.into_iter().enumerate() {
+            let is_paragraph = line.chars().count() > PARAGRAPH_BULLET_CHARS;
+            if is_paragraph {
+                paragraph_count += 1;
+            }
             let cb = super::trust::CanonicalBullet {
                 id: 0,
                 entity_type: entity_type.to_string(),
                 entity_id,
                 text: line,
-                approved: true,
+                approved: !is_paragraph,
                 sort_order: (i + 1) as i64,
                 evidence: Vec::new(),
                 evidence_ids: Vec::new(),
             };
             if let Err(e) = super::trust::create_bullet(conn, &cb) {
-                warnings.push(format!("Could not create a bullet on “{entity_type} #{entity_id}”: {e}"));
+                warnings.push(format!(
+                    "Could not create a bullet on “{entity_type} #{entity_id}”: {e}"
+                ));
             }
+        }
+        if paragraph_count > 0 {
+            warnings.push(format!(
+                "{paragraph_count} auto-generated bullet(s) exceeded {PARAGRAPH_BULLET_CHARS} characters and were left unapproved — review them in the record inspector."
+            ));
         }
         bullets = super::trust::list_bullets(conn, entity_type, entity_id)?;
     }
