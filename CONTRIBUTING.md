@@ -43,13 +43,18 @@ work; data is fake and nothing persists.
 ```bash
 cd src-tauri
 cargo test          # Rust unit + integration tests
+cargo fmt --check   # formatting gate (run `cargo fmt` to apply)
+cargo clippy --all-targets -- -D warnings
 
 cd ..
+npm run lint        # ESLint (react-hooks rules on; a few warnings tolerated)
+npm test            # vitest unit tests (pure logic + dev-harness parsers)
 npm run build       # TypeScript type-check + production bundle
 ```
 
-CI runs both on every push/PR. Please make sure both are green before
-opening a PR.
+CI runs all of these on every push/PR. Please make sure they are green
+before opening a PR. Prettier (`.prettierrc.json`, `npm run format`) is
+available but not enforced — don't reformat unrelated code in a PR.
 
 ## Architecture conventions
 

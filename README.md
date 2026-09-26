@@ -9,9 +9,9 @@ opportunity, select the strongest relevant proof, improve the wording without ch
 review every change, and produce a reproducible application artifact.
 
 [![CI](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml/badge.svg)](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml)
-![release](https://img.shields.io/badge/release-v4.0.0-2563EB)
+![release](https://img.shields.io/badge/release-v4.1.0-2563EB)
 ![license](https://img.shields.io/badge/license-MIT-10B981)
-![tests](https://img.shields.io/badge/tests-112%20passing-10B981)
+![tests](https://img.shields.io/badge/tests-116%20passing-10B981)
 ![migrations](https://img.shields.io/badge/migrations-11%20applied-8B5CF6)
 ![platform](https://img.shields.io/badge/platform-Windows-64748B)
 
@@ -93,7 +93,7 @@ Run once per opportunity:
                                  ▼
   RESUME STUDIO       content · editor · live preview
                                  ▼
-  PDF                 one ATS-safe LaTeX template via Tectonic
+  PDF                 three ATS-safe LaTeX templates via Tectonic
                                  ▼
   VERSIONS            immutable snapshots — reopen what you sent
                                  ▼
@@ -127,7 +127,7 @@ domain module unit-testable without fixtures and guarantees determinism is testa
                            │
 ┌──────────────────────────▼─────────────────────────────────┐
 │ PERSISTENCE (src-tauri/src/db/)                            │
-│   SQLite (bundled, WAL) · 10 numbered migrations           │
+│   SQLite (bundled, WAL) · 11 numbered migrations           │
 │   entity repos · validators · artifact persistence         │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -137,7 +137,7 @@ dropped for the duration of the I/O so the UI stays responsive.
 
 ## Data model
 
-Ten numbered migrations, append-only (shipped files are never edited):
+Eleven numbered migrations, append-only (shipped files are never edited):
 
 | Migration | Tables / changes |
 |---|---|
@@ -151,6 +151,7 @@ Ten numbered migrations, append-only (shipped files are never edited):
 | `0008_pdf` | pdf/tex paths, page count, compiled_at on `resume_plans` |
 | `0009_versions` | `resume_versions` (immutable per-job snapshots + private PDF copies) |
 | `0010_applications` | `applications` (company, role, status pipeline, next action, notes, job + resume-version links) |
+| `0011_artifact_template` | `artifact_template_id` + `artifact_paper` on `resume_plans` (remembers what each compiled PDF used) |
 
 Key relationships:
 
@@ -296,8 +297,9 @@ preview:
 
 `latex.rs` + `db/pdf.rs` — spec §9.1. The LLM is never involved; the renderer owns structure.
 
-- One **ATS-safe template**: `article` class, letter paper, 0.6 in margins, T1 fonts, `hidelinks`,
-  compact itemize, uppercase ruled section headings — nothing exotic for parsers to trip on.
+- Three **ATS-safe templates** — `jake` (default), `expressive`, `plushcv` — all on the `article`
+  class, letter paper, 0.6 in margins, T1 fonts, `hidelinks`, compact itemize, uppercase ruled
+  section headings — nothing exotic for parsers to trip on.
 - **Full escaping** of every user string: `\ & % $ # _ { } ~ ^`, control characters stripped,
   newlines in descriptions → `\par`. Tested against hostile input.
 - **Pipeline**: plan → `.tex` written under `AppData/pdf/job_N/` → `tectonic --outdir --keep-logs` →
@@ -381,7 +383,7 @@ need connectivity — each degrades with a clear error.
 
 ## Testing
 
-95 Rust unit tests across the domain modules + integration tests:
+116 Rust unit tests across the domain modules + integration tests:
 
 - **Unit** — escaping, section extraction, tokenization, score components, date ordering, alias
   handling, validation gates.
@@ -438,7 +440,7 @@ npm run tauri dev        # dev window (vite :5173 + cargo)
 npm run build            # frontend type-check + production bundle
 
 cd src-tauri
-cargo test               # 95 unit + integration tests
+cargo test               # 116 unit + integration tests
 ```
 
 In-app quick tour: Settings → AI provider (optional) → Vault (profile + records + evidence +
@@ -480,15 +482,21 @@ npm run tauri dev        # dev window (vite :5173 + cargo)
 
 ## Roadmap
 
-**v4.0.0 shipped**: the v4 "Midnight Sunrise" brand (official logo system, boot splash,
+**v4.1.0 shipped**: one-pass batch tailoring (every planned bullet rewritten in a single
+bounded LLM call with a visible Stop control), plan warnings that name the records dropped by
+section caps, hardening for reasoning/null-content models, and an open-source readiness pass
+(browser-mock import parsers, a self-seeded version-snapshot integration test, zero production
+`unwrap()`s, surfaced backup/log I/O warnings, frontend lint + test tooling, community files).
+**v4.0.0** shipped the v4 "Midnight Sunrise" brand (official logo system, boot splash,
 self-hosted Inter, dark-first theme with an Appearance control), the vault paste crash fix
 (char-boundary-safe parsing, async commands, panic containment, ErrorBoundary), and a
 reliability sweep. **v3.0.0** shipped ATS-grade PDF export (3 LaTeX templates via Tectonic),
 grounded AI tailoring with local-model support (Ollama / LM Studio), deterministic matching and
 planning, resume versioning, application tracking, interview prep and backups.
 
-**Next up**: multi-page estimate refinements, frontend test suite, code-splitting for faster
-first paint, macOS/Linux builds and signing.
+**Next up**: multi-page estimate refinements, deeper frontend test coverage, code-splitting for
+faster first paint, resume-version pruning cap, macOS/Linux builds, code signing and the
+auto-updater.
 
 Deliberately out of scope (per spec): cloud sync, template marketplace, email tracking,
 vector databases, salary/hiring predictions.
