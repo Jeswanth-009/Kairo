@@ -3,14 +3,22 @@
  * `?mock` browser harness so pages render without the Tauri backend.
  */
 import type {
+  Achievement,
   Application,
+  CanonicalBullet,
+  Certification,
+  ClaimRule,
   DashboardOverview,
   Diagnostics,
+  Evidence,
+  Experience,
   Job,
   Profile,
+  Project,
   ResumePlan,
   ResumeVersion,
   Skill,
+  SkillRef,
   TailorSuggestion,
 } from "../lib/types";
 import { APP_VERSION } from "../lib/version";
@@ -247,6 +255,168 @@ export const mockPlan: ResumePlan = {
 };
 
 export const mockSuggestions: TailorSuggestion[] = [];
+
+// --- Vault records (mirroring mockDashboard.counts) ------------------------
+
+const skillRef = (name: string, confidence: number): SkillRef | null => {
+  const skill = mockSkills.find((s) => s.canonicalName.toLowerCase() === name.toLowerCase());
+  return skill ? { skillId: skill.id, canonicalName: skill.canonicalName, confidence } : null;
+};
+
+const skillRefs = (names: string[], base: number): SkillRef[] =>
+  names.map((name, i) => skillRef(name, Math.max(3, base - (i % 2)))).filter((s): s is SkillRef => s !== null);
+
+export const mockProjects: Project[] = mockPlan.projects.map((p) => ({
+  id: p.id,
+  title: p.title,
+  description: p.description,
+  startDate: null,
+  endDate: null,
+  isCurrent: false,
+  url: "",
+  repoUrl: p.title === "WatchDog" ? "https://github.com/alex-rivera-dev/watchdog" : "",
+  skills: skillRefs(p.skills, 5),
+  evidenceCount: p.evidenceCount,
+}));
+
+export const mockExperiences: Experience[] = mockPlan.experience.map((e) => {
+  const [organization, role] = e.title.split(" — ");
+  return {
+    id: e.id,
+    organization,
+    role: role ?? "",
+    description: e.description,
+    startDate: e.startDate,
+    endDate: e.endDate,
+    isCurrent: e.isCurrent,
+    location: e.subtitle,
+    skills: skillRefs(e.skills, 4),
+    evidenceCount: e.evidenceCount,
+  };
+});
+
+export const mockCertifications: Certification[] = [
+  {
+    id: 1,
+    title: "Cloud Practitioner Essentials",
+    issuer: "Amazon Web Services",
+    description: "Foundational AWS cloud architecture, services and billing models.",
+    issueDate: "2025-03-01",
+    expiryDate: null,
+    credentialId: "AWS-CCP-88412",
+    url: "",
+  },
+  {
+    id: 2,
+    title: "Python Data Structures",
+    issuer: "Skilstack Academy",
+    description: "Core Python data structures, complexity analysis and testing.",
+    issueDate: "2024-08-15",
+    expiryDate: null,
+    credentialId: "SKA-PY-1042",
+    url: "",
+  },
+];
+
+export const mockAchievements: Achievement[] = [
+  ...(mockPlan.achievements ?? []).map((a) => ({
+    id: a.id,
+    title: a.title,
+    issuer: a.issuer,
+    description: a.description,
+    achievedOn: a.achievedOn ?? null,
+  })),
+  {
+    id: 3,
+    title: "1300+ Codeforces rating",
+    issuer: "Codeforces",
+    description: "Peak competitive-programming rating, top 8% of participants.",
+    achievedOn: "2025-12-01",
+  },
+  {
+    id: 4,
+    title: "40+ merged open-source PRs",
+    issuer: "GitHub",
+    description: "Merged contributions across Rust and Python projects.",
+    achievedOn: "2026-06-15",
+  },
+];
+
+// 18 evidence items, 11 verified — matching mockDashboard.counts.
+export const mockEvidence: Evidence[] = [
+  { id: 1, entityType: "project", entityId: 20, kind: "metric", title: "60% model cost reduction", reference: "benchmark-notes.md", note: "Measured over a 30-day window across regions.", verified: true },
+  { id: 2, entityType: "project", entityId: 20, kind: "document", title: "Sub-2s latency trace", reference: "latency-trace.json", note: "", verified: true },
+  { id: 3, entityType: "project", entityId: 20, kind: "repository", title: "CodeSensei repo", reference: "github.com/alex-rivera-dev/codesensei", note: "", verified: true },
+  { id: 4, entityType: "project", entityId: 20, kind: "note", title: "Bedrock pricing worksheet", reference: "", note: "", verified: false },
+  { id: 5, entityType: "project", entityId: 19, kind: "repository", title: "WatchDog repo", reference: "github.com/alex-rivera-dev/watchdog", note: "", verified: true },
+  { id: 6, entityType: "project", entityId: 19, kind: "metric", title: "EMA anomaly results", reference: "dog-eval.md", note: "", verified: false },
+  { id: 7, entityType: "project", entityId: 21, kind: "repository", title: "Kairo repo", reference: "github.com/Jeswanth-009/Kairo", note: "", verified: true },
+  { id: 8, entityType: "project", entityId: 21, kind: "metric", title: "118 tests passing", reference: "ci-run-2231", note: "", verified: true },
+  { id: 9, entityType: "project", entityId: 21, kind: "document", title: "Architecture notes", reference: "docs/architecture.md", note: "", verified: false },
+  { id: 10, entityType: "experience", entityId: 1, kind: "metric", title: "708 ops/s benchmark", reference: "pykv-bench.py", note: "20-way concurrent load test.", verified: true },
+  { id: 11, entityType: "experience", entityId: 1, kind: "document", title: "Internship completion letter", reference: "", note: "", verified: true },
+  { id: 12, entityType: "experience", entityId: 2, kind: "repository", title: "Secure messenger repo", reference: "github.com/alex-rivera-dev/messenger", note: "", verified: true },
+  { id: 13, entityType: "experience", entityId: 2, kind: "document", title: "Internship report", reference: "", note: "", verified: false },
+  { id: 14, entityType: "experience", entityId: 2, kind: "metric", title: "<100ms delivery latency", reference: "ws-bench.md", note: "", verified: false },
+  { id: 15, entityType: "education", entityId: 1, kind: "document", title: "Enrollment record", reference: "", note: "", verified: true },
+  { id: 16, entityType: "certification", entityId: 1, kind: "certificate", title: "AWS CCP certificate", reference: "AWS-CCP-88412", note: "", verified: true },
+  { id: 17, entityType: "certification", entityId: 2, kind: "certificate", title: "Python course certificate", reference: "SKA-PY-1042", note: "", verified: false },
+  { id: 18, entityType: "achievement", entityId: 1, kind: "link", title: "OpenForge finalist page", reference: "openforge.org/finalists", note: "", verified: true },
+];
+
+// 9 canonical bullets, 8 approved — matching mockDashboard.counts.
+export const mockBullets: CanonicalBullet[] = [
+  { id: 1, entityType: "project", entityId: 20, text: "Architected a 4-layer Socratic reasoning pipeline over Amazon Bedrock with multi-turn conversation history", approved: true, sortOrder: 1, evidence: [{ id: 1, title: "60% model cost reduction", kind: "metric", verified: true }], evidenceIds: [1] },
+  { id: 2, entityType: "project", entityId: 20, text: "Cut model costs 60% with a cross-region architecture while keeping sub-2s end-to-end latency", approved: true, sortOrder: 2, evidence: [{ id: 1, title: "60% model cost reduction", kind: "metric", verified: true }], evidenceIds: [1] },
+  { id: 3, entityType: "project", entityId: 20, text: "Built an auto-explain provider with 1.5s diagnostic debounce covering 10+ languages", approved: true, sortOrder: 3, evidence: [], evidenceIds: [] },
+  { id: 4, entityType: "project", entityId: 19, text: "Built a user-space monitoring daemon with an async producer-consumer pipeline over SQLite", approved: true, sortOrder: 1, evidence: [{ id: 5, title: "WatchDog repo", kind: "repository", verified: true }], evidenceIds: [5] },
+  { id: 5, entityType: "project", entityId: 21, text: "Led a platform team of 12 engineers across three regions", approved: false, sortOrder: 1, evidence: [], evidenceIds: [] },
+  { id: 6, entityType: "experience", entityId: 2, text: "Reduced message delivery latency to <100ms via payload serialization and per-room pooling", approved: true, sortOrder: 1, evidence: [{ id: 12, title: "Secure messenger repo", kind: "repository", verified: true }], evidenceIds: [12] },
+  { id: 7, entityType: "experience", entityId: 2, text: "Containerized the Node.js WebSocket server and Express API with Docker Compose; 15+ integration tests", approved: true, sortOrder: 2, evidence: [], evidenceIds: [] },
+  { id: 8, entityType: "experience", entityId: 1, text: "Engineered PyKV, an in-memory LRU cache with O(1) GET/SET and AOF append-only persistence", approved: true, sortOrder: 1, evidence: [{ id: 10, title: "708 ops/s benchmark", kind: "metric", verified: true }], evidenceIds: [10] },
+  { id: 9, entityType: "experience", entityId: 1, text: "Characterized true server throughput at 708 ops/s under 20-way concurrent load", approved: true, sortOrder: 2, evidence: [{ id: 10, title: "708 ops/s benchmark", kind: "metric", verified: true }], evidenceIds: [10] },
+];
+
+export const mockClaimRules: ClaimRule[] = [
+  { id: 1, entityType: null, entityId: null, ruleType: "forbidden_claim", pattern: "led a team of", note: "Never claim leadership scope without evidence." },
+  { id: 2, entityType: null, entityId: null, ruleType: "forbidden_claim", pattern: "nationwide", note: "" },
+  { id: 3, entityType: "project", entityId: 20, ruleType: "allowed_claim", pattern: "cut model costs", note: "Backed by benchmark-notes.md." },
+];
+
+// Requirements per job — matching each job's requirementCount badge.
+const req = (id: number, jobId: number, kind: string, rawText: string, importance: number) => ({
+  id,
+  jobId,
+  kind,
+  rawText,
+  normalizedKey: rawText.toLowerCase(),
+  importance,
+  userConfirmed: true,
+});
+
+export const mockRequirements = [
+  req(1, 3, "required_skill", "TypeScript", 0.9),
+  req(2, 3, "required_skill", "React", 0.9),
+  req(3, 3, "required_skill", "REST APIs", 0.85),
+  req(4, 3, "required_skill", "Node.js", 0.8),
+  req(5, 3, "preferred_skill", "AWS", 0.6),
+  req(6, 3, "preferred_skill", "LLM integration", 0.6),
+  req(7, 3, "preferred_skill", "Docker", 0.55),
+  req(8, 3, "responsibility", "Build AI-powered web tooling", 0.8),
+  req(9, 3, "responsibility", "Ship features end to end", 0.7),
+  req(10, 3, "responsibility", "Write tested, reviewed code", 0.7),
+  req(11, 3, "responsibility", "Collaborate with designers", 0.6),
+  req(12, 3, "responsibility", "Work with product on scope", 0.6),
+  req(13, 4, "required_skill", "Ruby on Rails", 0.9),
+  req(14, 4, "required_skill", "Distributed systems", 0.85),
+  req(15, 4, "required_skill", "SQL", 0.8),
+  req(16, 4, "preferred_skill", "Go", 0.6),
+  req(17, 4, "preferred_skill", "Kubernetes", 0.6),
+  req(18, 4, "preferred_skill", "gRPC", 0.55),
+  req(19, 4, "responsibility", "Design review APIs", 0.8),
+  req(20, 4, "responsibility", "Improve CI pipelines", 0.7),
+  req(21, 4, "responsibility", "On-call rotation", 0.6),
+];
 
 export const mockVersions: ResumeVersion[] = [];
 

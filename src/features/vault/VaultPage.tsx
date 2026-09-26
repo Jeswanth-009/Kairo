@@ -13,6 +13,7 @@ import type { AnyVaultRecord } from "../../lib/types";
 import { ImportDialog } from "../imports/ImportDialog";
 import { ProfileCard } from "./ProfileCard";
 import { RecordInspector } from "./RecordInspector";
+import { scrollMainToTop } from "../../lib/dom";
 import { RecordDialog } from "./RecordDialog";
 import { SkillsTab } from "./SkillsTab";
 import { VaultCard } from "./VaultCard";
@@ -199,6 +200,9 @@ export default function VaultPage() {
               onChange={(id) => {
                 setTab(id);
                 setQuery("");
+                // Tabs range from 0 to 26 cards — reset scroll so the new
+                // tab always opens at its heading.
+                scrollMainToTop();
               }}
               className="flex-wrap"
             />

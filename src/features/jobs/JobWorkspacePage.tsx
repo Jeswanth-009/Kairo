@@ -7,6 +7,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Feedback";
 import { Field, Input, Select } from "../../components/ui/inputs";
 import { JOB_REQUIREMENT_KINDS } from "../../lib/types";
+import { scrollMainToTop } from "../../lib/dom";
 import type { Job, JobRequirement, JobRequirementKind } from "../../lib/types";
 import { useJobsStore } from "../../stores/jobsStore";
 import { toast } from "../../stores/toastStore";
@@ -116,7 +117,11 @@ export default function JobWorkspacePage() {
         <Tabs
           tabs={TAB_META.map((t) => ({ id: t.key, label: t.label }))}
           active={tab}
-          onChange={(id) => setTab(id as WorkspaceTab)}
+          onChange={(id) => {
+            setTab(id as WorkspaceTab);
+            // Tab bodies differ wildly in height — never land mid-page.
+            scrollMainToTop();
+          }}
           className="flex-wrap"
         />
       </div>

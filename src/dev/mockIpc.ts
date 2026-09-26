@@ -3,8 +3,17 @@
  * app runs in a plain browser against fixtures. Enabled via the `?mock` dev
  * entry (mock.html) — never bundled into the production app.
  */
-import { mockApplications, mockDashboard, mockDiagnostics, mockJobs, mockPlan, mockProfile, mockSkills, mockSuggestions, mockVersions } from "./fixtures";
+import { mockApplications, mockBullets, mockClaimRules, mockDashboard, mockDiagnostics, mockEvidence, mockExperiences, mockAchievements, mockCertifications, mockJobs, mockPlan, mockProfile, mockProjects, mockRequirements, mockSkills, mockSuggestions, mockVersions } from "./fixtures";
 import { parseCertificate, parseGithubRepo, parseResume } from "./mockParsers";
+import type {
+  CanonicalBullet,
+  Certification,
+  ClaimRule,
+  Evidence,
+  Experience,
+  Project,
+  Achievement,
+} from "../lib/types";
 
 type Handler = (args: Record<string, unknown>) => unknown;
 
@@ -18,6 +27,22 @@ const versions = structuredClone(mockVersions);
 
 const wrappedLines = (text: string) =>
   text.length === 0 ? 0 : Math.max(1, Math.ceil(text.length / 95));
+
+// In-session mutation helpers for the fixture-backed vault lists.
+const nextId = (list: { id: number }[]) => Math.max(...list.map((x) => x.id), 0) + 1;
+
+function replaceById<T extends { id: number }>(list: T[], item: unknown): T {
+  const next = item as T;
+  const idx = list.findIndex((x) => x.id === next.id);
+  if (idx >= 0) list[idx] = next;
+  return next;
+}
+
+function removeById(list: { id: number }[], id: unknown) {
+  const idx = list.findIndex((x) => x.id === Number(id));
+  if (idx >= 0) list.splice(idx, 1);
+  return { ok: true };
+}
 
 function estimateLines(p: typeof mockPlan): number {
   let lines = 4 + p.education.length * 2;
@@ -57,7 +82,11 @@ const handlers: Record<string, Handler> = {
       requirementCount: (a.requirements as unknown[])?.length ?? 0,
     };
     jobs.push(next);
-    return { job: next, requirements: a.requirements };
+    const created = (a.requirements as (typeof mockRequirements)[number][] | undefined) ?? [];
+    created.forEach((r) => {
+      mockRequirements.push({ ...r, id: nextId(mockRequirements), jobId: next.id });
+    });
+    return { job: next, requirements: mockRequirements.filter((r) => r.jobId === next.id) };
   },
   update_job: (a) => {
     const job = a.job as (typeof jobs)[number];
@@ -66,7 +95,17 @@ const handlers: Record<string, Handler> = {
     return job;
   },
   delete_job: () => ({ ok: true }),
-  list_requirements: () => [],
+  list_requirements: (a) => mockRequirements.filter((r) => r.jobId === Number(a.jobId)),
+  add_requirement: (a) => {
+    const r = {
+      ...(a.requirement as (typeof mockRequirements)[number]),
+      id: nextId(mockRequirements),
+    };
+    mockRequirements.push(r);
+    return r;
+  },
+  update_requirement: (a) => replaceById(mockRequirements, a.requirement),
+  delete_requirement: (a) => removeById(mockRequirements, a.id),
   parse_jd: () => ({
     role: "Software Engineering Intern",
     company: "",
@@ -189,9 +228,9 @@ const handlers: Record<string, Handler> = {
   },
   list_resume_versions: () => versions,
 
-  // vault (read-only in mock; create/update echo back)
-  list_projects: () => [],
-  list_experiences: () => [],
+  // vault (records live in fixtures; create/update/delete mutate in-session)
+  list_projects: () => mockProjects,
+  list_experiences: () => mockExperiences,
   list_education: () => [
     {
       id: 1,
@@ -204,32 +243,76 @@ const handlers: Record<string, Handler> = {
       isCurrent: false,
     },
   ],
-  list_certifications: () => [],
-  list_achievements: () => [],
+  list_certifications: () => mockCertifications,
+  list_achievements: () => mockAchievements,
   list_skills: () => skills,
   get_profile: () => profile,
   upsert_profile: (a) => Object.assign(profile, a.profile),
-  create_project: (a) => a.project,
-  create_experience: (a) => a.experience,
+  create_project: (a) => {
+    const p = { ...(a.project as Project), id: nextId(mockProjects) };
+    mockProjects.unshift(p);
+    return p;
+  },
+  create_experience: (a) => {
+    const e = { ...(a.experience as Experience), id: nextId(mockExperiences) };
+    mockExperiences.unshift(e);
+    return e;
+  },
   create_education: (a) => a.education,
-  create_certification: (a) => a.certification,
-  create_achievement: (a) => a.achievement,
+  create_certification: (a) => {
+    const c = { ...(a.certification as Certification), id: nextId(mockCertifications) };
+    mockCertifications.unshift(c);
+    return c;
+  },
+  create_achievement: (a) => {
+    const ach = { ...(a.achievement as Achievement), id: nextId(mockAchievements) };
+    mockAchievements.unshift(ach);
+    return ach;
+  },
   create_skill: (a) => a.skill,
-  update_project: (a) => a.project,
-  update_experience: (a) => a.experience,
+  update_project: (a) => replaceById(mockProjects, a.project),
+  update_experience: (a) => replaceById(mockExperiences, a.experience),
   update_education: (a) => a.education,
-  update_certification: (a) => a.certification,
-  update_achievement: (a) => a.achievement,
+  update_certification: (a) => replaceById(mockCertifications, a.certification),
+  update_achievement: (a) => replaceById(mockAchievements, a.achievement),
   update_skill: (a) => a.skill,
-  delete_project: () => ({ ok: true }),
-  delete_experience: () => ({ ok: true }),
+  delete_project: (a) => removeById(mockProjects, a.id),
+  delete_experience: (a) => removeById(mockExperiences, a.id),
   delete_education: () => ({ ok: true }),
-  delete_certification: () => ({ ok: true }),
-  delete_achievement: () => ({ ok: true }),
+  delete_certification: (a) => removeById(mockCertifications, a.id),
+  delete_achievement: (a) => removeById(mockAchievements, a.id),
   delete_skill: () => ({ ok: true }),
-  list_evidence: () => [],
-  list_bullets: () => [],
-  list_claim_rules: () => [],
+  list_evidence: (a) =>
+    mockEvidence.filter((e) => e.entityType === a.entityType && e.entityId === Number(a.entityId)),
+  list_bullets: (a) =>
+    mockBullets.filter((b) => b.entityType === a.entityType && b.entityId === Number(a.entityId)),
+  list_claim_rules: (a) =>
+    mockClaimRules.filter(
+      (r) =>
+        (r.entityType === null || r.entityType === a.entityType) &&
+        (r.entityId === null || r.entityId === Number(a.entityId)),
+    ),
+  create_evidence: (a) => {
+    const e = { ...(a.evidence as Evidence), id: nextId(mockEvidence) };
+    mockEvidence.unshift(e);
+    return e;
+  },
+  update_evidence: (a) => replaceById(mockEvidence, a.evidence),
+  delete_evidence: (a) => removeById(mockEvidence, a.id),
+  create_bullet: (a) => {
+    const b = { ...(a.bullet as CanonicalBullet), id: nextId(mockBullets) };
+    mockBullets.unshift(b);
+    return b;
+  },
+  update_bullet: (a) => replaceById(mockBullets, a.bullet),
+  delete_bullet: (a) => removeById(mockBullets, a.id),
+  create_claim_rule: (a) => {
+    const r = { ...(a.rule as ClaimRule), id: nextId(mockClaimRules) };
+    mockClaimRules.unshift(r);
+    return r;
+  },
+  update_claim_rule: (a) => replaceById(mockClaimRules, a.rule),
+  delete_claim_rule: (a) => removeById(mockClaimRules, a.id),
   add_skill_alias: (a) => ({ id: 1, alias: String(a.alias ?? "") }),
   delete_skill_alias: () => ({ ok: true }),
 

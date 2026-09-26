@@ -43,7 +43,7 @@ export default function App() {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar title={titleFor(location.pathname)} />
-        <main className="flex-1 overflow-y-auto">
+        <main id="app-main" className="flex-1 overflow-y-auto">
           {/* Keyed by path so each page plays the enter animation on navigation. */}
           <div key={location.pathname} className="page-enter h-full">
             <Routes>
