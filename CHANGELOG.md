@@ -4,6 +4,63 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [4.1.0] — 2026-09-26
+
+The tailor & plan engine revamp — one bounded LLM call rewrites the whole
+plan, with visible progress and a Stop control — followed by an
+open-source readiness pass: frontend tooling, community files, and a
+reliability sweep of the remaining silent-failure paths.
+
+### Added
+- One-pass batch tailoring: `tailor_plan_batch` rewrites every planned bullet
+  in a single LLM call with per-bullet grounding, a bounded prompt size, and
+  a `finish_reason` check — the Tailor tab shows an elapsed timer and a
+  Stop button that cancels the run (`tailor_cancel`)
+- Plan warnings now name the records dropped by section caps, highest
+  relevance first, so capping is no longer silent
+- Frontend quality gates: ESLint (typescript-eslint + react-hooks), Prettier,
+  a vitest starter suite for the dev-harness parsers, and `npm run lint` /
+  `npm test` scripts; CI now runs `cargo fmt --check`, `cargo clippy -D
+  warnings`, frontend lint, and frontend tests alongside the existing suites
+- Community files: Code of Conduct, pull-request template, issue-template
+  chooser, and Dependabot config (cargo + npm + GitHub Actions)
+- `.gitattributes` line-ending policy and `.nvmrc`; `engines`, `bugs` and
+  `homepage` fields in package.json
+- Browser mock harness implements the import parsers, so the Parse buttons in
+  the `mock.html` demo produce real candidates (pure heuristics in
+  `src/dev/mockParsers.ts`, unit-tested)
+
+### Changed
+- The release workflow publishes per-version release notes extracted from
+  this changelog instead of attaching the whole file to every release
+- The Settings page version fallback derives from package.json (single
+  source, `src/lib/version.ts`) instead of a hardcoded string
+- README refreshed for accuracy: 11 migrations (including
+  `0011_artifact_template`), three ATS-safe LaTeX templates, 116 unit tests,
+  updated architecture notes and roadmap
+
+### Fixed
+- Reasoning models that return null content no longer break tailoring, and
+  batch prompts are trimmed (240-char evidence notes, 480-char bullets) to
+  stay within free-tier request limits
+- The version-snapshot integration test seeds its own fixture database
+  through the real migration path — it now runs real assertions in CI
+  instead of silently skipping on machines without a live database
+- Removed the last production `unwrap()`/`expect()` panics in the composer
+  bullet-selection and profile write-back paths, and the unused `job_id`
+  parameter in composer input assembly
+- Backup pruning, log rotation, and Downloads-folder creation failures are
+  logged (or surfaced as command errors) instead of being silently discarded
+- README dashboard screenshot re-captured from the running app — the
+  previous image was a stale build-error overlay that leaked local paths
+- Demo fixtures scrubbed to a fully fictional persona; the sample resume PDF
+  is regenerated from the fixture plan and fits one page
+
+### Removed
+- Dead code left behind by the batch-tailoring refactor: the single-bullet
+  `check`/`truncate_chars` helpers, `RequirementKind::as_str` /
+  `from_str_value`, and the unread `best_confidence` match field
+
 ## [4.0.0] — 2026-09-22
 
 The v4 overhaul: a hard crash fix in the import pipeline, the official v4
