@@ -4,6 +4,7 @@
  * entry (mock.html) — never bundled into the production app.
  */
 import { mockApplications, mockDashboard, mockDiagnostics, mockJobs, mockPlan, mockProfile, mockSkills, mockSuggestions, mockVersions } from "./fixtures";
+import { parseCertificate, parseGithubRepo, parseResume } from "./mockParsers";
 
 type Handler = (args: Record<string, unknown>) => unknown;
 
@@ -194,7 +195,7 @@ const handlers: Record<string, Handler> = {
   list_education: () => [
     {
       id: 1,
-      institution: "Andhra University College Of Engineering Visakhapatnam",
+      institution: "Riverside Institute of Technology, Chennai",
       degree: "Bachelor of Technology",
       fieldOfStudy: "Computer Science & Systems Engineering",
       description: "",
@@ -278,12 +279,12 @@ const handlers: Record<string, Handler> = {
   ai_test_connection: () => "ok (mock)",
   list_backups: () => [],
   create_backup: () => ({ fileName: "kairo-backup-mock.db", path: "mock://backups", bytes: 10240, createdAt: new Date().toISOString() }),
-  restore_backup: () => ({ ok: true, appliedMigrations: 10 }),
+  restore_backup: () => ({ ok: true, appliedMigrations: 11 }),
 
-  // import parsers (pure)
-  parse_resume_text: () => null,
-  parse_certificate_text: () => null,
-  github_repo_candidate: () => null,
+  // import parsers (pure heuristics — the real extraction lives in the backend)
+  parse_resume_text: (a) => parseResume(String(a.text ?? "")),
+  parse_certificate_text: (a) => parseCertificate(String(a.text ?? "")),
+  github_repo_candidate: (a) => parseGithubRepo(String(a.owner ?? ""), String(a.repo ?? "")),
 };
 
 export function installMockIpc() {

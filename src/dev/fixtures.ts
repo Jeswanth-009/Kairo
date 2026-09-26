@@ -13,16 +13,15 @@ import type {
   Skill,
   TailorSuggestion,
 } from "../lib/types";
+import { APP_VERSION } from "../lib/version";
 
 const EXPERIENCE_LINES = {
   bdl: [
     "Reduced message delivery latency to <100ms by optimizing WebSocket payload serialization and implementing per-room connection pooling, while maintaining AES-256-GCM + RSA-OAEP E2E encryption with zero server-side key exposure",
-    "Eliminated man-in-the-middle attack surface by enforcing out-of-band RSA key fingerprint verification and per-room rate limiting (10 msg/s per user), blocking unauthorized session hijacking in integration tests",
     "Containerized Node.js WebSocket server and Express API with Docker Compose; wrote 15+ integration tests covering connection drops, key exchange failures, and message replay attacks",
   ].join("\n"),
   infosys: [
     "Engineered PyKV, an in-memory LRU cache engine with O(1) GET/SET via OrderedDict + asyncio.Lock; implemented AOF append-only persistence with atomic log compaction, reducing disk usage by 60% over 30-day operation",
-    "Architected primary-to-standby replication with async best-effort forwarding; built real-time observability dashboard tracking hit-rate, memory utilization, and eviction patterns",
     "Built automated benchmarking pipeline with 20-way concurrent httpx load, characterizing true server throughput at 708 ops/s (1.41ms/op) vs. in-process dict baseline; identified serialization and connection pooling as primary latency drivers",
   ].join("\n"),
 };
@@ -33,7 +32,7 @@ export const mockJobs: Job[] = [
     company: "Electronic Arts",
     roleTitle: "AI Full Stack Intern (Paid)",
     url: "",
-    rawJd: "General Information\nLocations: Hyderabad, Telangana, India\nBuild AI-powered web tooling…",
+    rawJd: "General Information\nLocations: Chennai, Tamil Nadu, India\nBuild AI-powered web tooling…",
     seniority: "Internship",
     domain: "AI/ML",
     requirementCount: 12,
@@ -52,10 +51,10 @@ export const mockJobs: Job[] = [
 
 export const mockProfile: Profile = {
   fullName: "Alex Rivera",
-  headline: "Software Developer | GSoC '26 Eval Call (Apache) | HackAp '25 Winner (100+ teams) | 1300+ Codeforces",
+  headline: "Software Developer | Open-Source Contributor (Rust · Python) | HackFusion '25 Winner | 1300+ Codeforces",
   email: "alex.rivera@example.com",
   phone: "+91 9876543210",
-  location: "Hyderabad, India",
+  location: "Chennai, India",
   website: "https://alexrivera.dev",
   github: "https://github.com/alex-rivera-dev",
   linkedin: "https://linkedin.com/in/alex-rivera",
@@ -104,10 +103,10 @@ export const mockPlan: ResumePlan = {
   },
   header: {
     fullName: "Alex Rivera",
-    headline: "Software Developer | GSoC '26 Eval Call (Apache) | HackAp '25 Winner (100+ teams) | 1300+ Codeforces",
+    headline: "Software Developer | Open-Source Contributor (Rust · Python) | HackFusion '25 Winner | 1300+ Codeforces",
     email: "alex.rivera@example.com",
     phone: "+91 9876543210",
-    location: "Hyderabad, India",
+    location: "Chennai, India",
     website: "https://alexrivera.dev",
     github: "https://github.com/alex-rivera-dev",
     linkedin: "https://linkedin.com/in/alex-rivera",
@@ -115,7 +114,7 @@ export const mockPlan: ResumePlan = {
   education: [
     {
       id: 1,
-      institution: "Andhra University College Of Engineering Visakhapatnam",
+      institution: "Riverside Institute of Technology, Chennai",
       degree: "Bachelor of Technology",
       fieldOfStudy: "Computer Science & Systems Engineering",
       startDate: "2023-09",
@@ -127,8 +126,8 @@ export const mockPlan: ResumePlan = {
     {
       entityType: "experience",
       id: 2,
-      title: "BDL (Bharat Dynamics Limited) — Project Intern",
-      subtitle: "Visakhapatnam, India",
+      title: "Helix Dynamics — Project Intern",
+      subtitle: "Chennai, India",
       startDate: "2025-06",
       endDate: "2025-07",
       isCurrent: false,
@@ -142,7 +141,7 @@ export const mockPlan: ResumePlan = {
     {
       entityType: "experience",
       id: 1,
-      title: "Infosys Springboard — Python Intern",
+      title: "Skilstack Academy — Python Intern",
       subtitle: "Remote",
       startDate: "2026-02",
       endDate: "2026-04",
@@ -203,7 +202,7 @@ export const mockPlan: ResumePlan = {
       endDate: null,
       isCurrent: false,
       description: [
-        "Architected a local-first career workspace in Rust and Tauri 2 with decoupled domain modules and an append-only 10-migration SQLite WAL layer, verified through 77 unit and integration tests",
+        "Architected a local-first career workspace in Rust and Tauri 2 with decoupled domain modules and an append-only migration SQLite WAL layer, verified through unit and integration tests",
         "Built a deterministic constraint solver and matching engine computing coverage against JDs via pure functions, enforcing zero-fabrication metrics and technology diff validation on rewrites",
         "Integrated headless ATS-safe PDF compilation via portable Tectonic LaTeX binary, running unlocked async I/O to guarantee zero UI thread blocking during compilation",
       ].join("\n"),
@@ -211,22 +210,22 @@ export const mockPlan: ResumePlan = {
       skills: ["Rust", "Tauri", "SQL"],
       relevance: 0.8,
       evidenceCount: 3,
-      excluded: false,
+      excluded: true,
     },
   ],
   achievements: [
     {
       id: 1,
-      title: "GSoC '26 Eval Call (Apache)",
-      issuer: "Apache Software Foundation",
-      description: "Selected for the evaluation call after the proposal round.",
+      title: "OpenForge '26 Finalist",
+      issuer: "OpenForge Foundation",
+      description: "Selected for the final round after the proposal stage.",
       achievedOn: "2026-05-01",
       excluded: false,
     },
     {
       id: 2,
-      title: "HackAp '25 Winner",
-      issuer: "HackAp",
+      title: "HackFusion '25 Winner",
+      issuer: "HackFusion",
       description: "1st place among 100+ teams.",
       achievedOn: "2025-11-20",
       excluded: false,
@@ -291,9 +290,9 @@ export const mockApplications: Application[] = [
 ];
 
 export const mockDiagnostics: Diagnostics = {
-  appVersion: "4.0.0",
-  schemaVersion: 10,
-  latestMigration: "0010_applications",
+  appVersion: APP_VERSION,
+  schemaVersion: 11,
+  latestMigration: "0011_artifact_template",
   sqliteVersion: "3.46.0",
   dbPath: "%APPDATA%/com.kairo.app/kairo.db",
   migrationsApplied: ["0001_init", "0002_career_vault", "0010_applications"],
@@ -337,7 +336,7 @@ export const mockDashboard: DashboardOverview = {
       id: 2,
       entityType: "experience",
       entityId: 2,
-      entityLabel: "BDL — Project Intern",
+      entityLabel: "Helix Dynamics — Project Intern",
       kind: "repository",
       title: "Secure messenger repo",
       reference: "github.com/alex-rivera-dev/messenger",
