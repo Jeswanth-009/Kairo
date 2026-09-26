@@ -52,14 +52,17 @@ pub fn run() {
                 "app_start",
                 &[
                     ("schema_migrations", schema_version.to_string()),
-                    ("db_path", data_dir.join("kairo.db").to_string_lossy().to_string()),
+                    (
+                        "db_path",
+                        data_dir.join("kairo.db").to_string_lossy().to_string(),
+                    ),
                 ],
             );
             app.manage(db::DbState(Mutex::new(conn)));
             app.manage(commands::pdf_commands::AppDataDir(data_dir));
-            app.manage(commands::ai_commands::TailorCancel(
-                std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            ));
+            app.manage(commands::ai_commands::TailorCancel(std::sync::Arc::new(
+                std::sync::atomic::AtomicBool::new(false),
+            )));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -10,7 +10,9 @@ use super::pdf_commands::AppDataDir;
 const DB_LOCK: &str = "database lock poisoned";
 
 #[tauri::command]
-pub fn list_backups(app_data_dir: State<'_, AppDataDir>) -> Result<Vec<backup::BackupInfo>, String> {
+pub fn list_backups(
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<Vec<backup::BackupInfo>, String> {
     backup::list_backups(&backup::backups_dir(&app_data_dir.0))
 }
 
@@ -46,7 +48,8 @@ pub fn restore_backup(
     file_name: String,
 ) -> Result<RestoreOk, String> {
     let mut conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    let report = backup::restore_backup(&mut conn, &backup::backups_dir(&app_data_dir.0), &file_name)?;
+    let report =
+        backup::restore_backup(&mut conn, &backup::backups_dir(&app_data_dir.0), &file_name)?;
     crate::logging::log_event(
         "info",
         "backup_restored",
@@ -55,5 +58,8 @@ pub fn restore_backup(
             ("applied_migrations", report.applied_migrations.to_string()),
         ],
     );
-    Ok(RestoreOk { ok: true, applied_migrations: report.applied_migrations })
+    Ok(RestoreOk {
+        ok: true,
+        applied_migrations: report.applied_migrations,
+    })
 }

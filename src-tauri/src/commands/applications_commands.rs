@@ -13,7 +13,9 @@ pub struct MutationOk {
 }
 
 #[tauri::command]
-pub fn list_applications(state: State<'_, DbState>) -> Result<Vec<applications::Application>, String> {
+pub fn list_applications(
+    state: State<'_, DbState>,
+) -> Result<Vec<applications::Application>, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     applications::list_applications(&conn)
 }
@@ -47,10 +49,7 @@ pub fn set_application_status(
 }
 
 #[tauri::command]
-pub fn delete_application(
-    state: State<'_, DbState>,
-    id: i64,
-) -> Result<MutationOk, String> {
+pub fn delete_application(state: State<'_, DbState>, id: i64) -> Result<MutationOk, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     applications::delete_application(&conn, id)?;
     Ok(MutationOk { ok: true })

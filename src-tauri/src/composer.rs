@@ -324,11 +324,62 @@ pub fn estimate_plan_lines(plan: &ResumePlan) -> u32 {
 }
 
 const STOPWORDS: &[&str] = &[
-    "a", "an", "the", "and", "or", "of", "with", "for", "to", "in", "on", "at", "by", "from",
-    "as", "is", "are", "be", "been", "was", "were", "you", "your", "we", "our", "their", "will",
-    "shall", "must", "have", "has", "had", "do", "does", "using", "use", "used", "strong",
-    "good", "great", "excellent", "plus", "years", "year", "experience", "ability", "able",
-    "work", "working", "knowledge", "familiarity", "including", "such", "least", "one", "modern",
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "of",
+    "with",
+    "for",
+    "to",
+    "in",
+    "on",
+    "at",
+    "by",
+    "from",
+    "as",
+    "is",
+    "are",
+    "be",
+    "been",
+    "was",
+    "were",
+    "you",
+    "your",
+    "we",
+    "our",
+    "their",
+    "will",
+    "shall",
+    "must",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "using",
+    "use",
+    "used",
+    "strong",
+    "good",
+    "great",
+    "excellent",
+    "plus",
+    "years",
+    "year",
+    "experience",
+    "ability",
+    "able",
+    "work",
+    "working",
+    "knowledge",
+    "familiarity",
+    "including",
+    "such",
+    "least",
+    "one",
+    "modern",
 ];
 
 fn stem(token: &str) -> String {
@@ -350,7 +401,10 @@ pub fn tokenize_filtered(text: &str) -> std::collections::HashSet<String> {
 pub fn bullet_overlap_count(bullet: &str, text: &str) -> usize {
     let bullet_tokens = tokenize_filtered(bullet);
     let other_tokens = tokenize_filtered(text);
-    bullet_tokens.iter().filter(|t| other_tokens.contains(*t)).count()
+    bullet_tokens
+        .iter()
+        .filter(|t| other_tokens.contains(*t))
+        .count()
 }
 
 /// How many requirement texts does this bullet support (calibrated token overlap)?
@@ -362,7 +416,10 @@ pub fn bullet_supports(text: &str, requirement_texts: &[String]) -> Vec<String> 
         if req_tokens.is_empty() {
             continue;
         }
-        let hits = bullet_tokens.iter().filter(|t| req_tokens.contains(*t)).count();
+        let hits = bullet_tokens
+            .iter()
+            .filter(|t| req_tokens.contains(*t))
+            .count();
         if hits >= 2 || (hits as f64 / req_tokens.len() as f64 >= 0.20) {
             supports.push(requirement.clone());
         }
@@ -438,7 +495,11 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         } else {
             input.config.max_projects
         };
-        let list = if is_experience { &mut experience } else { &mut projects };
+        let list = if is_experience {
+            &mut experience
+        } else {
+            &mut projects
+        };
         if list.len() >= cap as usize {
             continue;
         }
@@ -499,11 +560,13 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         else {
             continue;
         };
-        let item = experience
+        let Some(item) = experience
             .iter_mut()
             .chain(projects.iter_mut())
             .find(|i| i.entity_type == *entity_type && i.id == *id)
-            .unwrap();
+        else {
+            continue;
+        };
         let mut scored: Vec<(PlanBullet, usize)> = entity
             .bullets
             .iter()
@@ -523,7 +586,11 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             })
             .collect();
         scored.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.id.cmp(&b.0.id)));
-        item.bullets = scored.into_iter().take(input.config.max_bullets_per_item as usize).map(|(b, _)| b).collect();
+        item.bullets = scored
+            .into_iter()
+            .take(input.config.max_bullets_per_item as usize)
+            .map(|(b, _)| b)
+            .collect();
         let unapproved = entity.bullets.iter().filter(|b| !b.approved).count();
         if unapproved > 0 {
             warnings.push(format!(
@@ -576,7 +643,9 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             continue;
         }
         let lower = name.to_lowercase();
-        skill_category.entry(lower.clone()).or_insert_with(|| vs.category.clone());
+        skill_category
+            .entry(lower.clone())
+            .or_insert_with(|| vs.category.clone());
         if skills.iter().any(|s| s.to_lowercase() == lower) {
             continue;
         }
@@ -614,7 +683,11 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         })
         .collect();
 
-    let plan_at = |experience: &[PlanItem], projects: &[PlanItem], achievements: &[PlanAchievement], skills: &[String]| -> u32 {
+    let plan_at = |experience: &[PlanItem],
+                   projects: &[PlanItem],
+                   achievements: &[PlanAchievement],
+                   skills: &[String]|
+     -> u32 {
         let mut lines = 4; // header block
         lines += education.len() as u32 * 2;
         for item in experience.iter().chain(projects.iter()) {
@@ -659,14 +732,20 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             .into_iter()
             .min_by_key(|(_, _, bullet_id, support)| (*support, std::cmp::Reverse(*bullet_id)));
         if let Some((entity_type, id, bullet_id, _)) = weakest {
-            let list = if entity_type == "experience" { &mut experience } else { &mut projects };
-            let item = list
+            let list = if entity_type == "experience" {
+                &mut experience
+            } else {
+                &mut projects
+            };
+            let trimmed = list
                 .iter_mut()
                 .find(|i| i.entity_type == entity_type && i.id == id)
-                .unwrap();
-            item.bullets.retain(|b| b.id != bullet_id);
-            estimated_lines = plan_at(&experience, &projects, &achievements, &skills);
-            continue;
+                .map(|item| item.bullets.retain(|b| b.id != bullet_id))
+                .is_some();
+            if trimmed {
+                estimated_lines = plan_at(&experience, &projects, &achievements, &skills);
+                continue;
+            }
         }
         // No bullets left to trim: drop the lowest-relevance selected record.
         let weakest_item = experience
@@ -760,7 +839,11 @@ mod tests {
     use super::*;
 
     fn bullet(id: i64, text: &str, approved: bool) -> ComposerBullet {
-        ComposerBullet { id, text: text.to_string(), approved }
+        ComposerBullet {
+            id,
+            text: text.to_string(),
+            approved,
+        }
     }
 
     fn entity(
@@ -786,7 +869,11 @@ mod tests {
         }
     }
 
-    fn input(entities: Vec<ComposerEntity>, requirements: &[&str], config: ComposerConfig) -> ComposerInput {
+    fn input(
+        entities: Vec<ComposerEntity>,
+        requirements: &[&str],
+        config: ComposerConfig,
+    ) -> ComposerInput {
         ComposerInput {
             profile: Some(ComposerProfile {
                 full_name: "Alex Rivera".to_string(),
@@ -810,7 +897,7 @@ mod tests {
             entities,
             achievements: vec![],
             vault_skills: vec![],
-        extra_warnings: Vec::new(),
+            extra_warnings: Vec::new(),
             requirement_texts: requirements.iter().map(|s| s.to_string()).collect(),
             config,
         }
@@ -818,7 +905,10 @@ mod tests {
 
     #[test]
     fn selection_respects_caps_and_ranks_by_relevance() {
-        let config = ComposerConfig { max_projects: 2, ..Default::default() };
+        let config = ComposerConfig {
+            max_projects: 2,
+            ..Default::default()
+        };
         let entities = vec![
             entity(1, "project", "Low", 0.1, vec![]),
             entity(2, "project", "High", 0.9, vec![]),
@@ -834,7 +924,10 @@ mod tests {
 
     #[test]
     fn bullets_approved_only_and_support_ranked() {
-        let config = ComposerConfig { max_bullets_per_item: 2, ..Default::default() };
+        let config = ComposerConfig {
+            max_bullets_per_item: 2,
+            ..Default::default()
+        };
         let entities = vec![entity(
             1,
             "project",
@@ -847,14 +940,20 @@ mod tests {
                 bullet(4, "Unapproved claim about millions of users", false),
             ],
         )];
-        let requirements = ["Strong Python and SQL skills", "Experience with WAL and TTL"];
+        let requirements = [
+            "Strong Python and SQL skills",
+            "Experience with WAL and TTL",
+        ];
         let plan = compose(&input(entities, &requirements, config));
 
         let item = &plan.projects[0];
         assert_eq!(item.bullets.len(), 2); // cap
-        // Both kept bullets must support at least one requirement; the
-        // documentation bullet (no support) and the unapproved one are out.
-        assert!(item.bullets.iter().all(|b| !b.text.contains("documentation")));
+                                           // Both kept bullets must support at least one requirement; the
+                                           // documentation bullet (no support) and the unapproved one are out.
+        assert!(item
+            .bullets
+            .iter()
+            .all(|b| !b.text.contains("documentation")));
         assert!(item.bullets.iter().all(|b| !b.text.contains("millions")));
         assert!(item.bullets.iter().any(|b| !b.supports.is_empty()));
     }
@@ -862,7 +961,11 @@ mod tests {
     #[test]
     fn overflow_drops_weakest_bullets_before_records() {
         // One project with 3 supported bullets but a tiny line budget.
-        let config = ComposerConfig { target_pages: 1, max_bullets_per_item: 3, ..Default::default() };
+        let config = ComposerConfig {
+            target_pages: 1,
+            max_bullets_per_item: 3,
+            ..Default::default()
+        };
         let long = |t: &str| t.repeat(200);
         let entities = vec![entity(
             1,
@@ -881,12 +984,18 @@ mod tests {
         assert!(plan.estimated_lines <= 56);
         assert!(plan.fits_one_page);
         // The unsupported filler bullet must be the first to go.
-        assert!(!plan.projects[0].bullets.iter().any(|b| b.text.contains("weak filler")));
+        assert!(!plan.projects[0]
+            .bullets
+            .iter()
+            .any(|b| b.text.contains("weak filler")));
     }
 
     #[test]
     fn mandatory_header_and_education_survive_overflow() {
-        let config = ComposerConfig { target_pages: 1, ..Default::default() };
+        let config = ComposerConfig {
+            target_pages: 1,
+            ..Default::default()
+        };
         let entities: Vec<ComposerEntity> = (1..=5)
             .map(|i| {
                 entity(
@@ -910,7 +1019,11 @@ mod tests {
             entity(2, "experience", "B", 0.4, vec![bullet(2, "text two", true)]),
         ];
         let requirements = vec!["text one requirement"];
-        let a = compose(&input(entities.clone(), &requirements, ComposerConfig::default()));
+        let a = compose(&input(
+            entities.clone(),
+            &requirements,
+            ComposerConfig::default(),
+        ));
         let b = compose(&input(entities, &requirements, ComposerConfig::default()));
         assert_eq!(
             serde_json::to_string(&a).unwrap(),
@@ -922,7 +1035,11 @@ mod tests {
     fn skills_mentioned_in_requirements_come_first() {
         let mut e = entity(1, "project", "PyKV", 0.9, vec![]);
         e.skill_names = vec!["Docker".to_string(), "Python".to_string()];
-        let plan = compose(&input(vec![e], &["Strong Python"], ComposerConfig::default()));
+        let plan = compose(&input(
+            vec![e],
+            &["Strong Python"],
+            ComposerConfig::default(),
+        ));
         assert_eq!(plan.skills[0], "Python");
     }
 
@@ -930,7 +1047,9 @@ mod tests {
     fn test_bullet_supports_matches_realistic_requirements() {
         let bullet = "Developed full-stack web applications using React, TypeScript, and Python REST APIs with PostgreSQL";
         let req1 = "Proficiency in at least one modern web development stack (e.g., React, TypeScript, JavaScript, HTML5/CSS3) and backend language (e.g., Python, Node.js, or Java).".to_string();
-        let req2 = "Experience with Kubernetes cluster orchestration, Helm charts, and Terraform IAC".to_string();
+        let req2 =
+            "Experience with Kubernetes cluster orchestration, Helm charts, and Terraform IAC"
+                .to_string();
         let supported = bullet_supports(bullet, &[req1.clone(), req2]);
         assert_eq!(supported.len(), 1);
         assert_eq!(supported[0], req1);
@@ -943,4 +1062,3 @@ mod tests {
         assert!(bullet_overlap_count(bullet, req) >= 2);
     }
 }
-

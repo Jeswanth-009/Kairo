@@ -11,9 +11,7 @@ use rusqlite::{params, Connection};
 
 pub fn get_ai_config(conn: &Connection) -> Result<(AiConfig, bool), String> {
     let config_json: Option<String> = {
-        let mut stmt = sql_err(conn.prepare(
-            "SELECT value FROM meta WHERE key = 'ai_config'",
-        ))?;
+        let mut stmt = sql_err(conn.prepare("SELECT value FROM meta WHERE key = 'ai_config'"))?;
         let row = stmt.query_row([], |r| r.get(0));
         match row {
             Ok(v) => Some(v),
@@ -28,12 +26,10 @@ pub fn get_ai_config(conn: &Connection) -> Result<(AiConfig, bool), String> {
                 // Never silently fall back to the OpenAI default: the stored
                 // key would then be used against a paid endpoint the user
                 // never chose.
-                crate::logging::log_event(
-                    "warn",
-                    "ai_config_corrupt",
-                    &[("error", e.to_string())],
+                crate::logging::log_event("warn", "ai_config_corrupt", &[("error", e.to_string())]);
+                return Err(
+                    "Stored AI provider config is corrupt — re-enter it in Settings.".to_string(),
                 );
-                return Err("Stored AI provider config is corrupt — re-enter it in Settings.".to_string());
             }
         },
         None => AiConfig::default(),
@@ -42,7 +38,11 @@ pub fn get_ai_config(conn: &Connection) -> Result<(AiConfig, bool), String> {
     Ok((config, has_key))
 }
 
-pub fn save_ai_config(conn: &Connection, config: &AiConfig, api_key: Option<&str>) -> Result<(), String> {
+pub fn save_ai_config(
+    conn: &Connection,
+    config: &AiConfig,
+    api_key: Option<&str>,
+) -> Result<(), String> {
     if let Some(key) = api_key {
         if key.trim().is_empty() {
             // Explicitly blanked out in the UI — clear the stored credential
@@ -283,11 +283,7 @@ pub struct GroundingIndex {
     forbidden_by_entity: std::collections::HashMap<(String, i64), Vec<String>>,
 }
 
-fn evidence_notes_for(
-    kind: &str,
-    title: &str,
-    note: &str,
-) -> String {
+fn evidence_notes_for(kind: &str, title: &str, note: &str) -> String {
     if note.is_empty() {
         format!("{kind}: {title}")
     } else {
@@ -300,14 +296,25 @@ pub fn build_grounding_index(conn: &Connection, job_id: i64) -> Result<Grounding
     let mut entities = std::collections::HashMap::new();
 
     for project in super::vault::vault_list::<super::vault::Project>(conn)? {
-        let skills = project.skills.iter().map(|s| s.canonical_name.clone()).collect();
-        entities.insert(("project".to_string(), project.id), (project.title.clone(), skills));
+        let skills = project
+            .skills
+            .iter()
+            .map(|s| s.canonical_name.clone())
+            .collect();
+        entities.insert(
+            ("project".to_string(), project.id),
+            (project.title.clone(), skills),
+        );
         for bullet in super::trust::list_bullets(conn, "project", project.id)? {
             bullets.insert(bullet.id, ("project".to_string(), project.id, bullet.text));
         }
     }
     for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
-        let skills = experience.skills.iter().map(|s| s.canonical_name.clone()).collect();
+        let skills = experience
+            .skills
+            .iter()
+            .map(|s| s.canonical_name.clone())
+            .collect();
         entities.insert(
             ("experience".to_string(), experience.id),
             (
@@ -316,7 +323,10 @@ pub fn build_grounding_index(conn: &Connection, job_id: i64) -> Result<Grounding
             ),
         );
         for bullet in super::trust::list_bullets(conn, "experience", experience.id)? {
-            bullets.insert(bullet.id, ("experience".to_string(), experience.id, bullet.text));
+            bullets.insert(
+                bullet.id,
+                ("experience".to_string(), experience.id, bullet.text),
+            );
         }
     }
 
@@ -362,8 +372,10 @@ pub fn build_grounding_index(conn: &Connection, job_id: i64) -> Result<Grounding
         "(role: {} at {}; seniority: {})",
         job.role_title, job.company, job.seniority
     );
-    let requirement_texts: Vec<String> =
-        super::jobs::list_requirements(conn, job_id)?.iter().map(|r| r.raw_text.clone()).collect();
+    let requirement_texts: Vec<String> = super::jobs::list_requirements(conn, job_id)?
+        .iter()
+        .map(|r| r.raw_text.clone())
+        .collect();
 
     Ok(GroundingIndex {
         job_role_line,
@@ -422,7 +434,7 @@ impl GroundingIndex {
                     (text.clone(), hits)
                 })
                 .collect();
-            scored.sort_by(|a, b| b.1.cmp(&a.1));
+            scored.sort_by_key(|a| std::cmp::Reverse(a.1));
             supported = scored
                 .into_iter()
                 .filter(|(_, hits)| *hits > 0)
@@ -431,12 +443,7 @@ impl GroundingIndex {
                 .collect();
         }
         if supported.is_empty() {
-            supported = self
-                .requirement_texts
-                .iter()
-                .take(2)
-                .cloned()
-                .collect();
+            supported = self.requirement_texts.iter().take(2).cloned().collect();
         }
         supported.push(self.job_role_line.clone());
 

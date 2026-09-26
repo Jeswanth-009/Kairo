@@ -123,12 +123,19 @@ pub fn generate(
 
     // --- Project deep-dives + resume questions ------------------------------
     let mut featured: Vec<&PrepEntity> = entities.iter().filter(|e| e.relevance > 0.0).collect();
-    featured.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap_or(std::cmp::Ordering::Equal));
+    featured.sort_by(|a, b| {
+        b.relevance
+            .partial_cmp(&a.relevance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     for entity in entities {
         evidence_count += entity.evidence_count as usize;
     }
 
-    for entity in entities.iter().filter(|e| !e.bullet_texts.is_empty() || e.relevance > 0.0) {
+    for entity in entities
+        .iter()
+        .filter(|e| !e.bullet_texts.is_empty() || e.relevance > 0.0)
+    {
         let is_featured = entity.relevance > 0.0;
         questions.push(InterviewQuestion {
             category: QuestionCategory::ProjectDeepDive,
@@ -139,7 +146,8 @@ pub fn generate(
             why: if is_featured {
                 "You're featuring this on the submitted resume for this role.".to_string()
             } else {
-                "This record is in your Vault and is fair game if the interviewer digs in.".to_string()
+                "This record is in your Vault and is fair game if the interviewer digs in."
+                    .to_string()
             },
             evidence_refs: entity.evidence_titles.clone(),
         });
@@ -175,7 +183,10 @@ pub fn generate(
                 .fold(0.0f64, |acc, x| if x > acc { x } else { acc });
             let skill_hit = entity.skill_names.iter().any(|s| {
                 let lower = s.to_lowercase();
-                req_tokens.contains(&lower) || req_tokens.contains(<str as ToString>::to_string(lower.trim_end_matches('s')).as_str())
+                req_tokens.contains(&lower)
+                    || req_tokens.contains(
+                        <str as ToString>::to_string(lower.trim_end_matches('s')).as_str(),
+                    )
             });
             let score = ratio.max(if skill_hit { 1.0 } else { 0.0 });
             if score > best.map(|(_, s)| s).unwrap_or(0.0) {
@@ -183,7 +194,11 @@ pub fn generate(
             }
         }
 
-        let label = if requirement.kind == REQUIRED { "required" } else { "preferred" };
+        let label = if requirement.kind == REQUIRED {
+            "required"
+        } else {
+            "preferred"
+        };
         match (best, requirement.coverage.as_str()) {
             (Some((entity, _)), "covered") => {
                 let evidence: Vec<String> = entity.evidence_titles.clone();
@@ -271,7 +286,10 @@ pub fn generate(
         raw_jd_chars,
         requirement_count: requirements.len(),
         plan_bullet_count: entities.iter().map(|e| e.bullet_texts.len()).sum(),
-        gap_count: requirements.iter().filter(|r| r.coverage != "covered").count(),
+        gap_count: requirements
+            .iter()
+            .filter(|r| r.coverage != "covered")
+            .count(),
         evidence_count,
     };
 
@@ -294,7 +312,13 @@ fn short_text(text: &str) -> String {
 mod tests {
     use super::*;
 
-    fn entity(id: i64, title: &str, skills: &[&str], bullets: Vec<String>, relevance: f64) -> PrepEntity {
+    fn entity(
+        id: i64,
+        title: &str,
+        skills: &[&str],
+        bullets: Vec<String>,
+        relevance: f64,
+    ) -> PrepEntity {
         PrepEntity {
             entity_type: "project".to_string(),
             id,
@@ -308,7 +332,12 @@ mod tests {
     }
 
     fn requirement(id: i64, kind: &str, text: &str, coverage: &str) -> PrepRequirement {
-        PrepRequirement { id, kind: kind.to_string(), raw_text: text.to_string(), coverage: coverage.to_string() }
+        PrepRequirement {
+            id,
+            kind: kind.to_string(),
+            raw_text: text.to_string(),
+            coverage: coverage.to_string(),
+        }
     }
 
     #[test]
@@ -317,7 +346,13 @@ mod tests {
             requirement(1, REQUIRED, "Strong Python", "covered"),
             requirement(2, REQUIRED, "Kafka streaming", "missing"),
         ];
-        let entities = vec![entity(1, "PyKV", &["Python"], vec!["Built PyKV in Python".to_string()], 0.9)];
+        let entities = vec![entity(
+            1,
+            "PyKV",
+            &["Python"],
+            vec!["Built PyKV in Python".to_string()],
+            0.9,
+        )];
         let prep = generate("Senior Backend Engineer", 1200, &requirements, &entities);
 
         let technical: Vec<&InterviewQuestion> = prep
@@ -342,7 +377,13 @@ mod tests {
     #[test]
     fn partial_skill_goes_to_weak_area_with_evidence() {
         let requirements = vec![requirement(1, REQUIRED, "Strong Docker", "partial")];
-        let entities = vec![entity(1, "Containers project", &["Docker"], vec!["Used Docker lightly".to_string()], 0.5)];
+        let entities = vec![entity(
+            1,
+            "Containers project",
+            &["Docker"],
+            vec!["Used Docker lightly".to_string()],
+            0.5,
+        )];
         let prep = generate("DevOps Engineer", 800, &requirements, &entities);
         let weak: Vec<&InterviewQuestion> = prep
             .questions
@@ -375,13 +416,21 @@ mod tests {
             .filter(|q| q.category == QuestionCategory::Responsibility)
             .collect();
         assert_eq!(behavioral.len(), 1);
-        assert!(behavioral[0].why.contains("Closest experience: Payments API"));
+        assert!(behavioral[0]
+            .why
+            .contains("Closest experience: Payments API"));
         assert!(behavioral[0].question.contains("STAR"));
     }
 
     #[test]
     fn evidence_gap_becomes_resume_question() {
-        let mut no_evidence = entity(1, "NoProof", &["Python"], vec!["Built with Python".to_string()], 0.5);
+        let mut no_evidence = entity(
+            1,
+            "NoProof",
+            &["Python"],
+            vec!["Built with Python".to_string()],
+            0.5,
+        );
         no_evidence.evidence_count = 0;
         no_evidence.evidence_titles = vec![];
         let prep = generate("Role", 100, &[], &[no_evidence]);
@@ -400,12 +449,24 @@ mod tests {
             requirement(1, REQUIRED, "Python", "covered"),
             requirement(2, REQUIRED, "Kafka", "missing"),
         ];
-        let entities = vec![entity(1, "PyKV", &["Python"], vec!["bullet".to_string()], 0.9)];
+        let entities = vec![entity(
+            1,
+            "PyKV",
+            &["Python"],
+            vec!["bullet".to_string()],
+            0.9,
+        )];
         let prep = generate("Role", 500, &requirements, &entities);
         assert_eq!(prep.inputs.requirement_count, 2);
         assert_eq!(prep.inputs.gap_count, 1);
         assert_eq!(prep.inputs.plan_bullet_count, 1);
         assert_eq!(prep.inputs.evidence_count, 1);
-        assert_eq!(prep.questions.iter().filter(|q| q.category == QuestionCategory::ProjectDeepDive).count(), 1);
+        assert_eq!(
+            prep.questions
+                .iter()
+                .filter(|q| q.category == QuestionCategory::ProjectDeepDive)
+                .count(),
+            1
+        );
     }
 }

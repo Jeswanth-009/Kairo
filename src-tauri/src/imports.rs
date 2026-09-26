@@ -135,27 +135,58 @@ fn detect_section(line: &str) -> Option<Section> {
         .trim()
         .to_lowercase();
     match cleaned.as_str() {
-        "summary" | "about" | "about me" | "objective" | "career objective"
-        | "professional summary" | "profile summary" => Some(Section::Summary),
+        "summary"
+        | "about"
+        | "about me"
+        | "objective"
+        | "career objective"
+        | "professional summary"
+        | "profile summary" => Some(Section::Summary),
         "projects" | "project" | "personal projects" | "key projects" | "selected projects"
         | "projects & work" => Some(Section::Projects),
-        "experience" | "work experience" | "professional experience" | "employment"
-        | "employment history" | "internships" | "internship" | "work & experience"
+        "experience"
+        | "work experience"
+        | "professional experience"
+        | "employment"
+        | "employment history"
+        | "internships"
+        | "internship"
+        | "work & experience"
         | "experience & work" => Some(Section::Experience),
         "education" => Some(Section::Education),
-        "achievements" | "achievement" | "awards" | "honors" | "honours"
-        | "awards & achievements" | "achievements & awards" | "accomplishments" => {
-            Some(Section::Achievements)
-        }
-        "skills" | "technical skills" | "skills & technologies" | "technologies" | "tech stack"
-        | "skills and tools" | "skills & tools" | "toolkit" | "technical expertise" => {
-            Some(Section::Skills)
-        }
-        "certifications" | "certificates" | "certifications & training"
-        | "contact" | "contact information" | "references"
-        | "publications" | "hobbies" | "interests" | "courses" | "coursework"
-        | "extracurricular" | "declaration" | "positions of responsibility"
-        | "volunteer" | "volunteering" => Some(Section::Ignored),
+        "achievements"
+        | "achievement"
+        | "awards"
+        | "honors"
+        | "honours"
+        | "awards & achievements"
+        | "achievements & awards"
+        | "accomplishments" => Some(Section::Achievements),
+        "skills"
+        | "technical skills"
+        | "skills & technologies"
+        | "technologies"
+        | "tech stack"
+        | "skills and tools"
+        | "skills & tools"
+        | "toolkit"
+        | "technical expertise" => Some(Section::Skills),
+        "certifications"
+        | "certificates"
+        | "certifications & training"
+        | "contact"
+        | "contact information"
+        | "references"
+        | "publications"
+        | "hobbies"
+        | "interests"
+        | "courses"
+        | "coursework"
+        | "extracurricular"
+        | "declaration"
+        | "positions of responsibility"
+        | "volunteer"
+        | "volunteering" => Some(Section::Ignored),
         _ => None,
     }
 }
@@ -194,8 +225,12 @@ fn split_pair(line: &str) -> Option<(String, String)> {
 }
 
 fn looks_like_role_at_org(part: &str) -> Option<(String, String)> {
-    find_ci(part, " at ")
-        .map(|(start, end)| (part[..start].trim().to_string(), part[end..].trim().to_string()))
+    find_ci(part, " at ").map(|(start, end)| {
+        (
+            part[..start].trim().to_string(),
+            part[end..].trim().to_string(),
+        )
+    })
 }
 
 fn is_probable_name(line: &str) -> bool {
@@ -235,7 +270,9 @@ fn first_email(text: &str) -> String {
             let domain = &domain[1..];
             let ok = !local.is_empty()
                 && domain.contains('.')
-                && word.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '@' | '.' | '_' | '+' | '-'))
+                && word
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '@' | '.' | '_' | '+' | '-'))
                 && domain.len() >= 4;
             if ok {
                 return word.to_string();
@@ -301,7 +338,8 @@ fn website_url(text: &str) -> String {
             let plausible = tld.len() >= 2
                 && tld.chars().all(|c| c.is_ascii_alphabetic())
                 && parts[0].len() >= 2
-                && w.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+                && w.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
             if plausible {
                 return format!("https://{w}");
             }
@@ -319,7 +357,8 @@ fn first_phone(text: &str) -> String {
             }
             let digits = s.chars().filter(|c| c.is_ascii_digit()).count();
             if (8..=15).contains(&digits)
-                && s.chars().all(|c| c.is_ascii_digit() || matches!(c, '+' | '-' | ' ' | '(' | ')' | '.'))
+                && s.chars()
+                    .all(|c| c.is_ascii_digit() || matches!(c, '+' | '-' | ' ' | '(' | ')' | '.'))
             {
                 return s.to_string();
             }
@@ -352,9 +391,9 @@ fn linkedin_url(text: &str) -> String {
 pub fn classify_skill_category(category_hint: Option<&str>, skill_name: &str) -> String {
     let lower_skill = skill_name.to_lowercase();
     let dict_cat = match lower_skill.as_str() {
-        "rust" | "python" | "typescript" | "javascript" | "c++" | "c" | "java" | "go" | "golang"
-        | "dart" | "sql" | "c#" | "php" | "ruby" | "swift" | "kotlin" | "html" | "css" | "bash"
-        | "shell" | "r" | "scala" | "lua" => Some("language"),
+        "rust" | "python" | "typescript" | "javascript" | "c++" | "c" | "java" | "go"
+        | "golang" | "dart" | "sql" | "c#" | "php" | "ruby" | "swift" | "kotlin" | "html"
+        | "css" | "bash" | "shell" | "r" | "scala" | "lua" => Some("language"),
 
         "tauri" | "react" | "next.js" | "node.js" | "fastapi" | "flask" | "django" | "express"
         | "vue" | "angular" | "svelte" | "flutter" | "tailwind css" | "tailwind" | "shadcn ui"
@@ -363,9 +402,20 @@ pub fn classify_skill_category(category_hint: Option<&str>, skill_name: &str) ->
         "sqlite" | "sqlite (wal)" | "postgresql" | "postgres" | "mongodb" | "mysql" | "redis"
         | "dynamodb" | "hive" | "cassandra" | "mariadb" | "oracle" | "couchdb" => Some("database"),
 
-        "aws" | "amazon bedrock" | "amazon bedrock (nova lite)" | "bedrock" | "azure" | "gcp"
-        | "google cloud" | "cloudflare" | "vercel" | "netlify" | "heroku" | "lambda"
-        | "aws lambda" | "api gateway" => Some("cloud"),
+        "aws"
+        | "amazon bedrock"
+        | "amazon bedrock (nova lite)"
+        | "bedrock"
+        | "azure"
+        | "gcp"
+        | "google cloud"
+        | "cloudflare"
+        | "vercel"
+        | "netlify"
+        | "heroku"
+        | "lambda"
+        | "aws lambda"
+        | "api gateway" => Some("cloud"),
 
         "docker" | "kubernetes" | "git" | "github" | "github actions" | "gitlab" | "linux"
         | "tectonic" | "terraform" | "ansible" | "jenkins" | "nginx" => Some("devops"),
@@ -517,14 +567,19 @@ fn extract_month_year(line: &str) -> Option<String> {
     // "March 2025" / "March 12, 2025" / "Mar '25" style — word-based scan.
     let words: Vec<String> = lower
         .split_whitespace()
-        .map(|w| w.trim_matches(|c: char| matches!(c, ',' | '.' | ':' | ';' | '(' | ')')).to_string())
+        .map(|w| {
+            w.trim_matches(|c: char| matches!(c, ',' | '.' | ':' | ';' | '(' | ')'))
+                .to_string()
+        })
         .collect();
     for (i, word) in words.iter().enumerate() {
         let Some((_, _, num)) = MONTHS.iter().find(|(abbrev, full, _)| {
             word.as_str() == *full
                 || word.as_str() == *abbrev
                 || (word.starts_with(*abbrev)
-                    && word[abbrev.len()..].chars().all(|c| !c.is_ascii_alphabetic()))
+                    && word[abbrev.len()..]
+                        .chars()
+                        .all(|c| !c.is_ascii_alphabetic()))
         }) else {
             continue;
         };
@@ -580,7 +635,10 @@ fn extract_location(line: &str) -> (String, String) {
     for suffix in ["remote", "hybrid", "on-site", "onsite", "wfh"] {
         if lower.ends_with(suffix) {
             let cut = line.len() - suffix.len();
-            let base = line[..cut].trim().trim_end_matches([',', '-', '–', '|']).trim();
+            let base = line[..cut]
+                .trim()
+                .trim_end_matches([',', '-', '–', '|'])
+                .trim();
             let loc = match suffix {
                 "remote" => "Remote",
                 "hybrid" => "Hybrid",
@@ -602,7 +660,10 @@ fn extract_location(line: &str) -> (String, String) {
         {
             let city = before[j + sep.len_utf8()..].trim();
             let loc = format!("{city}, {tail}");
-            let base = before[..j].trim().trim_end_matches([',', '-', '–', '|']).trim();
+            let base = before[..j]
+                .trim()
+                .trim_end_matches([',', '-', '–', '|'])
+                .trim();
             if !base.is_empty() && base.split_whitespace().count() >= 2 {
                 return (base.to_string(), loc);
             }
@@ -615,7 +676,9 @@ fn is_month_word(word: &str) -> bool {
     // Months appear capitalized in real headings ("February 2026") while the
     // table is lowercase — compare case-insensitively.
     let word = word.to_lowercase();
-    MONTHS.iter().any(|(abbrev, full, _)| word == *abbrev || word == *full)
+    MONTHS
+        .iter()
+        .any(|(abbrev, full, _)| word == *abbrev || word == *full)
 }
 
 fn is_year_word(word: &str) -> bool {
@@ -666,11 +729,9 @@ const LOCATION_SUFFIXES: &[&str] = &["remote", "hybrid", "on-site", "onsite", "w
 /// "Python Intern Remote" -> "Python Intern"; also drops a trailing
 /// comma-separated place ("Project Intern Visakhapatnam, India").
 fn strip_trailing_location(line: &str) -> String {
-    let mut words: Vec<String> = line
-        .split_whitespace()
-        .map(|w| w.to_string())
-        .collect();
-    while matches!(words.last(), Some(w) if LOCATION_SUFFIXES.contains(&w.to_lowercase().as_str())) {
+    let mut words: Vec<String> = line.split_whitespace().map(|w| w.to_string()).collect();
+    while matches!(words.last(), Some(w) if LOCATION_SUFFIXES.contains(&w.to_lowercase().as_str()))
+    {
         words.pop();
     }
     let mut s = words.join(" ");
@@ -686,9 +747,27 @@ fn strip_trailing_location(line: &str) -> String {
 
 fn looks_like_role_line(line: &str) -> bool {
     const ROLE_WORDS: &[&str] = &[
-        "intern", "engineer", "developer", "manager", "analyst", "designer", "consultant",
-        "associate", "architect", "scientist", "administrator", "director", "founder",
-        "trainee", "fellow", "sde", "devops", "research", "teaching", "lead", "member",
+        "intern",
+        "engineer",
+        "developer",
+        "manager",
+        "analyst",
+        "designer",
+        "consultant",
+        "associate",
+        "architect",
+        "scientist",
+        "administrator",
+        "director",
+        "founder",
+        "trainee",
+        "fellow",
+        "sde",
+        "devops",
+        "research",
+        "teaching",
+        "lead",
+        "member",
     ];
     let lower = line.to_lowercase();
     ROLE_WORDS.iter().any(|w| lower.contains(w))
@@ -696,8 +775,25 @@ fn looks_like_role_line(line: &str) -> bool {
 
 fn looks_like_degree(line: &str) -> bool {
     const DEGREE_WORDS: &[&str] = &[
-        "bachelor", "master", "b.tech", "btech", "b.e", "m.tech", "mtech", "m.e", "ph.d", "phd",
-        "diploma", "mba", "msc", "bsc", "bca", "mca", "associate", "high school", "secondary",
+        "bachelor",
+        "master",
+        "b.tech",
+        "btech",
+        "b.e",
+        "m.tech",
+        "mtech",
+        "m.e",
+        "ph.d",
+        "phd",
+        "diploma",
+        "mba",
+        "msc",
+        "bsc",
+        "bca",
+        "mca",
+        "associate",
+        "high school",
+        "secondary",
         "intermediate",
     ];
     let lower = line.trim_start_matches(['-', '•', '*', ' ']).to_lowercase();
@@ -750,9 +846,12 @@ fn tech_skill_list(rest: &str) -> Option<Vec<String>> {
 fn is_separator_line(line: &str) -> bool {
     !line.is_empty()
         && line.chars().any(|c| !matches!(c, ' ' | '\t'))
-        && line
-            .chars()
-            .all(|c| matches!(c, '-' | '=' | '_' | '~' | '—' | '–' | '·' | '•' | '*' | '▪' | '.' | ' ' | '\t'))
+        && line.chars().all(|c| {
+            matches!(
+                c,
+                '-' | '=' | '_' | '~' | '—' | '–' | '·' | '•' | '*' | '▪' | '.' | ' ' | '\t'
+            )
+        })
 }
 
 // ---------------------------------------------------------------------------
@@ -779,9 +878,25 @@ fn is_narrative_heading(line: &str) -> bool {
 
 fn is_narrative_key_line(line: &str) -> bool {
     const KEYS: &[&str] = &[
-        "period", "context", "type", "domain", "status", "role", "team", "outcome", "platform",
-        "company", "theme", "category", "problem statement", "full name", "earlier working name",
-        "earlier concepts", "interface", "question", "idea",
+        "period",
+        "context",
+        "type",
+        "domain",
+        "status",
+        "role",
+        "team",
+        "outcome",
+        "platform",
+        "company",
+        "theme",
+        "category",
+        "problem statement",
+        "full name",
+        "earlier working name",
+        "earlier concepts",
+        "interface",
+        "question",
+        "idea",
     ];
     KEYS.iter().any(|k| {
         strip_ci_prefix(line, k)
@@ -870,10 +985,7 @@ fn parse_narrative_text(text: &str) -> Option<ResumeImport> {
             pending_demonstration = true;
             stack_context = false;
             // Inline variant: "What it demonstrates: A · B"
-            let rest = trimmed
-                .split_once(':')
-                .map(|(_, v)| v.trim())
-                .unwrap_or("");
+            let rest = trimmed.split_once(':').map(|(_, v)| v.trim()).unwrap_or("");
             if !rest.is_empty() {
                 push_narrative_skills(&mut skills, narrative_skill_tokens(rest));
                 pending_demonstration = false;
@@ -1089,7 +1201,11 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                         p.description.push_str(content);
                         snippet.push(line.to_string());
                     }
-                } else if !is_header && cur_project.as_ref().is_some_and(|p| !p.description.is_empty()) {
+                } else if !is_header
+                    && cur_project
+                        .as_ref()
+                        .is_some_and(|p| !p.description.is_empty())
+                {
                     if let Some(p) = cur_project.as_mut() {
                         if !p.description.is_empty() {
                             p.description.push(' ');
@@ -1104,8 +1220,8 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                     }
                     snippet = vec![line.to_string()];
                     let content = strip_trailing_dates(content);
-                    let (title, rest) = split_pair(&content)
-                        .unwrap_or((content.clone(), String::new()));
+                    let (title, rest) =
+                        split_pair(&content).unwrap_or((content.clone(), String::new()));
                     let title = clean_title(&title);
                     let (description, skills) = match tech_skill_list(&rest) {
                         Some(list) => (String::new(), list),
@@ -1135,7 +1251,9 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                         snippet.push(line.to_string());
                     }
                 } else if looks_like_role_line(&clean_content)
-                    && cur_experience.as_ref().is_some_and(|e| e.role.is_empty() && e.description.is_empty())
+                    && cur_experience
+                        .as_ref()
+                        .is_some_and(|e| e.role.is_empty() && e.description.is_empty())
                 {
                     if let Some(e) = cur_experience.as_mut() {
                         e.role = clean_content;
@@ -1149,7 +1267,9 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                         }
                         snippet.push(line.to_string());
                     }
-                } else if cur_experience.as_ref().is_some_and(|e| !e.description.is_empty())
+                } else if cur_experience
+                    .as_ref()
+                    .is_some_and(|e| !e.description.is_empty())
                     && start_date.is_none()
                     && !looks_like_role_line(&clean_content)
                     && (trimmed.chars().next().is_some_and(|c| c.is_lowercase())
@@ -1247,7 +1367,9 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                 let is_bullet = starts_with_bullet(trimmed);
                 let (date, _, _) = extract_date_range(content);
                 let clean_content = strip_trailing_dates(content);
-                let has_separator = clean_content.contains('|') || clean_content.contains('—') || clean_content.contains('–');
+                let has_separator = clean_content.contains('|')
+                    || clean_content.contains('—')
+                    || clean_content.contains('–');
 
                 if is_bullet {
                     if let Some(a) = cur_achievement.as_mut() {
@@ -1257,8 +1379,11 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                         a.description.push_str(content);
                         snippet.push(line.to_string());
                     }
-                } else if cur_achievement.as_ref().is_some_and(|a| !a.description.is_empty())
-                    && (trimmed.chars().next().is_some_and(|c| c.is_lowercase()) || (!has_separator && date.is_none()))
+                } else if cur_achievement
+                    .as_ref()
+                    .is_some_and(|a| !a.description.is_empty())
+                    && (trimmed.chars().next().is_some_and(|c| c.is_lowercase())
+                        || (!has_separator && date.is_none()))
                 {
                     if let Some(a) = cur_achievement.as_mut() {
                         if !a.description.is_empty() {
@@ -1356,7 +1481,6 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
 // Certificate text parser
 // ---------------------------------------------------------------------------
 
-
 pub fn parse_certificate_text(text: &str) -> CertificateCandidate {
     let mut title = String::new();
     let mut issuer = String::new();
@@ -1394,14 +1518,22 @@ pub fn parse_certificate_text(text: &str) -> CertificateCandidate {
         }
         let lower = line.to_lowercase();
 
-        if title.is_empty() && (lower.contains("certificate of") || lower.contains("certificate for")) {
+        if title.is_empty()
+            && (lower.contains("certificate of") || lower.contains("certificate for"))
+        {
             title = line.trim_end_matches(['.', ':']).to_string();
             snippet.push(line.to_string());
             continue;
         }
 
         if issuer.is_empty() {
-            for phrase in ["issued by", "presented by", "provided by", "authorized by", "offered by"] {
+            for phrase in [
+                "issued by",
+                "presented by",
+                "provided by",
+                "authorized by",
+                "offered by",
+            ] {
                 if lower.contains(phrase) {
                     if let Some((_, end)) = find_ci(line, phrase) {
                         let after = line[end..].trim().trim_start_matches(':');
@@ -1475,10 +1607,13 @@ pub fn github_repo_candidate(owner: &str, repo: &str) -> Result<GithubRepoCandid
     let valid = |s: &str| {
         !s.is_empty()
             && s.len() <= 100
-            && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
     };
     if !valid(owner) || !valid(repo) {
-        return Err("Repository names may only contain letters, digits, '.', '-' and '_'".to_string());
+        return Err(
+            "Repository names may only contain letters, digits, '.', '-' and '_'".to_string(),
+        );
     }
 
     let agent = ureq::AgentBuilder::new()
@@ -1504,7 +1639,7 @@ pub fn github_repo_candidate(owner: &str, repo: &str) -> Result<GithubRepoCandid
         .map_err(|e| e.to_string())?
         .into_iter()
         .collect();
-    languages.sort_by(|a, b| b.1.cmp(&a.1));
+    languages.sort_by_key(|a| std::cmp::Reverse(a.1));
 
     let mut skills: Vec<String> = Vec::new();
     let mut seen: Vec<String> = Vec::new();
@@ -1530,21 +1665,37 @@ pub fn github_repo_candidate(owner: &str, repo: &str) -> Result<GithubRepoCandid
     let description = meta["description"].as_str().unwrap_or_default().to_string();
     let repo_url = meta["html_url"].as_str().unwrap_or_default().to_string();
     let homepage = meta["homepage"].as_str().unwrap_or_default();
-    let url = if homepage.starts_with("http") { homepage.to_string() } else { repo_url.clone() };
+    let url = if homepage.starts_with("http") {
+        homepage.to_string()
+    } else {
+        repo_url.clone()
+    };
     let start_date = meta["created_at"]
         .as_str()
         .filter(|s| s.len() >= 7)
         .map(|s| s[..7].to_string());
     let title = meta["name"].as_str().unwrap_or(repo).to_string();
 
-    let lang_list = languages.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(", ");
+    let lang_list = languages
+        .iter()
+        .map(|(n, _)| n.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
     let source_preview = format!(
         "GET {base}\nRepository: {}/{}\nDescription: {description}\nLanguages: {lang_list}",
         meta["owner"]["full_name"].as_str().unwrap_or(owner),
         title,
     );
 
-    Ok(GithubRepoCandidate { title, description, url, repo_url, start_date, skills, source_preview })
+    Ok(GithubRepoCandidate {
+        title,
+        description,
+        url,
+        repo_url,
+        start_date,
+        skills,
+        source_preview,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1585,8 +1736,14 @@ Docker | Kubernetes
         let import = parse_resume_text(RESUME);
 
         assert_eq!(import.profile.as_ref().unwrap().full_name, "Alex Rivera");
-        assert_eq!(import.profile.as_ref().unwrap().email, "alex.rivera@example.com");
-        assert_eq!(import.profile.as_ref().unwrap().github, "https://github.com/alex-rivera-dev");
+        assert_eq!(
+            import.profile.as_ref().unwrap().email,
+            "alex.rivera@example.com"
+        );
+        assert_eq!(
+            import.profile.as_ref().unwrap().github,
+            "https://github.com/alex-rivera-dev"
+        );
 
         assert_eq!(import.projects.len(), 2);
         assert_eq!(import.projects[0].title, "PyKV");
@@ -1607,7 +1764,11 @@ Docker | Kubernetes
         assert_eq!(import.education[0].field_of_study, "CSE");
 
         assert_eq!(
-            import.skills.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            import
+                .skills
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect::<Vec<_>>(),
             vec!["Python", "Rust", "SQL", "Docker", "Kubernetes"]
         );
         assert_eq!(import.skills[0].category, "language");
@@ -1685,7 +1846,10 @@ Bachelor of Technology in Computer Science & Systems Engineering September 2023 
         assert_eq!(import.experiences[0].end_date.as_deref(), Some("2026-04"));
         assert!(import.experiences[0].description.contains("PyKV"));
 
-        assert_eq!(import.experiences[1].organization, "BDL (Bharat Dynamics Limited)");
+        assert_eq!(
+            import.experiences[1].organization,
+            "BDL (Bharat Dynamics Limited)"
+        );
         assert!(import.experiences[1].role.contains("Project Intern"));
         assert_eq!(import.experiences[1].start_date.as_deref(), Some("2025-06"));
         assert_eq!(import.experiences[1].end_date.as_deref(), Some("2025-07"));
@@ -1695,40 +1859,81 @@ Bachelor of Technology in Computer Science & Systems Engineering September 2023 
         assert_eq!(import.projects[0].title, "Kairo");
         assert!(import.projects[0].skills.contains(&"Rust".to_string()));
         assert!(import.projects[0].skills.contains(&"Tauri 2".to_string()));
-        assert!(import.projects[0].skills.contains(&"SQLite (WAL)".to_string()));
-        assert!(import.projects[0].description.contains("local-first career workspace"));
+        assert!(import.projects[0]
+            .skills
+            .contains(&"SQLite (WAL)".to_string()));
+        assert!(import.projects[0]
+            .description
+            .contains("local-first career workspace"));
         assert_eq!(import.projects[1].title, "CodeSensei");
-        assert!(import.projects[1].skills.contains(&"Amazon Bedrock (Nova Lite)".to_string()));
+        assert!(import.projects[1]
+            .skills
+            .contains(&"Amazon Bedrock (Nova Lite)".to_string()));
         assert_eq!(import.projects[2].title, "WatchDog");
 
         // Achievements: parsed into AchievementDraft candidates!
-        assert_eq!(import.achievements.len(), 2, "got {:?}", import.achievements);
+        assert_eq!(
+            import.achievements.len(),
+            2,
+            "got {:?}",
+            import.achievements
+        );
         assert_eq!(import.achievements[0].title, "Google Summer of Code 2026");
         assert_eq!(import.achievements[0].issuer, "Apache Software Foundation");
-        assert_eq!(import.achievements[0].achieved_on.as_deref(), Some("2026-05"));
-        assert!(import.achievements[0].description.contains("direct evaluation call"));
+        assert_eq!(
+            import.achievements[0].achieved_on.as_deref(),
+            Some("2026-05")
+        );
+        assert!(import.achievements[0]
+            .description
+            .contains("direct evaluation call"));
         assert_eq!(import.achievements[1].title, "HackAp Hackathon 2025");
-        assert_eq!(import.achievements[1].achieved_on.as_deref(), Some("2025-03"));
+        assert_eq!(
+            import.achievements[1].achieved_on.as_deref(),
+            Some("2025-03")
+        );
 
         // Skills: categorized properly!
-        let rust_skill = import.skills.iter().find(|s| s.name == "Rust").expect("Rust found");
+        let rust_skill = import
+            .skills
+            .iter()
+            .find(|s| s.name == "Rust")
+            .expect("Rust found");
         assert_eq!(rust_skill.category, "language");
 
-        let react_skill = import.skills.iter().find(|s| s.name == "React").expect("React found");
+        let react_skill = import
+            .skills
+            .iter()
+            .find(|s| s.name == "React")
+            .expect("React found");
         assert_eq!(react_skill.category, "framework");
 
-        let sqlite_skill = import.skills.iter().find(|s| s.name.contains("SQLite")).expect("SQLite found");
+        let sqlite_skill = import
+            .skills
+            .iter()
+            .find(|s| s.name.contains("SQLite"))
+            .expect("SQLite found");
         assert_eq!(sqlite_skill.category, "database");
 
-        let docker_skill = import.skills.iter().find(|s| s.name == "Docker").expect("Docker found");
+        let docker_skill = import
+            .skills
+            .iter()
+            .find(|s| s.name == "Docker")
+            .expect("Docker found");
         assert!(docker_skill.category == "tool" || docker_skill.category == "devops");
 
-        let pandas_skill = import.skills.iter().find(|s| s.name == "Pandas").expect("Pandas found");
+        let pandas_skill = import
+            .skills
+            .iter()
+            .find(|s| s.name == "Pandas")
+            .expect("Pandas found");
         assert_eq!(pandas_skill.category, "tool");
 
         // Education: two-line header resolved into institution/degree/field and dates.
         assert_eq!(import.education.len(), 1, "got {:?}", import.education);
-        assert!(import.education[0].institution.contains("Andhra University"));
+        assert!(import.education[0]
+            .institution
+            .contains("Andhra University"));
         assert_eq!(import.education[0].degree, "Bachelor of Technology");
         assert_eq!(
             import.education[0].field_of_study,
@@ -1740,13 +1945,25 @@ Bachelor of Technology in Computer Science & Systems Engineering September 2023 
 
     #[test]
     fn date_stripping_and_location_suffixes() {
-        assert_eq!(strip_trailing_dates("Infosys Springboard February 2026 – April 2026"), "Infosys Springboard");
-        assert_eq!(strip_trailing_dates("Bachelor of Technology in CS September 2023 – May 2027"), "Bachelor of Technology in CS");
+        assert_eq!(
+            strip_trailing_dates("Infosys Springboard February 2026 – April 2026"),
+            "Infosys Springboard"
+        );
+        assert_eq!(
+            strip_trailing_dates("Bachelor of Technology in CS September 2023 – May 2027"),
+            "Bachelor of Technology in CS"
+        );
         assert_eq!(strip_trailing_dates("Role May 2026 – Present"), "Role");
         assert_eq!(strip_trailing_dates("Kairo 2025"), "Kairo");
         assert_eq!(strip_trailing_dates("No dates here"), "No dates here");
-        assert_eq!(strip_trailing_location("Python Intern Remote"), "Python Intern");
-        assert_eq!(strip_trailing_location("Project Intern Visakhapatnam, India"), "Project Intern Visakhapatnam");
+        assert_eq!(
+            strip_trailing_location("Python Intern Remote"),
+            "Python Intern"
+        );
+        assert_eq!(
+            strip_trailing_location("Project Intern Visakhapatnam, India"),
+            "Project Intern Visakhapatnam"
+        );
     }
 
     #[test]
@@ -1764,7 +1981,8 @@ Bachelor of Technology in Computer Science & Systems Engineering September 2023 
 
     #[test]
     fn certificate_parser_handles_iso_dates() {
-        let candidate = parse_certificate_text("AWS Cloud Practitioner\nissued by Amazon\n2025-04-10");
+        let candidate =
+            parse_certificate_text("AWS Cloud Practitioner\nissued by Amazon\n2025-04-10");
         assert_eq!(candidate.title, "AWS Cloud Practitioner");
         assert_eq!(candidate.issue_date.as_deref(), Some("2025-04"));
     }
@@ -1829,7 +2047,10 @@ Acme–Berlin, Germany — Engineer
     fn split_degree_field_is_boundary_safe() {
         assert_eq!(
             split_degree_field("Bachelor of Technology in Computer Science"),
-            ("Bachelor of Technology".to_string(), "Computer Science".to_string())
+            (
+                "Bachelor of Technology".to_string(),
+                "Computer Science".to_string()
+            )
         );
         let (degree, field) = split_degree_field("İnİ in Math");
         assert_eq!(degree, "İnİ");
@@ -1854,7 +2075,9 @@ Acme–Berlin, Germany — Engineer
         // and every section — must complete without panicking or hanging.
         let mut text = String::from("Alex Rivera\nPROJECTS\n");
         for i in 0..250 {
-            text.push_str(&format!("Proje—{i}—Modüler sistem\n- Detay {i}\n- Rüzgar–Rota analizi\n"));
+            text.push_str(&format!(
+                "Proje—{i}—Modüler sistem\n- Detay {i}\n- Rüzgar–Rota analizi\n"
+            ));
         }
         text.push_str("EXPERIENCE\n");
         for i in 0..125 {
@@ -1862,7 +2085,12 @@ Acme–Berlin, Germany — Engineer
         }
         let import = parse_resume_text(&text);
         assert_eq!(import.projects.len(), 250, "got {}", import.projects.len());
-        assert_eq!(import.experiences.len(), 125, "got {}", import.experiences.len());
+        assert_eq!(
+            import.experiences.len(),
+            125,
+            "got {}",
+            import.experiences.len()
+        );
     }
 
     // --- Narrative story dumps (v4) -----------------------------------------
@@ -1910,11 +2138,17 @@ Route Optimization · Algorithms
         let import = parse_resume_text(text);
         assert_eq!(import.projects.len(), 3, "got {:?}", import.projects);
         assert_eq!(import.projects[0].title, "Alpha Weather App");
-        assert!(import.projects[0].description.contains("Period: by May 2025"));
+        assert!(import.projects[0]
+            .description
+            .contains("Period: by May 2025"));
         assert!(import.projects[0].description.contains("weather service"));
         assert!(import.projects[0].skills.contains(&"Next.js".to_string()));
-        assert!(import.projects[0].skills.contains(&"API Integration".to_string()));
-        assert!(import.projects[0].skills.contains(&"Tailwind CSS".to_string()));
+        assert!(import.projects[0]
+            .skills
+            .contains(&"API Integration".to_string()));
+        assert!(import.projects[0]
+            .skills
+            .contains(&"Tailwind CSS".to_string()));
         // Deduped across stack + demonstration lists.
         assert_eq!(
             import.projects[0]
@@ -1924,8 +2158,13 @@ Route Optimization · Algorithms
                 .count(),
             1
         );
-        assert_eq!(import.projects[1].title, "Beta Key Store — with persistence");
-        assert!(import.projects[1].skills.contains(&"Backend Engineering".to_string()));
+        assert_eq!(
+            import.projects[1].title,
+            "Beta Key Store — with persistence"
+        );
+        assert!(import.projects[1]
+            .skills
+            .contains(&"Backend Engineering".to_string()));
         assert!(import.experiences.is_empty() && import.achievements.is_empty());
     }
 
@@ -1937,4 +2176,3 @@ Route Optimization · Algorithms
         assert!(parse_narrative_text("1. One\n- a\n2. Two\n- b\n").is_none());
     }
 }
-

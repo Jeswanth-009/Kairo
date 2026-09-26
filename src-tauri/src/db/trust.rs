@@ -9,13 +9,31 @@ use rusqlite::types::Value;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-pub const EVIDENCE_ENTITY_TYPES: &[&str] =
-    &["project", "experience", "education", "certification", "achievement"];
-pub const EVIDENCE_KINDS: &[&str] =
-    &["repository", "document", "certificate", "metric", "note", "link", "other"];
+pub const EVIDENCE_ENTITY_TYPES: &[&str] = &[
+    "project",
+    "experience",
+    "education",
+    "certification",
+    "achievement",
+];
+pub const EVIDENCE_KINDS: &[&str] = &[
+    "repository",
+    "document",
+    "certificate",
+    "metric",
+    "note",
+    "link",
+    "other",
+];
 pub const BULLET_ENTITY_TYPES: &[&str] = &["project", "experience"];
-pub const RULE_ENTITY_TYPES: &[&str] =
-    &["project", "experience", "education", "certification", "achievement", "skill"];
+pub const RULE_ENTITY_TYPES: &[&str] = &[
+    "project",
+    "experience",
+    "education",
+    "certification",
+    "achievement",
+    "skill",
+];
 pub const RULE_TYPES: &[&str] = &["forbidden_claim", "allowed_claim"];
 
 fn str_err<T>(r: rusqlite::Result<T>) -> Result<T, String> {
@@ -115,7 +133,11 @@ pub fn get_evidence(conn: &Connection, id: i64) -> Result<Evidence, String> {
     str_err(stmt.query_row([id], evidence_from_row))
 }
 
-fn evidence_parent_exists(conn: &Connection, entity_type: &str, entity_id: i64) -> Result<(), String> {
+fn evidence_parent_exists(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: i64,
+) -> Result<(), String> {
     let table = match entity_type {
         "project" => "projects",
         "experience" => "experiences",
@@ -136,7 +158,8 @@ fn evidence_parent_exists(conn: &Connection, entity_type: &str, entity_id: i64) 
 pub fn create_evidence(conn: &Connection, evidence: &Evidence) -> Result<Evidence, String> {
     evidence.validate()?;
     evidence_parent_exists(conn, &evidence.entity_type, evidence.entity_id)?;
-    let sql = "INSERT INTO evidence (entity_type, entity_id, kind, title, reference, note, verified) \
+    let sql =
+        "INSERT INTO evidence (entity_type, entity_id, kind, title, reference, note, verified) \
                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
     let values: Vec<Value> = evidence.values();
     let tx = str_err(conn.unchecked_transaction())?;
@@ -178,8 +201,10 @@ pub fn evidence_count_map(
         return Ok(map);
     }
     // ?1 is entity_type; the IN list starts at ?2.
-    let placeholders =
-        (2..=ids.len() + 1).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ");
+    let placeholders = (2..=ids.len() + 1)
+        .map(|i| format!("?{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
     let sql = format!(
         "SELECT entity_id, COUNT(*) FROM evidence \
          WHERE entity_type = ?1 AND entity_id IN ({placeholders}) GROUP BY entity_id"
@@ -250,7 +275,10 @@ fn bullet_evidence_map(
     if bullet_ids.is_empty() {
         return Ok(map);
     }
-    let placeholders = (1..=bullet_ids.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ");
+    let placeholders = (1..=bullet_ids.len())
+        .map(|i| format!("?{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
     let sql = format!(
         "SELECT be.bullet_id, e.id, e.title, e.kind, e.verified \
          FROM bullet_evidence be JOIN evidence e ON e.id = be.evidence_id \
@@ -322,7 +350,10 @@ impl CanonicalBullet {
     /// Replaces the bullet's evidence links after insert/update, in-tx.
     /// Always runs: an empty list explicitly clears all references.
     fn write_evidence_links(&self, conn: &Connection) -> Result<(), String> {
-        str_err(conn.execute("DELETE FROM bullet_evidence WHERE bullet_id = ?1", [self.id]))?;
+        str_err(conn.execute(
+            "DELETE FROM bullet_evidence WHERE bullet_id = ?1",
+            [self.id],
+        ))?;
         for evidence_id in &self.evidence_ids {
             let parent: Option<(String, i64)> = str_err(
                 conn.query_row(
@@ -336,7 +367,10 @@ impl CanonicalBullet {
                 return Err(format!("Evidence {evidence_id} not found"));
             };
             if parent_type != self.entity_type || parent_id != self.entity_id {
-                return Err(format!("Evidence {} belongs to a different record", evidence_id));
+                return Err(format!(
+                    "Evidence {} belongs to a different record",
+                    evidence_id
+                ));
             }
             str_err(conn.execute(
                 "INSERT OR IGNORE INTO bullet_evidence (bullet_id, evidence_id) VALUES (?1, ?2)",
@@ -347,7 +381,10 @@ impl CanonicalBullet {
     }
 }
 
-pub fn create_bullet(conn: &Connection, bullet: &CanonicalBullet) -> Result<CanonicalBullet, String> {
+pub fn create_bullet(
+    conn: &Connection,
+    bullet: &CanonicalBullet,
+) -> Result<CanonicalBullet, String> {
     bullet.validate()?;
     let next_order: i64 = str_err(conn.query_row(
         "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM canonical_bullets \
@@ -384,15 +421,17 @@ pub fn create_bullet(conn: &Connection, bullet: &CanonicalBullet) -> Result<Cano
     get_bullet(conn, id)
 }
 
-pub fn update_bullet(conn: &Connection, bullet: &CanonicalBullet) -> Result<CanonicalBullet, String> {
+pub fn update_bullet(
+    conn: &Connection,
+    bullet: &CanonicalBullet,
+) -> Result<CanonicalBullet, String> {
     bullet.validate()?;
-    let sql = "UPDATE canonical_bullets SET text = ?1, approved = ?2, updated_at = datetime('now') \
+    let sql =
+        "UPDATE canonical_bullets SET text = ?1, approved = ?2, updated_at = datetime('now') \
                WHERE id = ?3";
     let tx = str_err(conn.unchecked_transaction())?;
-    let changed = str_err(tx.execute(
-        sql,
-        params![bullet.text, bullet.approved as i64, bullet.id],
-    ))?;
+    let changed =
+        str_err(tx.execute(sql, params![bullet.text, bullet.approved as i64, bullet.id]))?;
     if changed == 0 {
         return Err("Bullet not found".to_string());
     }
@@ -447,7 +486,11 @@ impl ClaimRule {
         match (&self.entity_type, &self.entity_id) {
             (Some(t), Some(_)) => check_in(t, RULE_ENTITY_TYPES, "entity type")?,
             (None, None) => {}
-            _ => return Err("Claim rules must be global or scoped to a full entity reference".to_string()),
+            _ => {
+                return Err(
+                    "Claim rules must be global or scoped to a full entity reference".to_string(),
+                )
+            }
         }
         Ok(())
     }
@@ -486,9 +529,11 @@ pub fn create_claim_rule(conn: &Connection, rule: &ClaimRule) -> Result<ClaimRul
     if let (Some(t), Some(id)) = (&rule.entity_type, rule.entity_id) {
         // Skills are not evidence parents but can still carry claim rules.
         if t == "skill" {
-            let count: i64 = str_err(
-                conn.query_row("SELECT COUNT(*) FROM skills WHERE id = ?1", [id], |r| r.get(0)),
-            )?;
+            let count: i64 = str_err(conn.query_row(
+                "SELECT COUNT(*) FROM skills WHERE id = ?1",
+                [id],
+                |r| r.get(0),
+            ))?;
             if count == 0 {
                 return Err("Parent record not found".to_string());
             }
@@ -499,7 +544,10 @@ pub fn create_claim_rule(conn: &Connection, rule: &ClaimRule) -> Result<ClaimRul
     let sql = "INSERT INTO claim_rules (entity_type, entity_id, rule_type, pattern, note) \
                VALUES (?1, ?2, ?3, ?4, ?5)";
     let values: Vec<Value> = vec![
-        rule.entity_type.clone().map(Value::Text).unwrap_or(Value::Null),
+        rule.entity_type
+            .clone()
+            .map(Value::Text)
+            .unwrap_or(Value::Null),
         rule.entity_id.map(Value::Integer).unwrap_or(Value::Null),
         Value::Text(rule.rule_type.clone()),
         Value::Text(rule.pattern.clone()),
@@ -545,8 +593,8 @@ pub fn delete_claim_rule(conn: &Connection, id: i64) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::vault::{vault_create, vault_delete, Project};
     use crate::db::apply_migrations;
+    use crate::db::vault::{vault_create, vault_delete, Project};
 
     fn mem_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();

@@ -113,7 +113,12 @@ pub fn vault_create<E: VaultEntity>(conn: &Connection, value: &E) -> Result<E, S
         .map(|i| format!("?{i}"))
         .collect::<Vec<_>>()
         .join(", ");
-    let sql = format!("INSERT INTO {} ({}) VALUES ({})", E::TABLE, cols, placeholders);
+    let sql = format!(
+        "INSERT INTO {} ({}) VALUES ({})",
+        E::TABLE,
+        cols,
+        placeholders
+    );
     let values: Vec<Value> = value.values().iter().map(|v| v.to_value()).collect();
 
     let tx = sql_err(conn.unchecked_transaction())?;
@@ -238,8 +243,10 @@ fn load_links<T: HasSkillLinks>(
     let mut by_id: std::collections::HashMap<i64, Vec<SkillRef>> = std::collections::HashMap::new();
     if !ids.is_empty() {
         // ?1 is entity_type; the IN list starts at ?2.
-        let placeholders =
-            (2..=ids.len() + 1).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ");
+        let placeholders = (2..=ids.len() + 1)
+            .map(|i| format!("?{i}"))
+            .collect::<Vec<_>>()
+            .join(", ");
         let sql = format!(
             "SELECT es.entity_id, s.id, s.canonical_name, es.confidence \
              FROM entity_skills es JOIN skills s ON s.id = es.skill_id \
@@ -296,7 +303,8 @@ fn write_links(
     entity_type: &str,
     entity_id: i64,
     skills: &[SkillRef],
-) -> Result<(), String> {    for skill in skills {
+) -> Result<(), String> {
+    for skill in skills {
         if !(0..=5).contains(&skill.confidence) {
             return Err("Skill confidence must be between 0 and 5".to_string());
         }
@@ -352,8 +360,15 @@ impl VaultEntity for Project {
     const TABLE: &'static str = "projects";
     const ORDER_BY: &'static str = "COALESCE(start_date, '') DESC, id DESC";
     const SEARCH_COLS: &'static [&'static str] = &["title", "description"];
-    const INSERT_COLS: &'static [&'static str] =
-        &["title", "description", "start_date", "end_date", "is_current", "url", "repo_url"];
+    const INSERT_COLS: &'static [&'static str] = &[
+        "title",
+        "description",
+        "start_date",
+        "end_date",
+        "is_current",
+        "url",
+        "repo_url",
+    ];
 
     fn id(&self) -> i64 {
         self.id
@@ -694,8 +709,16 @@ impl VaultEntity for Achievement {
 // Skills + aliases
 // ---------------------------------------------------------------------------
 
-pub const SKILL_CATEGORIES: &[&str] =
-    &["language", "framework", "tool", "database", "cloud", "devops", "soft", "other"];
+pub const SKILL_CATEGORIES: &[&str] = &[
+    "language",
+    "framework",
+    "tool",
+    "database",
+    "cloud",
+    "devops",
+    "soft",
+    "other",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -754,7 +777,8 @@ impl VaultEntity for Skill {
         }
         let mut stmt =
             conn.prepare("SELECT id, skill_id, alias FROM skill_aliases ORDER BY alias")?;
-        let mut map: std::collections::HashMap<i64, Vec<SkillAlias>> = std::collections::HashMap::new();
+        let mut map: std::collections::HashMap<i64, Vec<SkillAlias>> =
+            std::collections::HashMap::new();
         let pairs = stmt.query_map([], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
@@ -764,7 +788,10 @@ impl VaultEntity for Skill {
         })?;
         for triple in pairs {
             let (alias_id, skill_id, alias) = triple?;
-            map.entry(skill_id).or_default().push(SkillAlias { id: alias_id, alias });
+            map.entry(skill_id).or_default().push(SkillAlias {
+                id: alias_id,
+                alias,
+            });
         }
         for skill in rows.iter_mut() {
             if let Some(aliases) = map.remove(&skill.id) {
@@ -780,9 +807,11 @@ pub fn add_skill_alias(conn: &Connection, skill_id: i64, alias: &str) -> Result<
     if alias.is_empty() {
         return Err("Alias is required".to_string());
     }
-    let exists: i64 = sql_err(
-        conn.query_row("SELECT COUNT(*) FROM skills WHERE id = ?1", [skill_id], |r| r.get(0)),
-    )?;
+    let exists: i64 = sql_err(conn.query_row(
+        "SELECT COUNT(*) FROM skills WHERE id = ?1",
+        [skill_id],
+        |r| r.get(0),
+    ))?;
     if exists == 0 {
         return Err("Skill not found".to_string());
     }
@@ -836,7 +865,10 @@ const PROFILE_COLS: &[&str] = &[
 ];
 
 pub fn get_profile(conn: &Connection) -> Result<Option<Profile>, String> {
-    let sql = format!("SELECT {} FROM profiles ORDER BY id LIMIT 1", PROFILE_COLS.join(", "));
+    let sql = format!(
+        "SELECT {} FROM profiles ORDER BY id LIMIT 1",
+        PROFILE_COLS.join(", ")
+    );
     let mut stmt = sql_err(conn.prepare(&sql))?;
     match stmt.query_row([], |row| {
         Ok(Profile {
@@ -878,8 +910,7 @@ pub fn upsert_profile(conn: &Connection, profile: &Profile) -> Result<Profile, S
         .map(|(i, col)| format!("{col} = ?{}", i + 1))
         .collect::<Vec<_>>()
         .join(", ");
-    let existing: i64 =
-        sql_err(conn.query_row("SELECT COUNT(*) FROM profiles", [], |r| r.get(0)))?;
+    let existing: i64 = sql_err(conn.query_row("SELECT COUNT(*) FROM profiles", [], |r| r.get(0)))?;
     let tx = sql_err(conn.unchecked_transaction())?;
     if existing > 0 {
         let sql = format!(
@@ -889,13 +920,15 @@ pub fn upsert_profile(conn: &Connection, profile: &Profile) -> Result<Profile, S
         sql_err(tx.execute(&sql, params_from_iter(values.iter())))?;
     } else {
         let cols = PROFILE_COLS.join(", ");
-        let placeholders =
-            (1..=PROFILE_COLS.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ");
+        let placeholders = (1..=PROFILE_COLS.len())
+            .map(|i| format!("?{i}"))
+            .collect::<Vec<_>>()
+            .join(", ");
         let sql = format!("INSERT INTO profiles ({cols}) VALUES ({placeholders})");
         sql_err(tx.execute(&sql, params_from_iter(values.iter())))?;
     }
     sql_err(tx.commit())?;
-    Ok(get_profile(conn)?.expect("profile row just written"))
+    get_profile(conn)?.ok_or_else(|| "profile row just written could not be read back".to_string())
 }
 
 fn profile_field(profile: &Profile, column: &str) -> String {
@@ -959,8 +992,16 @@ mod tests {
                 url: String::new(),
                 repo_url: "https://github.com/me/pykv".to_string(),
                 skills: vec![
-                    SkillRef { skill_id: python.id, canonical_name: String::new(), confidence: 4 },
-                    SkillRef { skill_id: sql_skill.id, canonical_name: String::new(), confidence: 2 },
+                    SkillRef {
+                        skill_id: python.id,
+                        canonical_name: String::new(),
+                        confidence: 4,
+                    },
+                    SkillRef {
+                        skill_id: sql_skill.id,
+                        canonical_name: String::new(),
+                        confidence: 2,
+                    },
                 ],
                 evidence_count: 0,
             },
@@ -1011,8 +1052,11 @@ mod tests {
 
         assert!(vault_create(&conn, &base("", Some("2025-01".into()), None)).is_err());
         assert!(vault_create(&conn, &base("X", Some("March 2025".into()), None)).is_err());
-        assert!(vault_create(&conn, &base("X", Some("2025-03".into()), Some("2024-01".into())))
-            .is_err());
+        assert!(vault_create(
+            &conn,
+            &base("X", Some("2025-03".into()), Some("2024-01".into()))
+        )
+        .is_err());
         assert!(vault_create(&conn, &base("X", None, None)).is_ok());
 
         let mut bad_url = base("X", None, None);
@@ -1046,7 +1090,11 @@ mod tests {
             is_current: false,
             url: String::new(),
             repo_url: String::new(),
-            skills: vec![SkillRef { skill_id: s.id, canonical_name: String::new(), confidence: 9 }],
+            skills: vec![SkillRef {
+                skill_id: s.id,
+                canonical_name: String::new(),
+                confidence: 9,
+            }],
             evidence_count: 0,
         };
         assert!(vault_create(&conn, &p).is_err());
@@ -1075,8 +1123,9 @@ mod tests {
         let saved = upsert_profile(&conn, &profile).unwrap();
         assert_eq!(saved.headline, "Backend engineer");
 
-        let count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM profiles", [], |r| r.get(0)).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM profiles", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(count, 1);
         assert!(upsert_profile(
             &conn,

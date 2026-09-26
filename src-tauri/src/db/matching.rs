@@ -57,8 +57,17 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
             .into_iter()
             .map(|b| b.text)
             .collect::<Vec<_>>();
-        let text = format!("{} {} {}", project.title, project.description, bullets.join(" "));
-        let existing_skills: Vec<(i64, i64)> = project.skills.into_iter().map(|r| (r.skill_id, r.confidence)).collect();
+        let text = format!(
+            "{} {} {}",
+            project.title,
+            project.description,
+            bullets.join(" ")
+        );
+        let existing_skills: Vec<(i64, i64)> = project
+            .skills
+            .into_iter()
+            .map(|r| (r.skill_id, r.confidence))
+            .collect();
         let entity_skills = enrich_skills(existing_skills, &text);
         entities.push(MatchEntity {
             entity_type: "project".to_string(),
@@ -79,8 +88,18 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
             .into_iter()
             .map(|b| b.text)
             .collect::<Vec<_>>();
-        let text = format!("{} {} {} {}", experience.organization, experience.role, experience.description, bullets.join(" "));
-        let existing_skills: Vec<(i64, i64)> = experience.skills.into_iter().map(|r| (r.skill_id, r.confidence)).collect();
+        let text = format!(
+            "{} {} {} {}",
+            experience.organization,
+            experience.role,
+            experience.description,
+            bullets.join(" ")
+        );
+        let existing_skills: Vec<(i64, i64)> = experience
+            .skills
+            .into_iter()
+            .map(|r| (r.skill_id, r.confidence))
+            .collect();
         let entity_skills = enrich_skills(existing_skills, &text);
         entities.push(MatchEntity {
             entity_type: "experience".to_string(),
@@ -99,7 +118,10 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
     }
 
     for education in super::vault::vault_list::<super::vault::Education>(conn)? {
-        let bullets = vec![format!("{} in {}", education.degree, education.field_of_study)];
+        let bullets = vec![format!(
+            "{} in {}",
+            education.degree, education.field_of_study
+        )];
         let desc = format!(
             "{} in {}{}",
             education.degree,
@@ -217,11 +239,12 @@ pub fn run_and_persist(conn: &Connection, job_id: i64, now: &str) -> Result<Matc
 }
 
 pub fn get_report(conn: &Connection, job_id: i64) -> Result<Option<MatchReport>, String> {
-    let mut stmt = sql_err(conn.prepare(
-        "SELECT report_json FROM match_reports WHERE job_id = ?1",
-    ))?;
+    let mut stmt =
+        sql_err(conn.prepare("SELECT report_json FROM match_reports WHERE job_id = ?1"))?;
     match stmt.query_row([job_id], |row| row.get::<_, String>(0)) {
-        Ok(json) => serde_json::from_str(&json).map(Some).map_err(|e| e.to_string()),
+        Ok(json) => serde_json::from_str(&json)
+            .map(Some)
+            .map_err(|e| e.to_string()),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
     }

@@ -40,10 +40,17 @@ pub fn ai_save_config(
     api_key: Option<String>,
 ) -> Result<AiConfigView, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    let config = AiConfig { base_url: base_url.trim().to_string(), model: model.trim().to_string() };
+    let config = AiConfig {
+        base_url: base_url.trim().to_string(),
+        model: model.trim().to_string(),
+    };
     tailor::save_ai_config(&conn, &config, api_key.as_deref())?;
     let (_, has_key) = tailor::get_ai_config(&conn)?;
-    Ok(AiConfigView { base_url: config.base_url, model: config.model, has_api_key: has_key })
+    Ok(AiConfigView {
+        base_url: config.base_url,
+        model: config.model,
+        has_api_key: has_key,
+    })
 }
 
 /// Blocking network call — async so it runs on the command pool, never the
@@ -64,7 +71,10 @@ pub async fn ai_test_connection(state: State<'_, DbState>) -> Result<String, Str
 /// Lists models from the provider's OpenAI-compatible /models endpoint so
 /// Settings can offer a picker (works with Ollama and LM Studio).
 #[tauri::command]
-pub async fn ai_list_models(state: State<'_, DbState>, base_url: String) -> Result<Vec<String>, String> {
+pub async fn ai_list_models(
+    state: State<'_, DbState>,
+    base_url: String,
+) -> Result<Vec<String>, String> {
     // Lock held only for the keyring read, not the network GET.
     let key = {
         let _conn = state.0.lock().map_err(|_| DB_LOCK)?;
@@ -123,8 +133,7 @@ fn bounded_rewrite(
         crate::tailor::parse_response(&chat.content).map_err(|e| e.to_string())
     };
     if output.is_err() {
-        let truncated =
-            chat.finish_reason.as_deref() == Some("length") || empty_content;
+        let truncated = chat.finish_reason.as_deref() == Some("length") || empty_content;
         if truncated {
             opts.max_tokens *= 4;
         } else {
@@ -154,16 +163,20 @@ fn bounded_rewrite(
     }
 }
 
-fn log_tailor_call(event: &str, model: &str, chat: &crate::ai::ChatResult, extra: &[(&str, String)]) {
+fn log_tailor_call(
+    event: &str,
+    model: &str,
+    chat: &crate::ai::ChatResult,
+    extra: &[(&str, String)],
+) {
     let mut fields: Vec<(&str, String)> = vec![
         ("model", model.to_string()),
-        (
-            "chat_duration_ms",
-            chat.duration_ms.to_string(),
-        ),
+        ("chat_duration_ms", chat.duration_ms.to_string()),
         (
             "completion_tokens",
-            chat.completion_tokens.map(|t| t.to_string()).unwrap_or_default(),
+            chat.completion_tokens
+                .map(|t| t.to_string())
+                .unwrap_or_default(),
         ),
         (
             "finish_reason",
@@ -273,8 +286,9 @@ pub async fn tailor_plan_batch(
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
         let (config, _) = tailor::get_ai_config(&conn)?;
         let key = crate::ai::load_api_key()?.unwrap_or_default();
-        let stored = crate::db::composer::get_plan(&conn, job_id)?
-            .ok_or_else(|| "No plan for this workspace — compose one in the Plan tab first".to_string())?;
+        let stored = crate::db::composer::get_plan(&conn, job_id)?.ok_or_else(|| {
+            "No plan for this workspace — compose one in the Plan tab first".to_string()
+        })?;
         let index = tailor::build_grounding_index(&conn, job_id)?;
         let groundings = index.for_plan(&stored.plan)?;
         if groundings.is_empty() {

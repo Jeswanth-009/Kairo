@@ -47,11 +47,14 @@ pub fn create_backup(conn: &Connection, dir: &Path) -> Result<BackupInfo, String
 
 /// Shared backup writer; `prefix` distinguishes user backups from the
 /// automatic pre-restore safety snapshot (which pruning must never delete).
-fn create_backup_inner(conn: &Connection, dir: &Path, suffix: Option<&str>) -> Result<BackupInfo, String> {
+fn create_backup_inner(
+    conn: &Connection,
+    dir: &Path,
+    suffix: Option<&str>,
+) -> Result<BackupInfo, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create backups dir: {e}"))?;
-    let stamp: String = sql_err(
-        conn.query_row("SELECT strftime('%Y%m%d-%H%M%S', 'now')", [], |r| r.get(0)),
-    )?;
+    let stamp: String =
+        sql_err(conn.query_row("SELECT strftime('%Y%m%d-%H%M%S', 'now')", [], |r| r.get(0)))?;
     let file_name = match suffix {
         Some(suffix) => format!("{NAME_PATTERN}{stamp}{suffix}.db"),
         None => format!("{NAME_PATTERN}{stamp}.db"),
@@ -66,10 +69,19 @@ fn create_backup_inner(conn: &Connection, dir: &Path, suffix: Option<&str>) -> R
             .run_to_completion(64, std::time::Duration::from_millis(0), None)
             .map_err(|e| format!("backup failed: {e}"))?;
     } // borrow of dst ends here — the integrity check needs it back.
-    // Hardening: never keep a corrupt snapshot on disk.
+      // Hardening: never keep a corrupt snapshot on disk.
     let check: String = sql_err(dst.query_row("PRAGMA quick_check", [], |r| r.get(0)))?;
     if check != "ok" {
-        let _ = std::fs::remove_file(&path);
+        if let Err(e) = std::fs::remove_file(&path) {
+            crate::logging::log_event(
+                "warn",
+                "backup_discard_failed",
+                &[
+                    ("path", path.to_string_lossy().to_string()),
+                    ("error", e.to_string()),
+                ],
+            );
+        }
         return Err(format!("backup failed integrity check: {check}"));
     }
     drop(dst);
@@ -118,7 +130,11 @@ pub fn list_backups(dir: &Path) -> Result<Vec<BackupInfo>, String> {
 /// a valid SQLite database carrying the Kairo schema (core tables present),
 /// or the restore is refused and the live data is left untouched. Migrations
 /// are re-applied afterwards so an older backup upgrades transparently.
-pub fn restore_backup(live: &mut Connection, dir: &Path, file_name: &str) -> Result<RestoreReport, String> {
+pub fn restore_backup(
+    live: &mut Connection,
+    dir: &Path,
+    file_name: &str,
+) -> Result<RestoreReport, String> {
     if !is_backup_name(file_name) {
         return Err(format!(
             "'{file_name}' is not a Kairo backup file name (expected {NAME_PATTERN}<stamp>.db)"
@@ -148,9 +164,8 @@ pub fn restore_backup(live: &mut Connection, dir: &Path, file_name: &str) -> Res
     // A backup may predate the latest schema; migrations are idempotent, so
     // re-applying upgrades the restored data in place.
     super::apply_migrations(live).map_err(|e| format!("restored, but migration failed: {e}"))?;
-    let applied: i64 = sql_err(
-        live.query_row("SELECT COUNT(*) FROM _migrations", [], |r| r.get(0)),
-    )?;
+    let applied: i64 =
+        sql_err(live.query_row("SELECT COUNT(*) FROM _migrations", [], |r| r.get(0)))?;
     Ok(RestoreReport {
         restored_from: file_name.to_string(),
         applied_migrations: applied as usize,
@@ -176,20 +191,19 @@ fn validate_kairo_db(conn: &Connection) -> Result<(), String> {
         "claim_rules",
     ];
     for table in CORE_TABLES {
-        let present: i64 = sql_err(
-            conn.query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
-                [table],
-                |r| r.get(0),
-            ),
-        )?;
+        let present: i64 = sql_err(conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |r| r.get(0),
+        ))?;
         if present == 0 {
-            return Err(format!("file is not a Kairo backup (missing table '{table}')"));
+            return Err(format!(
+                "file is not a Kairo backup (missing table '{table}')"
+            ));
         }
     }
-    let migrations: i64 = sql_err(
-        conn.query_row("SELECT COUNT(*) FROM _migrations", [], |r| r.get(0)),
-    )?;
+    let migrations: i64 =
+        sql_err(conn.query_row("SELECT COUNT(*) FROM _migrations", [], |r| r.get(0)))?;
     if migrations == 0 || migrations as usize > MIGRATIONS.len() {
         return Err(format!(
             "backup has an incompatible migration count ({migrations})"
@@ -210,13 +224,10 @@ fn is_backup_name(name: &str) -> bool {
     };
     stamp.len() == 15
         && stamp.as_bytes()[8] == b'-'
-        && stamp.chars().enumerate().all(|(i, c)| {
-            if i == 8 {
-                true
-            } else {
-                c.is_ascii_digit()
-            }
-        })
+        && stamp
+            .chars()
+            .enumerate()
+            .all(|(i, c)| if i == 8 { true } else { c.is_ascii_digit() })
 }
 
 /// Keep only the newest `KEEP_BACKUPS` files (names sort chronologically).
@@ -228,7 +239,15 @@ fn prune_old_backups(dir: &Path) -> Result<(), String> {
         if old.file_name.contains(PRE_RESTORE_SUFFIX) {
             continue;
         }
-        let _ = std::fs::remove_file(&old.path);
+        if let Err(e) = std::fs::remove_file(&old.path) {
+            // Pruning is housekeeping — never fail the backup over it, but a
+            // backup dir that only grows is worth a warning.
+            crate::logging::log_event(
+                "warn",
+                "backup_prune_failed",
+                &[("file", old.file_name.clone()), ("error", e.to_string())],
+            );
+        }
     }
     Ok(())
 }
@@ -251,7 +270,8 @@ mod tests {
     }
 
     fn dir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("kairo-backup-test-{tag}-{}", std::process::id()));
+        let d =
+            std::env::temp_dir().join(format!("kairo-backup-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
     }
@@ -279,13 +299,15 @@ mod tests {
     #[test]
     fn restore_swaps_live_data_and_prunes_garbage() {
         let conn = db();
-        conn.execute("INSERT INTO projects (title) VALUES ('V1')", []).unwrap();
+        conn.execute("INSERT INTO projects (title) VALUES ('V1')", [])
+            .unwrap();
         let dir = dir("restore");
         let info = create_backup(&conn, &dir).unwrap();
 
         // Live data drifts after the backup.
         conn.execute("DELETE FROM projects", []).unwrap();
-        conn.execute("INSERT INTO projects (title) VALUES ('V2')", []).unwrap();
+        conn.execute("INSERT INTO projects (title) VALUES ('V2')", [])
+            .unwrap();
         assert_eq!(project_count(&conn), 1);
 
         let mut live = conn;
@@ -312,20 +334,26 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(&fake, b"this is definitely not sqlite").unwrap();
         let mut live = conn;
-        assert!(restore_backup(&mut live, &dir, fake.file_name().unwrap().to_str().unwrap()).is_err());
+        assert!(
+            restore_backup(&mut live, &dir, fake.file_name().unwrap().to_str().unwrap()).is_err()
+        );
         assert_eq!(project_count(&live), 1);
 
         // 2. A valid SQLite file that is not a Kairo database.
         let other = dir.join(format!("{NAME_PATTERN}20990101-000001.db"));
         let foreign = Connection::open(&other).unwrap();
-        foreign.execute("CREATE TABLE stuff (x INTEGER)", []).unwrap();
+        foreign
+            .execute("CREATE TABLE stuff (x INTEGER)", [])
+            .unwrap();
         let name = other.file_name().unwrap().to_str().unwrap().to_string();
         assert!(restore_backup(&mut live, &dir, &name).is_err());
         assert_eq!(project_count(&live), 1);
 
         // 3. Path traversal via the file name is rejected by the pattern.
         assert!(restore_backup(&mut live, &dir, "..\\secrets.db").is_err());
-        assert!(restore_backup(&mut live, &dir, "sub/dir/kairo-backup-20990101-000000.db").is_err());
+        assert!(
+            restore_backup(&mut live, &dir, "sub/dir/kairo-backup-20990101-000000.db").is_err()
+        );
     }
 
     #[test]
@@ -392,7 +420,10 @@ mod tests {
         prune_old_backups(&dir).unwrap();
         let remaining = list_backups(&dir).unwrap();
         assert_eq!(remaining.len(), KEEP_BACKUPS);
-        assert_eq!(remaining[0].file_name, format!("{NAME_PATTERN}20260913-{:06}.db", KEEP_BACKUPS + 2));
+        assert_eq!(
+            remaining[0].file_name,
+            format!("{NAME_PATTERN}20260913-{:06}.db", KEEP_BACKUPS + 2)
+        );
         assert!(dir.join("unrelated.db").is_file());
         let _ = std::fs::remove_dir_all(&dir);
     }

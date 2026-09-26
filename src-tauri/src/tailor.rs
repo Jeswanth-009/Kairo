@@ -105,7 +105,12 @@ pub fn parse_response(raw: &str) -> Result<RewriteOutput, String> {
     let value: serde_json::Value = extract_json_object(raw)?;
     let raw: Raw = serde_json::from_value(value).map_err(|e| format!("schema violation: {e}"))?;
 
-    if !raw.new_claims.as_array().map(|a| a.is_empty()).unwrap_or(false) {
+    if !raw
+        .new_claims
+        .as_array()
+        .map(|a| a.is_empty())
+        .unwrap_or(false)
+    {
         return Err("newClaims must be an empty array — new claims are forbidden".to_string());
     }
     let text = raw
@@ -157,10 +162,7 @@ fn contains_phrase(haystack: &str, phrase: &str) -> bool {
     }
 }
 
-pub fn validate(
-    ctx: &TailorContext,
-    output: &RewriteOutput,
-) -> ValidationResult {
+pub fn validate(ctx: &TailorContext, output: &RewriteOutput) -> ValidationResult {
     let mut violations: Vec<String> = Vec::new();
 
     // 1. Fact reference validation: every material claim maps to allowed facts.
@@ -186,7 +188,10 @@ pub fn validate(
     for skill in &ctx.skill_vocabulary {
         if contains_phrase(&output.text, skill)
             && !contains_phrase(&ctx.bullet_text, skill)
-            && !ctx.evidence_notes.iter().any(|note| contains_phrase(note, skill))
+            && !ctx
+                .evidence_notes
+                .iter()
+                .any(|note| contains_phrase(note, skill))
         {
             violations.push(format!("introduces a new technology ({skill})"));
         }
@@ -199,17 +204,9 @@ pub fn validate(
         }
     }
 
-    ValidationResult { ok: violations.is_empty(), violations }
-}
-
-/// Convenience: parse + validate in one step.
-pub fn check(raw: &str, ctx: &TailorContext) -> Result<RewriteOutput, String> {
-    let output = parse_response(raw)?;
-    let validation = validate(ctx, &output);
-    if validation.ok {
-        Ok(output)
-    } else {
-        Err(validation.violations.join("; "))
+    ValidationResult {
+        ok: violations.is_empty(),
+        violations,
     }
 }
 
@@ -283,14 +280,6 @@ pub fn build_batch_user_prompt(
         items.len()
     ));
     user
-}
-
-fn truncate_chars(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        return s.to_string();
-    }
-    let cut: String = s.chars().take(max).collect();
-    format!("{cut}…")
 }
 
 /// Shared defensive JSON extraction (code fences, <think> blocks, leading
@@ -373,7 +362,11 @@ pub fn parse_batch_response(
                     );
                 }
             }
-            _ => return Err(format!("rewrite for bulletId {bullet_id} needs a factsUsed array")),
+            _ => {
+                return Err(format!(
+                    "rewrite for bulletId {bullet_id} needs a factsUsed array"
+                ))
+            }
         }
         out.push(BatchRewriteItem {
             bullet_id,
@@ -458,7 +451,10 @@ mod tests {
     #[test]
     fn metric_diff_ignores_fuzzy_padding() {
         // numbers() strips leading zeros: "007" == "7"
-        let out = RewriteOutput { text: "worked 7 years".into(), facts_used: vec![1] };
+        let out = RewriteOutput {
+            text: "worked 7 years".into(),
+            facts_used: vec![1],
+        };
         let mut c = ctx();
         c.bullet_text = "worked 07 years".into();
         assert!(validate(&c, &out).ok);
@@ -474,7 +470,10 @@ mod tests {
 
     #[test]
     fn forbidden_scan_blocks_configured_patterns() {
-        let raw = raw_json("Built a production-scale distributed system in Python", "[1]");
+        let raw = raw_json(
+            "Built a production-scale distributed system in Python",
+            "[1]",
+        );
         let result = validate(&ctx(), &parse_response(&raw).unwrap());
         assert!(!result.ok);
         assert!(result.violations.iter().any(|v| v.contains("forbidden")));
@@ -485,7 +484,10 @@ mod tests {
         let raw = raw_json("Reworded bullet about Python", "[99]");
         let result = validate(&ctx(), &parse_response(&raw).unwrap());
         assert!(!result.ok);
-        assert!(result.violations.iter().any(|v| v.contains("unknown evidence")));
+        assert!(result
+            .violations
+            .iter()
+            .any(|v| v.contains("unknown evidence")));
     }
 
     #[test]
@@ -501,8 +503,8 @@ mod tests {
             "Built an in-memory key-value store in Python, WAL persistence and TTL eviction",
             "[1]",
         );
-        let out = check(&raw, &ctx()).unwrap();
-        assert!(!out.text.is_empty());
+        let out = validate(&ctx(), &parse_response(&raw).unwrap());
+        assert!(out.ok);
     }
 
     #[test]
@@ -556,7 +558,11 @@ mod tests {
 
     #[test]
     fn batch_prompt_covers_every_bullet() {
-        let prompt = build_batch_user_prompt("(role: Engineer at Acme; seniority: Senior)", &["rocket scientist".to_string()], &batch_items());
+        let prompt = build_batch_user_prompt(
+            "(role: Engineer at Acme; seniority: Senior)",
+            &["rocket scientist".to_string()],
+            &batch_items(),
+        );
         assert!(prompt.contains("bulletId 11"));
         assert!(prompt.contains("bulletId 12"));
         assert!(prompt.contains("rocket scientist"));

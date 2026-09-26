@@ -14,16 +14,6 @@ pub enum RequirementKind {
     Responsibility,
 }
 
-impl RequirementKind {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            RequirementKind::RequiredSkill => "required_skill",
-            RequirementKind::PreferredSkill => "preferred_skill",
-            RequirementKind::Responsibility => "responsibility",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RequirementDraft {
@@ -70,8 +60,8 @@ fn detect_section(line: &str) -> Option<Section> {
 
     // Any heading starting with "about " (unless "about the role", "about you", etc.)
     // is company overview copy and should be skipped.
-    if cleaned.starts_with("about ") {
-        let after = cleaned[6..].trim();
+    if let Some(head) = cleaned.strip_prefix("about ") {
+        let after = head.trim();
         if !after.starts_with("the role")
             && !after.starts_with("the job")
             && !after.starts_with("the position")
@@ -148,7 +138,10 @@ fn detect_section(line: &str) -> Option<Section> {
     }
 
     // Preferred / Nice to have
-    if cleaned.contains("preferred") || cleaned.contains("nice to have") || cleaned.contains("good to have") {
+    if cleaned.contains("preferred")
+        || cleaned.contains("nice to have")
+        || cleaned.contains("good to have")
+    {
         return Some(Section::Preferred);
     }
     const PREFERRED: &[&str] = &[
@@ -277,9 +270,37 @@ fn detect_seniority(text: &str) -> String {
 }
 
 const DOMAINS: &[(&str, &[&str])] = &[
-    ("Fintech", &["fintech", "payments", "banking", "trading", "lending", "insurance"]),
-    ("Healthcare", &["healthcare", "health care", "medical", "biotech", "clinical"]),
-    ("E-commerce", &["e-commerce", "ecommerce", "marketplace", "retail", "shopping"]),
+    (
+        "Fintech",
+        &[
+            "fintech",
+            "payments",
+            "banking",
+            "trading",
+            "lending",
+            "insurance",
+        ],
+    ),
+    (
+        "Healthcare",
+        &[
+            "healthcare",
+            "health care",
+            "medical",
+            "biotech",
+            "clinical",
+        ],
+    ),
+    (
+        "E-commerce",
+        &[
+            "e-commerce",
+            "ecommerce",
+            "marketplace",
+            "retail",
+            "shopping",
+        ],
+    ),
     (
         "AI/ML",
         &[
@@ -295,19 +316,48 @@ const DOMAINS: &[(&str, &[&str])] = &[
             "nlp",
         ],
     ),
-    ("Infrastructure", &["infrastructure", "devops", "cloud platform", "kubernetes", "site reliability"]),
-    ("Cybersecurity", &["cybersecurity", "cyber security", "application security", "threat"]),
-    ("Data", &["data platform", "analytics", "big data", "data engineering"]),
+    (
+        "Infrastructure",
+        &[
+            "infrastructure",
+            "devops",
+            "cloud platform",
+            "kubernetes",
+            "site reliability",
+        ],
+    ),
+    (
+        "Cybersecurity",
+        &[
+            "cybersecurity",
+            "cyber security",
+            "application security",
+            "threat",
+        ],
+    ),
+    (
+        "Data",
+        &["data platform", "analytics", "big data", "data engineering"],
+    ),
     (
         "Gaming",
-        &["gaming", "game development", "game studio", "interactive entertainment", "video games"],
+        &[
+            "gaming",
+            "game development",
+            "game studio",
+            "interactive entertainment",
+            "video games",
+        ],
     ),
 ];
 
 pub(crate) fn detect_domain(text: &str) -> String {
     let lower = format!(" {} ", text.to_lowercase());
     for (domain, terms) in DOMAINS {
-        if terms.iter().any(|t| lower.contains(&format!(" {t}")) || lower.contains(&format!("{t} "))) {
+        if terms
+            .iter()
+            .any(|t| lower.contains(&format!(" {t}")) || lower.contains(&format!("{t} ")))
+        {
             return domain.to_string();
         }
     }
@@ -400,7 +450,10 @@ fn split_title_line(line: &str) -> Option<(String, String)> {
     // 3 bytes wide, so `index + 1` would slice inside the character.
     if let Some((index, sep)) = line.match_indices(['—', '–', '|']).next() {
         let a = line[..index].trim();
-        let b = line[index + sep.len()..].trim().trim_start_matches('-').trim();
+        let b = line[index + sep.len()..]
+            .trim()
+            .trim_start_matches('-')
+            .trim();
         if !a.is_empty()
             && !b.is_empty()
             && a.len() <= 80
@@ -416,9 +469,22 @@ fn split_title_line(line: &str) -> Option<(String, String)> {
 
 fn looks_like_role(text: &str) -> bool {
     let lower = text.to_lowercase();
-    ["engineer", "developer", "designer", "manager", "intern", "scientist", "analyst", "architect", "lead", "consultant", "specialist", "director"]
-        .iter()
-        .any(|k| lower.contains(k))
+    [
+        "engineer",
+        "developer",
+        "designer",
+        "manager",
+        "intern",
+        "scientist",
+        "analyst",
+        "architect",
+        "lead",
+        "consultant",
+        "specialist",
+        "director",
+    ]
+    .iter()
+    .any(|k| lower.contains(k))
 }
 
 fn labeled_value(line: &str, labels: &[&str]) -> Option<String> {
@@ -449,7 +515,11 @@ const IMPORTANCE: [(RequirementKind, f64); 3] = [
 ];
 
 fn default_importance(kind: RequirementKind) -> f64 {
-    IMPORTANCE.iter().find(|(k, _)| *k == kind).map(|(_, v)| *v).unwrap_or(0.5)
+    IMPORTANCE
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map(|(_, v)| *v)
+        .unwrap_or(0.5)
 }
 
 fn split_at_marker(line: &str) -> Option<(String, String)> {
@@ -557,33 +627,32 @@ fn extract_company_from_text(lines: &[&str]) -> Option<String> {
         {
             continue;
         }
-        if looks_like_role(line)
-            && i + 1 < lines.len() {
-                let candidate = lines[i + 1].trim();
-                if !candidate.is_empty()
-                    && candidate.len() <= 60
-                    && !looks_like_role(candidate)
-                    && !is_employment_noise(candidate)
-                    && !is_ats_preamble_label(candidate)
-                    && !candidate.starts_with("http")
-                    && !candidate.ends_with(':')
-                    && detect_section(candidate).is_none()
-                {
-                    // If followed by location (line i + 2 has a comma, e.g. "Hyderabad, India")
-                    if i + 2 < lines.len() {
-                        let loc = lines[i + 2].trim().to_lowercase();
-                        if loc.contains(',')
-                            || loc.contains("remote")
-                            || loc.contains("hybrid")
-                            || loc.contains("india")
-                            || loc.contains("united states")
-                            || loc.contains("san francisco")
-                        {
-                            return Some(candidate.to_string());
-                        }
+        if looks_like_role(line) && i + 1 < lines.len() {
+            let candidate = lines[i + 1].trim();
+            if !candidate.is_empty()
+                && candidate.len() <= 60
+                && !looks_like_role(candidate)
+                && !is_employment_noise(candidate)
+                && !is_ats_preamble_label(candidate)
+                && !candidate.starts_with("http")
+                && !candidate.ends_with(':')
+                && detect_section(candidate).is_none()
+            {
+                // If followed by location (line i + 2 has a comma, e.g. "Hyderabad, India")
+                if i + 2 < lines.len() {
+                    let loc = lines[i + 2].trim().to_lowercase();
+                    if loc.contains(',')
+                        || loc.contains("remote")
+                        || loc.contains("hybrid")
+                        || loc.contains("india")
+                        || loc.contains("united states")
+                        || loc.contains("san francisco")
+                    {
+                        return Some(candidate.to_string());
                     }
                 }
             }
+        }
     }
 
     // 4. "<Company> is an equal opportunity employer"
@@ -591,7 +660,10 @@ fn extract_company_from_text(lines: &[&str]) -> Option<String> {
         let lower = line.to_lowercase();
         if let Some(idx) = lower.find(" is an equal opportunity employer") {
             let candidate = line[..idx].trim();
-            if !candidate.is_empty() && candidate.len() <= 60 && !candidate.to_lowercase().starts_with("the company") {
+            if !candidate.is_empty()
+                && candidate.len() <= 60
+                && !candidate.to_lowercase().starts_with("the company")
+            {
                 return Some(candidate.to_string());
             }
         }
@@ -611,7 +683,10 @@ fn extract_role_from_text(lines: &[&str]) -> Option<String> {
             continue;
         }
         let lower = trimmed.to_lowercase();
-        if lower.starts_with("role id") || lower.starts_with("job id") || lower.starts_with("position id") {
+        if lower.starts_with("role id")
+            || lower.starts_with("job id")
+            || lower.starts_with("position id")
+        {
             continue;
         }
         if let Some(v) = labeled_value(line, &["job title", "role", "position"]) {
@@ -636,8 +711,10 @@ fn extract_role_from_text(lines: &[&str]) -> Option<String> {
             }
         }
         if let Some((a, b)) = split_title_line(trimmed) {
-            let a_is_role = looks_like_role(&a) && !is_employment_noise(&a) && !is_ats_preamble_label(&a);
-            let b_is_role = looks_like_role(&b) && !is_employment_noise(&b) && !is_ats_preamble_label(&b);
+            let a_is_role =
+                looks_like_role(&a) && !is_employment_noise(&a) && !is_ats_preamble_label(&a);
+            let b_is_role =
+                looks_like_role(&b) && !is_employment_noise(&b) && !is_ats_preamble_label(&b);
             if a_is_role && !b_is_role {
                 return Some(a);
             } else if b_is_role && !a_is_role {
@@ -656,26 +733,34 @@ fn extract_role_from_text(lines: &[&str]) -> Option<String> {
             continue;
         }
         let lower = trimmed.to_lowercase();
-        if lower.starts_with("role id") || lower.starts_with("job id") || lower.starts_with("position id") {
+        if lower.starts_with("role id")
+            || lower.starts_with("job id")
+            || lower.starts_with("position id")
+        {
             continue;
         }
-        if trimmed.len() <= 80 && looks_like_role(trimmed)
+        if trimmed.len() <= 80
+            && looks_like_role(trimmed)
             && !lower.starts_with("you will")
-                && !lower.starts_with("we are")
-                && !lower.starts_with("as an")
-                && !lower.starts_with("about")
-                && !lower.ends_with(':')
-                && detect_section(trimmed).is_none()
-            {
-                return Some(trimmed.to_string());
-            }
+            && !lower.starts_with("we are")
+            && !lower.starts_with("as an")
+            && !lower.starts_with("about")
+            && !lower.ends_with(':')
+            && detect_section(trimmed).is_none()
+        {
+            return Some(trimmed.to_string());
+        }
     }
 
     None
 }
 
 pub fn parse_jd(text: &str) -> JobExtraction {
-    let raw_lines: Vec<&str> = text.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+    let raw_lines: Vec<&str> = text
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
 
     let role = extract_role_from_text(&raw_lines).unwrap_or_default();
     let company = extract_company_from_text(&raw_lines).unwrap_or_default();
@@ -749,13 +834,25 @@ pub fn parse_jd(text: &str) -> JobExtraction {
                     if token.is_empty() || is_boilerplate_requirement(token) {
                         continue;
                     }
-                    push_requirement(&mut requirements, &mut seen, kind, token, default_importance(kind));
+                    push_requirement(
+                        &mut requirements,
+                        &mut seen,
+                        kind,
+                        token,
+                        default_importance(kind),
+                    );
                 }
                 continue;
             }
         }
 
-        push_requirement(&mut requirements, &mut seen, kind, content, default_importance(kind));
+        push_requirement(
+            &mut requirements,
+            &mut seen,
+            kind,
+            content,
+            default_importance(kind),
+        );
     }
 
     if requirements.len() > 40 {
@@ -766,7 +863,11 @@ pub fn parse_jd(text: &str) -> JobExtraction {
         let context = format!(
             "{} {}",
             role,
-            requirements.iter().map(|r| r.raw_text.as_str()).collect::<Vec<_>>().join(" ")
+            requirements
+                .iter()
+                .map(|r| r.raw_text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ")
         );
         let from_context = detect_domain(&context);
         if !from_context.is_empty() {
@@ -813,7 +914,11 @@ fn push_requirement(
         return;
     }
     seen.push(key);
-    requirements.push(RequirementDraft { kind, raw_text: text.to_string(), importance });
+    requirements.push(RequirementDraft {
+        kind,
+        raw_text: text.to_string(),
+        importance,
+    });
 }
 
 #[cfg(test)]
@@ -863,7 +968,11 @@ mod tests {
             (RequirementKind::PreferredSkill, 2),
         ];
         for (kind, expected) in kinds {
-            let count = extraction.requirements.iter().filter(|r| r.kind == kind).count();
+            let count = extraction
+                .requirements
+                .iter()
+                .filter(|r| r.kind == kind)
+                .count();
             assert_eq!(count, expected, "wrong count for {kind:?}");
         }
 
@@ -876,7 +985,10 @@ mod tests {
         assert!((preferred.importance - 0.4).abs() < f64::EPSILON);
 
         // "How to apply" content must not leak into requirements.
-        assert!(!extraction.requirements.iter().any(|r| r.raw_text.to_lowercase().contains("resume")));
+        assert!(!extraction
+            .requirements
+            .iter()
+            .any(|r| r.raw_text.to_lowercase().contains("resume")));
     }
 
     #[test]
@@ -972,22 +1084,48 @@ Electronic Arts is an equal opportunity employer. All employment decisions are m
         assert_eq!(extraction.domain, "AI/ML");
 
         // 4 Responsibilities + 6 Required Skills = 10 clean requirements
-        let resp_count = extraction.requirements.iter().filter(|r| r.kind == RequirementKind::Responsibility).count();
-        let req_count = extraction.requirements.iter().filter(|r| r.kind == RequirementKind::RequiredSkill).count();
+        let resp_count = extraction
+            .requirements
+            .iter()
+            .filter(|r| r.kind == RequirementKind::Responsibility)
+            .count();
+        let req_count = extraction
+            .requirements
+            .iter()
+            .filter(|r| r.kind == RequirementKind::RequiredSkill)
+            .count();
 
         for r in &extraction.requirements {
             println!("EXTRACTED [{:?}]: {}", r.kind, r.raw_text);
         }
 
-        assert_eq!(resp_count, 4, "Expected 4 responsibilities, got {resp_count}");
+        assert_eq!(
+            resp_count, 4,
+            "Expected 4 responsibilities, got {resp_count}"
+        );
         assert_eq!(req_count, 6, "Expected 6 required skills, got {req_count}");
 
         // Boilerplate, benefits, and EEO must NOT leak into requirements
-        assert!(!extraction.requirements.iter().any(|r| r.raw_text.to_lowercase().contains("benefits")));
-        assert!(!extraction.requirements.iter().any(|r| r.raw_text.to_lowercase().contains("equal opportunity")));
-        assert!(!extraction.requirements.iter().any(|r| r.raw_text.to_lowercase().contains("criminal")));
-        assert!(!extraction.requirements.iter().any(|r| r.raw_text.to_lowercase().contains("healthcare")));
-        assert!(!extraction.requirements.iter().any(|r| r.raw_text.to_lowercase().contains("portfolio of games")));
+        assert!(!extraction
+            .requirements
+            .iter()
+            .any(|r| r.raw_text.to_lowercase().contains("benefits")));
+        assert!(!extraction
+            .requirements
+            .iter()
+            .any(|r| r.raw_text.to_lowercase().contains("equal opportunity")));
+        assert!(!extraction
+            .requirements
+            .iter()
+            .any(|r| r.raw_text.to_lowercase().contains("criminal")));
+        assert!(!extraction
+            .requirements
+            .iter()
+            .any(|r| r.raw_text.to_lowercase().contains("healthcare")));
+        assert!(!extraction
+            .requirements
+            .iter()
+            .any(|r| r.raw_text.to_lowercase().contains("portfolio of games")));
     }
 
     // --- Regression (v4): UTF-8 char-boundary panics ------------------------
@@ -996,14 +1134,16 @@ Electronic Arts is an equal opportunity employer. All employment decisions are m
     #[test]
     fn jd_parser_survives_unspaced_dashes() {
         // `split_title_line`'s fallback used to slice inside the 3-byte dash.
-        let text = "Requirements\nRust—Systems Engineer\n2024–2025 Program\n-Ownership of routing\n";
+        let text =
+            "Requirements\nRust—Systems Engineer\n2024–2025 Program\n-Ownership of routing\n";
         let extraction = parse_jd(text);
         assert!(!extraction.requirements.is_empty());
     }
 
     #[test]
     fn jd_parser_labeled_values_are_boundary_safe() {
-        let text = "Company: İstanbul Teknoloji\nRole Senior Systems Engineer\nRequirements\n- Rust\n";
+        let text =
+            "Company: İstanbul Teknoloji\nRole Senior Systems Engineer\nRequirements\n- Rust\n";
         let extraction = parse_jd(text);
         assert_eq!(extraction.company, "İstanbul Teknoloji");
     }
@@ -1023,4 +1163,3 @@ Electronic Arts is an equal opportunity employer. All employment decisions are m
         assert_eq!(split_at_marker("no marker"), None);
     }
 }
-

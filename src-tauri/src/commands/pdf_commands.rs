@@ -31,7 +31,9 @@ pub async fn export_pdf(
         let mut plan: crate::composer::ResumePlan = {
             let stored = crate::db::composer::get_plan(&conn, job_id)?;
             stored
-                .ok_or_else(|| "No plan for this workspace — compose one in the Plan tab first".to_string())?
+                .ok_or_else(|| {
+                    "No plan for this workspace — compose one in the Plan tab first".to_string()
+                })?
                 .plan
         };
         let _ = crate::db::tailor::apply_accepted_suggestions(&conn, job_id, &mut plan)?;
@@ -78,7 +80,10 @@ pub async fn export_pdf(
             ("duration_ms", started.elapsed().as_millis().to_string()),
         ],
     );
-    Ok(ExportResult { artifact: out.artifact, log_tail: out.log_tail })
+    Ok(ExportResult {
+        artifact: out.artifact,
+        log_tail: out.log_tail,
+    })
 }
 
 #[tauri::command]
@@ -126,7 +131,10 @@ pub fn open_file(path: String) -> Result<(), String> {
 /// Scoped to the app data dir — the webview must not become a general file
 /// read primitive.
 #[tauri::command]
-pub fn read_pdf_bytes(path: String, app_data_dir: State<'_, AppDataDir>) -> Result<Vec<u8>, String> {
+pub fn read_pdf_bytes(
+    path: String,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<Vec<u8>, String> {
     let p = std::path::Path::new(&path);
     if !p.exists() {
         return Err(format!("File does not exist: {}", path));
@@ -172,7 +180,10 @@ pub fn reveal_file(path: String) -> Result<(), String> {
 
 /// Save / copy a PDF to the user's standard Downloads folder.
 #[tauri::command]
-pub fn save_pdf_to_downloads(src_path: String, custom_name: Option<String>) -> Result<String, String> {
+pub fn save_pdf_to_downloads(
+    src_path: String,
+    custom_name: Option<String>,
+) -> Result<String, String> {
     let src = std::path::Path::new(&src_path);
     if !src.exists() {
         return Err("Source file does not exist".to_string());
@@ -189,7 +200,12 @@ pub fn save_pdf_to_downloads(src_path: String, custom_name: Option<String>) -> R
         .unwrap_or_else(|_| std::path::PathBuf::from("."));
 
     if !downloads.exists() {
-        let _ = std::fs::create_dir_all(&downloads);
+        std::fs::create_dir_all(&downloads).map_err(|e| {
+            format!(
+                "cannot create Downloads folder ({}): {e}",
+                downloads.display()
+            )
+        })?;
     }
 
     let file_name = custom_name.unwrap_or_else(|| {

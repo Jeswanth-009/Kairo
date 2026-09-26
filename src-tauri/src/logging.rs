@@ -14,21 +14,30 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const ROTATE_BYTES: u64 = 1024 * 1024;
 
 static LOG_STATE: Mutex<Option<PathBuf>> = Mutex::new(None);
+static WRITE_FAILURE_WARNED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// Point the logger at `log_dir/kairo.log` and rotate an oversized file.
 pub fn init(log_dir: &PathBuf) -> Result<(), String> {
     fs::create_dir_all(log_dir).map_err(|e| format!("cannot create log dir: {e}"))?;
     let path = log_dir.join("kairo.log");
+    let mut rotation_error: Option<String> = None;
     if let Ok(meta) = fs::metadata(&path) {
         if meta.len() >= ROTATE_BYTES {
             let rotated = log_dir.join("kairo.log.1");
-            let _ = fs::remove_file(&rotated);
-            let _ = fs::rename(&path, &rotated);
+            if let Err(e) = fs::rename(&path, &rotated) {
+                rotation_error = Some(format!("log rotation failed ({}): {e}", rotated.display()));
+            }
         }
     }
     *LOG_STATE
         .lock()
         .map_err(|_| "log state poisoned".to_string())? = Some(path);
+    // Surface rotation failure through the log itself — appending to an
+    // unrotated file is degraded, not fatal.
+    if let Some(error) = rotation_error {
+        log_event("warn", "log_rotation_failed", &[("error", error)]);
+    }
     Ok(())
 }
 
@@ -52,8 +61,22 @@ pub fn log_event(level: &str, event: &str, fields: &[(&str, String)]) {
     }
 
     let line = Value::Object(record).to_string();
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(file, "{line}");
+    match OpenOptions::new().create(true).append(true).open(path) {
+        Ok(mut file) => {
+            if let Err(e) = writeln!(file, "{line}") {
+                warn_write_failure_once(&e);
+            }
+        }
+        Err(e) => warn_write_failure_once(&e),
+    }
+}
+
+/// Logging stays best-effort — a failed write never breaks the caller — but it
+/// is not silent: warn on stderr once per session so a broken log location is
+/// visible in dev consoles.
+fn warn_write_failure_once(error: &std::io::Error) {
+    if !WRITE_FAILURE_WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        eprintln!("[kairo] log write failed, log events are being dropped: {error}");
     }
 }
 
@@ -94,7 +117,14 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("kairo-log-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         init(&dir).unwrap();
-        log_event("info", "test_event", &[("job_id", "7".into()), ("api_key", "sk-super-secret".into())]);
+        log_event(
+            "info",
+            "test_event",
+            &[
+                ("job_id", "7".into()),
+                ("api_key", "sk-super-secret".into()),
+            ],
+        );
         log_event("error", "test_failure", &[("error", "boom".into())]);
 
         let text = fs::read_to_string(dir.join("kairo.log")).unwrap();
@@ -107,12 +137,19 @@ mod tests {
         assert!(lines[1].contains("\"level\":\"error\""));
 
         // Force rotation: seed a full log, re-init, write, assert the rollover.
-        fs::write(dir.join("kairo.log"), "x".repeat((ROTATE_BYTES + 1) as usize)).unwrap();
+        fs::write(
+            dir.join("kairo.log"),
+            "x".repeat((ROTATE_BYTES + 1) as usize),
+        )
+        .unwrap();
         init(&dir).unwrap();
         log_event("info", "after_rotation", &[]);
         let current = fs::read_to_string(dir.join("kairo.log")).unwrap();
         assert!(current.contains("after_rotation"));
-        assert_eq!(fs::read_to_string(dir.join("kairo.log.1")).unwrap().len() as u64, ROTATE_BYTES + 1);
+        assert_eq!(
+            fs::read_to_string(dir.join("kairo.log.1")).unwrap().len() as u64,
+            ROTATE_BYTES + 1
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -109,8 +109,14 @@ mod tests {
 
     #[test]
     fn strip_ci_prefix_folds_case_and_keeps_boundaries() {
-        assert_eq!(strip_ci_prefix("Location: Berlin", "location"), Some(": Berlin"));
-        assert_eq!(strip_ci_prefix("LOCATION Berlin", "location"), Some(" Berlin"));
+        assert_eq!(
+            strip_ci_prefix("Location: Berlin", "location"),
+            Some(": Berlin")
+        );
+        assert_eq!(
+            strip_ci_prefix("LOCATION Berlin", "location"),
+            Some(" Berlin")
+        );
         assert_eq!(strip_ci_prefix("relocate now", "location"), None);
         // ASCII folding only: `İ` is not `i`, so this never matches.
         assert_eq!(strip_ci_prefix("İstanbul", "i"), None);
@@ -121,7 +127,10 @@ mod tests {
         let line = "İssued by ACME";
         assert_eq!(strip_ci_prefix(line, "issued by"), None);
         // Non-ASCII characters pass through unchanged and still match exactly.
-        assert_eq!(strip_ci_prefix("École Polytechnique", "École"), Some(" Polytechnique"));
+        assert_eq!(
+            strip_ci_prefix("École Polytechnique", "École"),
+            Some(" Polytechnique")
+        );
     }
 
     #[test]

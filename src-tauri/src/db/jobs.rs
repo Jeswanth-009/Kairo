@@ -2,7 +2,6 @@
 //! engine; requirements get their own scoped repository. The raw JD is stored
 //! verbatim and never modified after creation.
 
-use crate::jd::RequirementKind;
 use rusqlite::types::Value;
 use rusqlite::{params, params_from_iter, Connection, Row};
 use serde::{Deserialize, Serialize};
@@ -32,8 +31,14 @@ impl VaultEntity for Job {
     const TABLE: &'static str = "jobs";
     const ORDER_BY: &'static str = "id DESC";
     const SEARCH_COLS: &'static [&'static str] = &["company", "role_title"];
-    const INSERT_COLS: &'static [&'static str] =
-        &["company", "role_title", "url", "raw_jd", "seniority", "domain"];
+    const INSERT_COLS: &'static [&'static str] = &[
+        "company",
+        "role_title",
+        "url",
+        "raw_jd",
+        "seniority",
+        "domain",
+    ];
 
     fn id(&self) -> i64 {
         self.id
@@ -65,7 +70,9 @@ impl VaultEntity for Job {
 
     fn validate(&self) -> Result<(), String> {
         if self.raw_jd.trim().len() < 30 {
-            return Err("The job description text looks too short — paste the full posting".to_string());
+            return Err(
+                "The job description text looks too short — paste the full posting".to_string(),
+            );
         }
         if !self.url.trim().is_empty()
             && !self.url.starts_with("http://")
@@ -95,7 +102,10 @@ fn requirement_count_map(
         return Ok(map);
     }
     // ?1..?n only; no extra prefix parameter here.
-    let placeholders = (1..=ids.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ");
+    let placeholders = (1..=ids.len())
+        .map(|i| format!("?{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
     let sql = format!(
         "SELECT job_id, COUNT(*) FROM job_requirements WHERE job_id IN ({placeholders}) GROUP BY job_id"
     );
@@ -148,7 +158,10 @@ pub struct JobWithRequirements {
 }
 
 fn valid_kind(kind: &str) -> Result<(), String> {
-    if matches!(kind, "required_skill" | "preferred_skill" | "responsibility") {
+    if matches!(
+        kind,
+        "required_skill" | "preferred_skill" | "responsibility"
+    ) {
         Ok(())
     } else {
         Err(format!("Unknown requirement kind '{kind}'"))
@@ -204,8 +217,10 @@ pub fn create_job_with_requirements(
         validate_requirement(req)?;
     }
     let cols = Job::INSERT_COLS.join(", ");
-    let placeholders =
-        (1..=Job::INSERT_COLS.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ");
+    let placeholders = (1..=Job::INSERT_COLS.len())
+        .map(|i| format!("?{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
     let sql = format!("INSERT INTO jobs ({cols}) VALUES ({placeholders})");
     let values: Vec<Value> = job.values().iter().map(|v| v.to_value()).collect();
 
@@ -250,7 +265,10 @@ pub fn update_job(conn: &Connection, job: &Job) -> Result<Job, String> {
     Ok(rows.remove(0))
 }
 
-pub fn update_requirement(conn: &Connection, req: &JobRequirement) -> Result<JobRequirement, String> {
+pub fn update_requirement(
+    conn: &Connection,
+    req: &JobRequirement,
+) -> Result<JobRequirement, String> {
     validate_requirement(req)?;
     let sql = "UPDATE job_requirements SET kind = ?1, raw_text = ?2, normalized_key = ?3, \
                importance = ?4, user_confirmed = ?5, updated_at = datetime('now') WHERE id = ?6";
@@ -296,18 +314,6 @@ pub fn delete_job(conn: &Connection, id: i64) -> Result<(), String> {
     Ok(())
 }
 
-// Kind helper used by commands to translate serde enum input to plain strings.
-impl RequirementKind {
-    pub fn from_str_value(kind: &str) -> Result<RequirementKind, String> {
-        match kind {
-            "required_skill" => Ok(RequirementKind::RequiredSkill),
-            "preferred_skill" => Ok(RequirementKind::PreferredSkill),
-            "responsibility" => Ok(RequirementKind::Responsibility),
-            other => Err(format!("Unknown requirement kind '{other}'")),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -326,7 +332,8 @@ mod tests {
             company: "NimbusPay".to_string(),
             role_title: "Senior Backend Engineer".to_string(),
             url: String::new(),
-            raw_jd: "A sufficiently long job description body goes here for validation.".to_string(),
+            raw_jd: "A sufficiently long job description body goes here for validation."
+                .to_string(),
             seniority: "Senior".to_string(),
             domain: "Fintech".to_string(),
             requirement_count: 0,
@@ -399,14 +406,22 @@ mod tests {
         let extraction = parse_jd(crate::jd::SAMPLE_JD);
         assert!(!extraction.requirements.is_empty());
 
-        let job = Job { company: extraction.company.clone(), role_title: extraction.role.clone(), ..job_fixture() };
+        let job = Job {
+            company: extraction.company.clone(),
+            role_title: extraction.role.clone(),
+            ..job_fixture()
+        };
         let requirements: Vec<JobRequirement> = extraction
             .requirements
             .iter()
             .map(|d| JobRequirement {
                 id: 0,
                 job_id: 0,
-                kind: d.kind.as_str().to_string(),
+                kind: serde_json::to_value(d.kind)
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
                 raw_text: d.raw_text.clone(),
                 normalized_key: d.raw_text.to_lowercase(),
                 importance: d.importance,
@@ -416,6 +431,5 @@ mod tests {
         let created = create_job_with_requirements(&conn, &job, &requirements).unwrap();
         assert_eq!(created.requirements.len(), extraction.requirements.len());
         assert!(created.requirements.iter().all(|r| r.user_confirmed));
-        let _ = RequirementKind::RequiredSkill;
     }
 }

@@ -2,9 +2,7 @@
 //! real LaTeX renderer and compiles it with the real Tectonic binary. Skips
 //! automatically when Tectonic isn't installed on the machine.
 
-use kairo_lib::composer::{
-    ComposerConfig, PlanBullet, PlanItem, ResumePlan,
-};
+use kairo_lib::composer::{ComposerConfig, PlanBullet, PlanItem, ResumePlan};
 
 fn sample_plan() -> ResumePlan {
     ResumePlan {
@@ -92,7 +90,11 @@ fn compile_locked_produces_valid_pdf() {
     // Compile with the machine's tectonic if present, else skip.
     let tectonic = dirs_next().unwrap_or_else(std::env::temp_dir);
     let exe = tectonic.join("tectonic.exe");
-    let candidate = if exe.exists() { exe } else { tectonic.join("tectonic") };
+    let candidate = if exe.exists() {
+        exe
+    } else {
+        tectonic.join("tectonic")
+    };
     if !candidate.exists() {
         eprintln!("tectonic not installed — skipping compile assertion");
         return;
@@ -101,7 +103,14 @@ fn compile_locked_produces_valid_pdf() {
     let out_dir = std::env::temp_dir().join(format!("kairo-pdf-test-{}", std::process::id()));
     std::fs::create_dir_all(&out_dir).unwrap();
 
-    let output = kairo_lib::db::pdf::compile_locked(plan, 999, "jake", &candidate, &out_dir.parent().unwrap().join("kairo-pdf-root")).unwrap_or_else(|e| {
+    let output = kairo_lib::db::pdf::compile_locked(
+        plan,
+        999,
+        "jake",
+        &candidate,
+        &out_dir.parent().unwrap().join("kairo-pdf-root"),
+    )
+    .unwrap_or_else(|e| {
         if e.contains("bundle") || e.contains("network") {
             eprintln!("skipping: bundle not reachable: {e}");
             return kairo_lib::db::pdf::CompileOutput {

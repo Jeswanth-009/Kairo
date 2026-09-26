@@ -87,7 +87,10 @@ fn hydrate(row: &rusqlite::Row) -> rusqlite::Result<ResumeVersion> {
                 excluded_skills: vec![],
                 estimated_lines: 0,
                 fits_one_page: false,
-                warnings: vec!["This version's snapshot could not be read (corrupt row) — metadata is intact.".to_string()],
+                warnings: vec![
+                    "This version's snapshot could not be read (corrupt row) — metadata is intact."
+                        .to_string(),
+                ],
             },
             accepted_tailorings: vec![],
             matching_version: 0,
@@ -96,23 +99,37 @@ fn hydrate(row: &rusqlite::Row) -> rusqlite::Result<ResumeVersion> {
             pdf_path: pdf_path.clone(),
         }
     });
-    Ok(ResumeVersion { id, job_id, version_number, created_at, pdf_path, snapshot })
+    Ok(ResumeVersion {
+        id,
+        job_id,
+        version_number,
+        created_at,
+        pdf_path,
+        snapshot,
+    })
 }
 
 /// Creates the next immutable version for a job: snapshots every input and
 /// copies the current PDF into a version-owned directory.
-pub fn create_version(conn: &Connection, job_id: i64, app_data_dir: &std::path::Path) -> Result<ResumeVersion, String> {
+pub fn create_version(
+    conn: &Connection,
+    job_id: i64,
+    app_data_dir: &std::path::Path,
+) -> Result<ResumeVersion, String> {
     // 1. Gather the current state (all reads before any writes).
     let job = super::jobs::get_job_enriched(conn, job_id)?;
     let requirements = super::jobs::list_requirements(conn, job_id)?;
     let match_report = super::matching::get_report(conn, job_id)?;
-    let stored_plan = super::composer::get_plan(conn, job_id)?
-        .ok_or_else(|| "No plan for this workspace — compose one before saving a version".to_string())?;
+    let stored_plan = super::composer::get_plan(conn, job_id)?.ok_or_else(|| {
+        "No plan for this workspace — compose one before saving a version".to_string()
+    })?;
     let artifact = get_current_artifact(conn, job_id)?
         .ok_or_else(|| "No compiled PDF for this workspace — export the PDF first".to_string())?;
     let all_tailorings = list_tailorings(conn, job_id)?;
-    let accepted_tailorings: Vec<super::tailor::TailorSuggestion> =
-        all_tailorings.into_iter().filter(|s| s.status == "accepted").collect();
+    let accepted_tailorings: Vec<super::tailor::TailorSuggestion> = all_tailorings
+        .into_iter()
+        .filter(|s| s.status == "accepted")
+        .collect();
 
     // 2. Numbering: next per-job version.
     let next: u32 = sql_err(conn.query_row(
@@ -127,7 +144,8 @@ pub fn create_version(conn: &Connection, job_id: i64, app_data_dir: &std::path::
         .join(format!("job_{job_id}"))
         .join("versions")
         .join(format!("v{next}"));
-    std::fs::create_dir_all(&version_dir).map_err(|e| format!("could not create version dir: {e}"))?;
+    std::fs::create_dir_all(&version_dir)
+        .map_err(|e| format!("could not create version dir: {e}"))?;
     let version_pdf = version_dir.join("resume.pdf");
     std::fs::copy(&artifact.pdf_path, &version_pdf).map_err(|e| {
         format!(
@@ -144,7 +162,10 @@ pub fn create_version(conn: &Connection, job_id: i64, app_data_dir: &std::path::
         match_report: match_report.clone(),
         plan: stored_plan.plan.clone(),
         accepted_tailorings: accepted_tailorings.clone(),
-        matching_version: match_report.as_ref().map(|r| r.matching_version).unwrap_or(0),
+        matching_version: match_report
+            .as_ref()
+            .map(|r| r.matching_version)
+            .unwrap_or(0),
         composer_version: stored_plan.plan.composer_version,
         template_version: TEMPLATE_VERSION,
         pdf_path: version_pdf.display().to_string(),
@@ -154,7 +175,12 @@ pub fn create_version(conn: &Connection, job_id: i64, app_data_dir: &std::path::
     sql_err(conn.execute(
         "INSERT INTO resume_versions (job_id, version_number, snapshot_json, pdf_path) \
          VALUES (?1, ?2, ?3, ?4)",
-        params![job_id, next as i64, snapshot_json, version_pdf.display().to_string()],
+        params![
+            job_id,
+            next as i64,
+            snapshot_json,
+            version_pdf.display().to_string()
+        ],
     ))?;
     let id = conn.last_insert_rowid();
 
@@ -166,9 +192,10 @@ pub fn create_version(conn: &Connection, job_id: i64, app_data_dir: &std::path::
 }
 
 fn get_current_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfRef>, String> {
-    let mut stmt = sql_err(conn.prepare(
-        "SELECT pdf_path FROM resume_plans WHERE job_id = ?1 AND pdf_path IS NOT NULL",
-    ))?;
+    let mut stmt =
+        sql_err(conn.prepare(
+            "SELECT pdf_path FROM resume_plans WHERE job_id = ?1 AND pdf_path IS NOT NULL",
+        ))?;
     match stmt.query_row([job_id], |row| row.get::<_, String>(0)) {
         Ok(p) => Ok(Some(PdfRef { pdf_path: p })),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -180,7 +207,10 @@ struct PdfRef {
     pdf_path: String,
 }
 
-fn list_tailorings(conn: &Connection, job_id: i64) -> Result<Vec<super::tailor::TailorSuggestion>, String> {
+fn list_tailorings(
+    conn: &Connection,
+    job_id: i64,
+) -> Result<Vec<super::tailor::TailorSuggestion>, String> {
     super::tailor::list_suggestions(conn, job_id)
 }
 

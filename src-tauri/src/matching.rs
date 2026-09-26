@@ -154,11 +154,59 @@ pub struct MatchReport {
 // ---------------------------------------------------------------------------
 
 const STOPWORDS: &[&str] = &[
-    "a", "an", "the", "and", "or", "of", "with", "for", "to", "in", "on", "at", "by", "from",
-    "as", "is", "are", "be", "been", "was", "were", "you", "your", "we", "our", "their", "will",
-    "shall", "must", "have", "has", "had", "do", "does", "using", "use", "used", "strong",
-    "good", "great", "excellent", "plus", "years", "year", "experience", "ability", "able",
-    "work", "working", "knowledge", "familiarity", "including", "such",
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "of",
+    "with",
+    "for",
+    "to",
+    "in",
+    "on",
+    "at",
+    "by",
+    "from",
+    "as",
+    "is",
+    "are",
+    "be",
+    "been",
+    "was",
+    "were",
+    "you",
+    "your",
+    "we",
+    "our",
+    "their",
+    "will",
+    "shall",
+    "must",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "using",
+    "use",
+    "used",
+    "strong",
+    "good",
+    "great",
+    "excellent",
+    "plus",
+    "years",
+    "year",
+    "experience",
+    "ability",
+    "able",
+    "work",
+    "working",
+    "knowledge",
+    "familiarity",
+    "including",
+    "such",
 ];
 
 fn stem(token: &str) -> String {
@@ -220,7 +268,6 @@ const COVERED_CONFIDENCE: i64 = 3;
 
 struct SkillVerdict {
     coverage: Coverage,
-    best_confidence: Option<i64>,
     supporting: Vec<usize>, // indices into input.entities
 }
 
@@ -238,11 +285,16 @@ fn skill_verdict(skill_id: i64, entities: &[MatchEntity]) -> SkillVerdict {
     match best {
         Some(confidence) if confidence >= COVERED_CONFIDENCE => SkillVerdict {
             coverage: Coverage::Covered,
-            best_confidence: best,
             supporting,
         },
-        Some(_) => SkillVerdict { coverage: Coverage::Partial, best_confidence: best, supporting },
-        None => SkillVerdict { coverage: Coverage::Partial, best_confidence: None, supporting },
+        Some(_) => SkillVerdict {
+            coverage: Coverage::Partial,
+            supporting,
+        },
+        None => SkillVerdict {
+            coverage: Coverage::Partial,
+            supporting,
+        },
     }
 }
 
@@ -310,24 +362,55 @@ fn collective_overlap(req_tokens: &[String], entities: &[MatchEntity]) -> (f64, 
 fn is_education_requirement(text: &str) -> bool {
     let lower = text.to_lowercase();
     let edu_terms = [
-        "degree", "bachelor", "bachelors", "b.tech", "btech", "b.e", "bs in", "bsc in",
-        "master", "masters", "m.tech", "msc", "phd", "doctorate", "diploma",
-        "undergraduate", "graduate", "pursuing", "enrolled in", "major in",
+        "degree",
+        "bachelor",
+        "bachelors",
+        "b.tech",
+        "btech",
+        "b.e",
+        "bs in",
+        "bsc in",
+        "master",
+        "masters",
+        "m.tech",
+        "msc",
+        "phd",
+        "doctorate",
+        "diploma",
+        "undergraduate",
+        "graduate",
+        "pursuing",
+        "enrolled in",
+        "major in",
     ];
     let field_terms = [
-        "computer science", "information technology", "engineering", "related field",
-        "software engineering", "data science",
+        "computer science",
+        "information technology",
+        "engineering",
+        "related field",
+        "software engineering",
+        "data science",
     ];
     let has_edu = edu_terms.iter().any(|&t| lower.contains(t));
     let has_field = field_terms.iter().any(|&f| lower.contains(f));
-    has_edu && (has_field || lower.contains("degree") || lower.contains("bachelor") || lower.contains("pursuing"))
+    has_edu
+        && (has_field
+            || lower.contains("degree")
+            || lower.contains("bachelor")
+            || lower.contains("pursuing"))
 }
 
-fn match_education(req_text: &str, entities: &[MatchEntity]) -> Option<(Coverage, String, Vec<EntityRef>)> {
+fn match_education(
+    req_text: &str,
+    entities: &[MatchEntity],
+) -> Option<(Coverage, String, Vec<EntityRef>)> {
     if !is_education_requirement(req_text) {
         return None;
     }
-    let edu_entities: Vec<&MatchEntity> = entities.iter().filter(|e| e.entity_type == "education").collect();
+    let edu_entities: Vec<&MatchEntity> = entities
+        .iter()
+        .filter(|e| e.entity_type == "education")
+        .collect();
     if edu_entities.is_empty() {
         return Some((
             Coverage::Missing,
@@ -336,24 +419,46 @@ fn match_education(req_text: &str, entities: &[MatchEntity]) -> Option<(Coverage
         ));
     }
     let lower_req = req_text.to_lowercase();
-    let wants_bachelor = lower_req.contains("bachelor") || lower_req.contains("b.tech") || lower_req.contains("undergraduate") || lower_req.contains("bs");
-    let wants_master = lower_req.contains("master") || lower_req.contains("m.tech") || lower_req.contains("ms in") || lower_req.contains("graduate");
+    let wants_bachelor = lower_req.contains("bachelor")
+        || lower_req.contains("b.tech")
+        || lower_req.contains("undergraduate")
+        || lower_req.contains("bs");
+    let wants_master = lower_req.contains("master")
+        || lower_req.contains("m.tech")
+        || lower_req.contains("ms in")
+        || lower_req.contains("graduate");
     let wants_phd = lower_req.contains("phd") || lower_req.contains("doctorate");
 
     for edu in &edu_entities {
         let text = format!("{} {}", edu.title, edu.description).to_lowercase();
         let degree_ok = if wants_bachelor {
-            text.contains("bachelor") || text.contains("b.tech") || text.contains("btech") || text.contains("b.e") || text.contains("bs") || text.contains("b.s") || text.contains("undergraduate")
+            text.contains("bachelor")
+                || text.contains("b.tech")
+                || text.contains("btech")
+                || text.contains("b.e")
+                || text.contains("bs")
+                || text.contains("b.s")
+                || text.contains("undergraduate")
         } else if wants_master {
-            text.contains("master") || text.contains("m.tech") || text.contains("ms") || text.contains("graduate")
+            text.contains("master")
+                || text.contains("m.tech")
+                || text.contains("ms")
+                || text.contains("graduate")
         } else if wants_phd {
             text.contains("phd") || text.contains("doctorate")
         } else {
             true
         };
 
-        let field_ok = if lower_req.contains("computer science") || lower_req.contains("information technology") || lower_req.contains("related field") || lower_req.contains("engineering") {
-            text.contains("computer") || text.contains("engineering") || text.contains("technology") || text.contains("science")
+        let field_ok = if lower_req.contains("computer science")
+            || lower_req.contains("information technology")
+            || lower_req.contains("related field")
+            || lower_req.contains("engineering")
+        {
+            text.contains("computer")
+                || text.contains("engineering")
+                || text.contains("technology")
+                || text.contains("science")
         } else {
             true
         };
@@ -367,7 +472,10 @@ fn match_education(req_text: &str, entities: &[MatchEntity]) -> Option<(Coverage
             };
             return Some((
                 Coverage::Covered,
-                format!("Degree requirement satisfied by {}: {}.", edu.title, edu.description),
+                format!(
+                    "Degree requirement satisfied by {}: {}.",
+                    edu.title, edu.description
+                ),
                 vec![entity_ref],
             ));
         }
@@ -382,7 +490,10 @@ fn match_education(req_text: &str, entities: &[MatchEntity]) -> Option<(Coverage
     };
     Some((
         Coverage::Partial,
-        format!("Partial match with Vault education: {} ({}).", best.title, best.description),
+        format!(
+            "Partial match with Vault education: {} ({}).",
+            best.title, best.description
+        ),
         vec![entity_ref],
     ))
 }
@@ -390,10 +501,24 @@ fn match_education(req_text: &str, entities: &[MatchEntity]) -> Option<(Coverage
 fn is_soft_skill_requirement(text: &str) -> bool {
     let lower = text.to_lowercase();
     let terms = [
-        "curiosity", "curious", "passion", "eager to learn", "willingness to learn",
-        "quick learner", "fast learner", "team player", "collaborative", "collaboration",
-        "communication skills", "interpersonal", "self-motivated", "problem-solving attitude",
-        "adaptability", "enthusiasm", "attention to detail", "ability to work independently",
+        "curiosity",
+        "curious",
+        "passion",
+        "eager to learn",
+        "willingness to learn",
+        "quick learner",
+        "fast learner",
+        "team player",
+        "collaborative",
+        "collaboration",
+        "communication skills",
+        "interpersonal",
+        "self-motivated",
+        "problem-solving attitude",
+        "adaptability",
+        "enthusiasm",
+        "attention to detail",
+        "ability to work independently",
     ];
     terms.iter().any(|&t| lower.contains(t))
 }
@@ -460,7 +585,9 @@ fn latest_date(entity: &MatchEntity) -> Option<String> {
 
 /// 1.0 for evidence within ~1 year, decaying to 0.25 at 5+ years.
 fn recency_score(entity: &MatchEntity, now: &str) -> f64 {
-    let Some(date) = latest_date(entity) else { return 0.5 };
+    let Some(date) = latest_date(entity) else {
+        return 0.5;
+    };
     let parse = |s: &str| -> Option<i64> {
         let mut parts = s.split('-');
         let year: i64 = parts.next()?.parse().ok()?;
@@ -494,7 +621,11 @@ fn entity_recency(entities: &[MatchEntity], now: &str) -> f64 {
             }
         }
     }
-    if any { best } else { 0.5 }
+    if any {
+        best
+    } else {
+        0.5
+    }
 }
 
 fn evidence_strength_score(supporting: &[usize], entities: &[MatchEntity]) -> f64 {
@@ -562,10 +693,12 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
 
                 if union_ratio >= RESPONSIBILITY_COVERED {
                     coverage = Coverage::Covered;
-                } else if union_ratio >= RESPONSIBILITY_PARTIAL || scored.first().is_some_and(|(_, r)| *r >= RESPONSIBILITY_PARTIAL) {
+                } else if union_ratio >= RESPONSIBILITY_PARTIAL
+                    || scored
+                        .first()
+                        .is_some_and(|(_, r)| *r >= RESPONSIBILITY_PARTIAL)
+                {
                     coverage = Coverage::Partial;
-                } else if !scored.is_empty() {
-                    coverage = Coverage::Missing;
                 } else {
                     coverage = Coverage::Missing;
                 }
@@ -580,7 +713,10 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                             entity_type: entity.entity_type.clone(),
                             id: entity.id,
                             title: entity.title.clone(),
-                            contribution: format!("overlapping work ({:.0}% of the requirement)", ratio * 100.0),
+                            contribution: format!(
+                                "overlapping work ({:.0}% of the requirement)",
+                                ratio * 100.0
+                            ),
                         });
                         let kind_weight = 0.8;
                         relevance[index] += coverage_value(coverage) * req.importance * kind_weight;
@@ -594,24 +730,39 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                         }
                     }
                     explanation = if union_ratio >= RESPONSIBILITY_COVERED {
-                        format!("Covered by combined Vault evidence: {:.0}% wording overlap across {}.", union_ratio * 100.0, matched_titles.join(", "))
+                        format!(
+                            "Covered by combined Vault evidence: {:.0}% wording overlap across {}.",
+                            union_ratio * 100.0,
+                            matched_titles.join(", ")
+                        )
                     } else if union_ratio >= RESPONSIBILITY_PARTIAL {
                         format!("Closest Vault evidence overlaps {:.0}% of this responsibility's wording.", union_ratio * 100.0)
                     } else {
                         format!("Closest Vault evidence overlaps only {:.0}% of this responsibility's wording.", union_ratio * 100.0)
                     };
                 } else {
-                    explanation = "No project or experience text overlaps this responsibility.".to_string();
+                    explanation =
+                        "No project or experience text overlaps this responsibility.".to_string();
                 }
             }
-        } else if let Some((edu_cov, edu_expl, edu_refs)) = match_education(&req.raw_text, &input.entities) {
+        } else if let Some((edu_cov, edu_expl, edu_refs)) =
+            match_education(&req.raw_text, &input.entities)
+        {
             coverage = edu_cov;
             explanation = edu_expl;
             for r in &edu_refs {
                 entity_refs.push(r.clone());
-                if let Some(pos) = input.entities.iter().position(|e| e.id == r.id && e.entity_type == r.entity_type) {
+                if let Some(pos) = input
+                    .entities
+                    .iter()
+                    .position(|e| e.id == r.id && e.entity_type == r.entity_type)
+                {
                     relevance[pos] += coverage_value(coverage) * req.importance * 1.0;
-                    reasons[pos].push(format!("satisfies “{}” ({})", truncate(&req.raw_text, 40), coverage.as_str()));
+                    reasons[pos].push(format!(
+                        "satisfies “{}” ({})",
+                        truncate(&req.raw_text, 40),
+                        coverage.as_str()
+                    ));
                     if !supporting.contains(&pos) {
                         supporting.push(pos);
                     }
@@ -619,7 +770,11 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
             }
         } else if is_soft_skill_requirement(&req.raw_text) {
             let has_evidence = !input.entities.is_empty();
-            coverage = if has_evidence { Coverage::Covered } else { Coverage::Partial };
+            coverage = if has_evidence {
+                Coverage::Covered
+            } else {
+                Coverage::Partial
+            };
             explanation = if has_evidence {
                 "Demonstrated through technical portfolio and project initiatives.".to_string()
             } else {
@@ -633,7 +788,11 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                     contribution: "Demonstrates initiative and continuous learning".to_string(),
                 });
                 relevance[idx] += coverage_value(coverage) * req.importance * 0.5;
-                reasons[idx].push(format!("demonstrates “{}” ({})", truncate(&req.raw_text, 40), coverage.as_str()));
+                reasons[idx].push(format!(
+                    "demonstrates “{}” ({})",
+                    truncate(&req.raw_text, 40),
+                    coverage.as_str()
+                ));
                 if !supporting.contains(&idx) {
                     supporting.push(idx);
                 }
@@ -669,7 +828,11 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                                 ),
                             });
                         }
-                        let kind_weight = if req.kind == "required_skill" { 1.0 } else { 0.6 };
+                        let kind_weight = if req.kind == "required_skill" {
+                            1.0
+                        } else {
+                            0.6
+                        };
                         relevance[*index] +=
                             coverage_value(verdict.coverage) * req.importance * kind_weight;
                         reasons[*index].push(format!(
@@ -695,7 +858,8 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                     explanation = format!("Vault evidence supports {names}.");
                 } else if is_alt {
                     let req_lower = req.raw_text.to_lowercase();
-                    let has_compound_and = req_lower.contains(" and ") && (req_lower.contains("stack") || req_lower.contains("backend"));
+                    let has_compound_and = req_lower.contains(" and ")
+                        && (req_lower.contains("stack") || req_lower.contains("backend"));
                     if covered_count >= 2 || (covered_count >= 1 && !has_compound_and) {
                         coverage = Coverage::Covered;
                         explanation = format!(
@@ -710,9 +874,12 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                         );
                     } else {
                         coverage = Coverage::Partial;
-                        explanation = format!("{names} known to the Vault, but without strong project use.");
+                        explanation =
+                            format!("{names} known to the Vault, but without strong project use.");
                     }
-                } else if covered_count > 0 && (covered_count as f64 / mentioned.len() as f64 >= 0.5) {
+                } else if covered_count > 0
+                    && (covered_count as f64 / mentioned.len() as f64 >= 0.5)
+                {
                     coverage = Coverage::Covered;
                     explanation = format!(
                         "Core skills covered ({}), with {covered_count} of {} skills backed by Vault use.",
@@ -729,11 +896,12 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                 // Topic / content fallback when no canonical skill was matched directly
                 let (union_ratio, scored) = collective_overlap(&req_tokens, &input.entities);
                 if union_ratio >= 0.15 || scored.first().is_some_and(|(_, r)| *r >= 0.15) {
-                    coverage = if union_ratio >= 0.22 || scored.first().is_some_and(|(_, r)| *r >= 0.22) {
-                        Coverage::Covered
-                    } else {
-                        Coverage::Partial
-                    };
+                    coverage =
+                        if union_ratio >= 0.22 || scored.first().is_some_and(|(_, r)| *r >= 0.22) {
+                            Coverage::Covered
+                        } else {
+                            Coverage::Partial
+                        };
                     let take = scored.iter().take(3).cloned().collect::<Vec<_>>();
                     let mut matched_titles = Vec::new();
                     for (index, ratio) in take {
@@ -743,9 +911,16 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                             entity_type: entity.entity_type.clone(),
                             id: entity.id,
                             title: entity.title.clone(),
-                            contribution: format!("relevant technical work ({:.0}% matching context)", ratio * 100.0),
+                            contribution: format!(
+                                "relevant technical work ({:.0}% matching context)",
+                                ratio * 100.0
+                            ),
                         });
-                        let kind_weight = if req.kind == "required_skill" { 0.9 } else { 0.5 };
+                        let kind_weight = if req.kind == "required_skill" {
+                            0.9
+                        } else {
+                            0.5
+                        };
                         relevance[index] += coverage_value(coverage) * req.importance * kind_weight;
                         reasons[index].push(format!(
                             "supports “{}” ({})",
@@ -763,7 +938,8 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                     );
                 } else {
                     coverage = Coverage::Missing;
-                    explanation = "No Vault skill (by name or alias) appears in this requirement.".to_string();
+                    explanation = "No Vault skill (by name or alias) appears in this requirement."
+                        .to_string();
                 }
             }
         }
@@ -794,18 +970,24 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                 .fold(0.0f64, |acc, x| if x > acc { x } else { acc });
         let recency_bonus = 0.1 * recency_score(entity, now);
         let mut reasons = reasons[index].clone();
-        reasons.push(format!("+{:.2} strongest skill confidence", confidence_bonus));
+        reasons.push(format!(
+            "+{:.2} strongest skill confidence",
+            confidence_bonus
+        ));
         reasons.push(format!("+{:.2} recency", recency_bonus));
         ranking.push(RankedEntity {
             entity_type: entity.entity_type.clone(),
             id: entity.id,
             title: entity.title.clone(),
-            relevance: (relevance[index] + confidence_bonus + recency_bonus) * 1000.0
-                / 1000.0, // keep fp stable-ish
+            relevance: (relevance[index] + confidence_bonus + recency_bonus) * 1000.0 / 1000.0, // keep fp stable-ish
             reasons,
         });
     }
-    ranking.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap_or(std::cmp::Ordering::Equal));
+    ranking.sort_by(|a, b| {
+        b.relevance
+            .partial_cmp(&a.relevance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let components = ScoreComponents {
         required_skills: weighted_coverage(&results, "required_skill"),
@@ -862,7 +1044,12 @@ mod tests {
         }
     }
 
-    fn entity(index_base: i64, title: &str, skills: Vec<(i64, i64)>, dates: (Option<&str>, Option<&str>)) -> MatchEntity {
+    fn entity(
+        index_base: i64,
+        title: &str,
+        skills: Vec<(i64, i64)>,
+        dates: (Option<&str>, Option<&str>),
+    ) -> MatchEntity {
         MatchEntity {
             entity_type: "project".to_string(),
             id: index_base,
@@ -878,7 +1065,12 @@ mod tests {
     }
 
     fn req(id: i64, kind: &str, text: &str) -> MatchRequirement {
-        MatchRequirement { id, kind: kind.to_string(), raw_text: text.to_string(), importance: 0.8 }
+        MatchRequirement {
+            id,
+            kind: kind.to_string(),
+            raw_text: text.to_string(),
+            importance: 0.8,
+        }
     }
 
     #[test]
@@ -935,8 +1127,18 @@ mod tests {
             requirements: vec![req(1, "required_skill", "Strong Python")],
             skills: vec![skill(1, "Python", &[])],
             entities: vec![
-                entity(1, "Old project", vec![(1, 4)], (Some("2020-01"), Some("2020-06"))),
-                entity(2, "Recent project", vec![(1, 4)], (Some("2025-06"), Some("2025-09"))),
+                entity(
+                    1,
+                    "Old project",
+                    vec![(1, 4)],
+                    (Some("2020-01"), Some("2020-06")),
+                ),
+                entity(
+                    2,
+                    "Recent project",
+                    vec![(1, 4)],
+                    (Some("2025-06"), Some("2025-09")),
+                ),
             ],
         };
         let report = run_match(&input, "2026-01");
@@ -968,10 +1170,19 @@ mod tests {
                 req(2, "preferred_skill", "Kafka experience"),
                 req(3, "responsibility", "Design and ship REST APIs"),
             ],
-            skills: vec![skill(1, "Python", &[]), skill(2, "SQL", &[]), skill(3, "Kafka", &[])],
+            skills: vec![
+                skill(1, "Python", &[]),
+                skill(2, "SQL", &[]),
+                skill(3, "Kafka", &[]),
+            ],
             entities: vec![
                 entity(1, "PyKV", vec![(1, 5)], (Some("2025-01"), None)),
-                entity(2, "Watchdog SQL monitor", vec![(2, 4)], (Some("2024-01"), Some("2024-05"))),
+                entity(
+                    2,
+                    "Watchdog SQL monitor",
+                    vec![(2, 4)],
+                    (Some("2024-01"), Some("2024-05")),
+                ),
             ],
         };
         let a = run_match(&input, "2026-01");
@@ -987,7 +1198,11 @@ mod tests {
         let input = MatchInput {
             job_domain: String::new(),
             requirements: vec![
-                req(1, "responsibility", "Design and ship REST APIs for payment flows"),
+                req(
+                    1,
+                    "responsibility",
+                    "Design and ship REST APIs for payment flows",
+                ),
                 req(2, "required_skill", "Docker and Kubernetes"),
             ],
             skills: vec![skill(1, "Docker", &[])],
@@ -1052,7 +1267,9 @@ mod tests {
         };
         let report = run_match(&input, "2026-01");
         assert_eq!(report.results[0].coverage, Coverage::Covered);
-        assert!(report.results[0].explanation.contains("Degree requirement satisfied"));
+        assert!(report.results[0]
+            .explanation
+            .contains("Degree requirement satisfied"));
         assert_eq!(report.results[0].entity_refs[0].entity_type, "education");
     }
 
@@ -1101,7 +1318,9 @@ mod tests {
         };
         let report = run_match(&input, "2026-01");
         assert_eq!(report.results[0].coverage, Coverage::Covered);
-        assert!(report.results[0].explanation.contains("Satisfies requirement options"));
+        assert!(report.results[0]
+            .explanation
+            .contains("Satisfies requirement options"));
     }
 
     #[test]
@@ -1129,7 +1348,9 @@ mod tests {
         };
         let report = run_match(&input, "2026-01");
         assert_eq!(report.results[0].coverage, Coverage::Covered);
-        assert!(report.results[0].explanation.contains("Supported by project and experience evidence"));
+        assert!(report.results[0]
+            .explanation
+            .contains("Supported by project and experience evidence"));
     }
 
     #[test]
@@ -1138,7 +1359,11 @@ mod tests {
             job_domain: "Engineering".to_string(),
             requirements: vec![
                 req(1, "required_skill", "Curiosity to learn new technologies."),
-                req(2, "responsibility", "You will report to Senior Engineering Manager."),
+                req(
+                    2,
+                    "responsibility",
+                    "You will report to Senior Engineering Manager.",
+                ),
             ],
             skills: vec![],
             entities: vec![entity(1, "Project A", vec![], (None, None))],
@@ -1187,7 +1412,9 @@ mod tests {
         };
         let report = run_match(&input, "2026-01");
         assert_eq!(report.results[0].coverage, Coverage::Covered);
-        assert!(report.results[0].explanation.contains("Covered by combined Vault evidence"));
+        assert!(report.results[0]
+            .explanation
+            .contains("Covered by combined Vault evidence"));
     }
 
     #[test]
@@ -1288,11 +1515,19 @@ mod tests {
 
         // Verify that every single requirement is Covered
         for r in &report.results {
-            assert_ne!(r.coverage, Coverage::Missing, "Requirement should not be missing: {}", r.raw_text);
+            assert_ne!(
+                r.coverage,
+                Coverage::Missing,
+                "Requirement should not be missing: {}",
+                r.raw_text
+            );
         }
 
         // Overall score should be strong (> 0.80)
-        assert!(report.overall_score >= 0.80, "Score was only {:.2}, expected >= 0.80", report.overall_score);
+        assert!(
+            report.overall_score >= 0.80,
+            "Score was only {:.2}, expected >= 0.80",
+            report.overall_score
+        );
     }
-
 }

@@ -12,15 +12,15 @@ pub fn escape_latex(text: &str) -> String {
     for c in text.chars() {
         match c {
             '\\' => out.push_str("\\textbackslash{}"),
-            '&'  => out.push_str("\\&"),
-            '%'  => out.push_str("\\%"),
-            '$'  => out.push_str("\\$"),
-            '#'  => out.push_str("\\#"),
-            '_'  => out.push_str("\\_"),
-            '{'  => out.push_str("\\{"),
-            '}'  => out.push_str("\\}"),
-            '~'  => out.push_str("\\textasciitilde{}"),
-            '^'  => out.push_str("\\textasciicircum{}"),
+            '&' => out.push_str("\\&"),
+            '%' => out.push_str("\\%"),
+            '$' => out.push_str("\\$"),
+            '#' => out.push_str("\\#"),
+            '_' => out.push_str("\\_"),
+            '{' => out.push_str("\\{"),
+            '}' => out.push_str("\\}"),
+            '~' => out.push_str("\\textasciitilde{}"),
+            '^' => out.push_str("\\textasciicircum{}"),
             '\n' => out.push_str("\\par "),
             // Dropped: they leak in from copy-pasted text and confuse hyphenation.
             '\u{00AD}' | '\u{FFFE}' | '\u{FFFF}' | '\u{200B}' => {}
@@ -60,7 +60,7 @@ pub fn escape_latex(text: &str) -> String {
             '\u{03A3}' => out.push_str("$\\Sigma$"),
             '\u{03A9}' => out.push_str("$\\Omega$"),
             c if (c as u32) < 32 => { /* strip other control characters */ }
-            c    => out.push(c),
+            c => out.push(c),
         }
     }
     out
@@ -136,7 +136,10 @@ fn pretty_date(v: &str) -> String {
 }
 
 fn month_name(m: &str) -> Option<&'static str> {
-    m.parse::<usize>().ok().and_then(|n| MONTHS.get(n.wrapping_sub(1))).copied()
+    m.parse::<usize>()
+        .ok()
+        .and_then(|n| MONTHS.get(n.wrapping_sub(1)))
+        .copied()
 }
 
 /// Renders a stored date range the way resumes are read: "Aug 2022 – May 2026",
@@ -153,9 +156,9 @@ fn fmt_dates(start: &Option<String>, end: &Option<String>, current: bool) -> Str
     } else {
         match (s.is_empty(), e.is_empty()) {
             (false, false) => format!("{s} -- {e}"),
-            (false, true)  => s,
-            (true, false)  => e,
-            (true, true)   => String::new(),
+            (false, true) => s,
+            (true, false) => e,
+            (true, true) => String::new(),
         }
     }
 }
@@ -165,11 +168,11 @@ fn fmt_dates(start: &Option<String>, end: &Option<String>, current: bool) -> Str
 /// separator is present.
 fn split_title_role(title: &str) -> (String, String) {
     if let Some(idx) = title.find(" \u{2014} ") {
-        let org  = escape_latex(&inline(&title[..idx]));
+        let org = escape_latex(&inline(&title[..idx]));
         let role = escape_latex(&inline(&title[idx + 4..])); // 4 bytes for " — "
         (org, role)
     } else if let Some(idx) = title.find(" - ") {
-        let org  = escape_latex(&inline(&title[..idx]));
+        let org = escape_latex(&inline(&title[..idx]));
         let role = escape_latex(&inline(&title[idx + 3..]));
         (org, role)
     } else {
@@ -205,8 +208,8 @@ fn item_bullet_lines(item: &PlanItem) -> Vec<String> {
 pub fn render_plan(plan: &ResumePlan, template_id: &str) -> String {
     match template_id {
         "expressive" => render_expressive(plan),
-        "plushcv"    => render_plushcv(plan),
-        _            => render_jake(plan), // "jake" or any unknown → Jake (ATS-safe default)
+        "plushcv" => render_plushcv(plan),
+        _ => render_jake(plan), // "jake" or any unknown → Jake (ATS-safe default)
     }
 }
 
@@ -257,7 +260,11 @@ fn render_jake(plan: &ResumePlan) -> String {
     tex.push_str("\n\\begin{document}\n\n");
 
     // --- Heading ---
-    let name = escape_latex(&inline(if plan.header.full_name.is_empty() { "Your Name" } else { &plan.header.full_name }));
+    let name = escape_latex(&inline(if plan.header.full_name.is_empty() {
+        "Your Name"
+    } else {
+        &plan.header.full_name
+    }));
     let mut contact_parts: Vec<String> = Vec::new();
     if !plan.header.phone.is_empty() {
         contact_parts.push(escape_latex(&plan.header.phone));
@@ -267,21 +274,35 @@ fn render_jake(plan: &ResumePlan) -> String {
         contact_parts.push(latex_href(&format!("mailto:{email}"), email, true));
     }
     if !plan.header.linkedin.is_empty() {
-        let raw = plan.header.linkedin
+        let raw = plan
+            .header
+            .linkedin
             .trim_start_matches("https://www.linkedin.com/in/")
             .trim_start_matches("https://linkedin.com/in/")
             .trim_end_matches('/');
-        contact_parts.push(latex_href(&plan.header.linkedin, &format!("linkedin.com/in/{raw}"), true));
+        contact_parts.push(latex_href(
+            &plan.header.linkedin,
+            &format!("linkedin.com/in/{raw}"),
+            true,
+        ));
     }
     if !plan.header.github.is_empty() {
-        let raw = plan.header.github
+        let raw = plan
+            .header
+            .github
             .trim_start_matches("https://www.github.com/")
             .trim_start_matches("https://github.com/")
             .trim_end_matches('/');
-        contact_parts.push(latex_href(&plan.header.github, &format!("github.com/{raw}"), true));
+        contact_parts.push(latex_href(
+            &plan.header.github,
+            &format!("github.com/{raw}"),
+            true,
+        ));
     }
     if !plan.header.website.is_empty() {
-        let raw = plan.header.website
+        let raw = plan
+            .header
+            .website
             .trim_start_matches("https://")
             .trim_start_matches("http://")
             .trim_end_matches('/');
@@ -291,7 +312,10 @@ fn render_jake(plan: &ResumePlan) -> String {
         contact_parts.push(escape_latex(&plan.header.location));
     }
     tex.push_str("\\begin{center}\n");
-    tex.push_str(&format!("    \\textbf{{\\Huge \\scshape {}}} \\\\ \\vspace{{1pt}}\n", name));
+    tex.push_str(&format!(
+        "    \\textbf{{\\Huge \\scshape {}}} \\\\ \\vspace{{1pt}}\n",
+        name
+    ));
     if !contact_parts.is_empty() {
         tex.push_str(&format!("    \\small {}\n", contact_parts.join(" $|$ ")));
     }
@@ -327,7 +351,11 @@ fn render_jake(plan: &ResumePlan) -> String {
         for item in exp {
             let (company, role) = split_title_role(&item.title);
             let loc = escape_latex(&inline(&item.subtitle));
-            let dates = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
+            let dates = escape_latex(&fmt_dates(
+                &item.start_date,
+                &item.end_date,
+                item.is_current,
+            ));
             // Jake: \resumeSubheading{Company}{Dates}{Role}{Location}
             tex.push_str("    \\needspace{3\\baselineskip}\n");
             tex.push_str(&format!(
@@ -350,7 +378,11 @@ fn render_jake(plan: &ResumePlan) -> String {
             } else {
                 String::new()
             };
-            let dates = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
+            let dates = escape_latex(&fmt_dates(
+                &item.start_date,
+                &item.end_date,
+                item.is_current,
+            ));
             tex.push_str("      \\needspace{3\\baselineskip}\n");
             tex.push_str(&format!(
                 "      \\resumeProjectHeading\n          {{\\textbf{{{}}}{}}}{{{}}}\n",
@@ -381,7 +413,10 @@ fn render_jake(plan: &ResumePlan) -> String {
             ));
             if !a.description.is_empty() {
                 tex.push_str("        \\resumeItemListStart\n");
-                tex.push_str(&format!("          \\resumeItem{{{}}}\n", escape_latex(&inline(&a.description))));
+                tex.push_str(&format!(
+                    "          \\resumeItem{{{}}}\n",
+                    escape_latex(&inline(&a.description))
+                ));
                 tex.push_str("        \\resumeItemListEnd\n");
             }
         }
@@ -399,7 +434,11 @@ fn render_jake(plan: &ResumePlan) -> String {
                 format!(
                     "     \\textbf{{{}}}{{: {}}} \\\\",
                     escape_latex(cat),
-                    names.iter().map(|s| escape_latex(&inline(s))).collect::<Vec<_>>().join(", ")
+                    names
+                        .iter()
+                        .map(|s| escape_latex(&inline(s)))
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             })
             .collect();
@@ -436,24 +475,44 @@ fn render_expressive(plan: &ResumePlan) -> String {
     tex.push_str("\n\\begin{document}\n\n");
 
     // Header: pre-built contact line with properly linked entries.
-    let name = escape_latex(&inline(if plan.header.full_name.is_empty() { "Your Name" } else { &plan.header.full_name }));
+    let name = escape_latex(&inline(if plan.header.full_name.is_empty() {
+        "Your Name"
+    } else {
+        &plan.header.full_name
+    }));
     let mut contact_parts: Vec<String> = Vec::new();
     if !plan.header.email.is_empty() {
-        contact_parts.push(latex_href(&format!("mailto:{}", plan.header.email.trim()), plan.header.email.trim(), false));
+        contact_parts.push(latex_href(
+            &format!("mailto:{}", plan.header.email.trim()),
+            plan.header.email.trim(),
+            false,
+        ));
     }
     if !plan.header.linkedin.is_empty() {
-        let raw = plan.header.linkedin
+        let raw = plan
+            .header
+            .linkedin
             .trim_start_matches("https://www.linkedin.com/in/")
             .trim_start_matches("https://linkedin.com/in/")
             .trim_end_matches('/');
-        contact_parts.push(latex_href(&plan.header.linkedin, &format!("linkedin.com/in/{raw}"), false));
+        contact_parts.push(latex_href(
+            &plan.header.linkedin,
+            &format!("linkedin.com/in/{raw}"),
+            false,
+        ));
     }
     if !plan.header.github.is_empty() {
-        let raw = plan.header.github
+        let raw = plan
+            .header
+            .github
             .trim_start_matches("https://www.github.com/")
             .trim_start_matches("https://github.com/")
             .trim_end_matches('/');
-        contact_parts.push(latex_href(&plan.header.github, &format!("github.com/{raw}"), false));
+        contact_parts.push(latex_href(
+            &plan.header.github,
+            &format!("github.com/{raw}"),
+            false,
+        ));
     }
     if !plan.header.phone.is_empty() {
         contact_parts.push(escape_latex(&plan.header.phone));
@@ -481,8 +540,12 @@ fn render_expressive(plan: &ResumePlan) -> String {
         tex.push_str("\\section{Work Experience}\n\n");
         for item in exp {
             let (company, role) = split_title_role(&item.title);
-            let loc    = escape_latex(&inline(&item.subtitle));
-            let dates  = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
+            let loc = escape_latex(&inline(&item.subtitle));
+            let dates = escape_latex(&fmt_dates(
+                &item.start_date,
+                &item.end_date,
+                item.is_current,
+            ));
             let lines = item_bullet_lines(item);
             if lines.is_empty() {
                 // No itemize: keep the two heading lines readable without it.
@@ -513,7 +576,11 @@ fn render_expressive(plan: &ResumePlan) -> String {
         tex.push_str("\\section{Technical Projects}\n\n");
         for item in proj {
             let title = escape_latex(&inline(&item.title));
-            let dates = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
+            let dates = escape_latex(&fmt_dates(
+                &item.start_date,
+                &item.end_date,
+                item.is_current,
+            ));
             let lines = item_bullet_lines(item);
             if lines.is_empty() {
                 tex.push_str(&format!(
@@ -564,10 +631,20 @@ fn render_expressive(plan: &ResumePlan) -> String {
             let title = escape_latex(&inline(&a.title));
             let issuer = escape_latex(&inline(&a.issuer));
             let date = escape_latex(&pretty_date(a.achieved_on.as_deref().unwrap_or("")));
-            let right_parts = [issuer, date].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" $|$ ");
-            tex.push_str(&format!("{{\\bfseries {}}}\\hfill{{\\small\\itshape {}}}\\par\n", title, right_parts));
+            let right_parts = [issuer, date]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" $|$ ");
+            tex.push_str(&format!(
+                "{{\\bfseries {}}}\\hfill{{\\small\\itshape {}}}\\par\n",
+                title, right_parts
+            ));
             if !a.description.is_empty() {
-                tex.push_str(&format!("\\vspace{{1pt}}{{\\small {}}}\\par\\vspace{{4pt}}\n", escape_latex(&inline(&a.description))));
+                tex.push_str(&format!(
+                    "\\vspace{{1pt}}{{\\small {}}}\\par\\vspace{{4pt}}\n",
+                    escape_latex(&inline(&a.description))
+                ));
             }
         }
         tex.push('\n');
@@ -581,7 +658,11 @@ fn render_expressive(plan: &ResumePlan) -> String {
             tex.push_str(&format!(
                 "\\small \\textbf{{{}}}: {}\\par\n",
                 escape_latex(cat),
-                names.iter().map(|s| escape_latex(&inline(s))).collect::<Vec<_>>().join(" \\textbullet{} ")
+                names
+                    .iter()
+                    .map(|s| escape_latex(&inline(s)))
+                    .collect::<Vec<_>>()
+                    .join(" \\textbullet{} ")
             ));
         }
         tex.push('\n');
@@ -603,24 +684,41 @@ fn render_plushcv(plan: &ResumePlan) -> String {
     // Name/header banner
     let words: Vec<&str> = plan.header.full_name.split_whitespace().collect();
     let first = escape_latex(words.first().copied().unwrap_or("Your"));
-    let last  = if words.len() > 1 { escape_latex(&words[1..].join(" ")) } else { String::new() };
-    let title = escape_latex(&inline(if plan.header.headline.is_empty() { "Software Engineer" } else { &plan.header.headline }));
+    let last = if words.len() > 1 {
+        escape_latex(&words[1..].join(" "))
+    } else {
+        String::new()
+    };
+    let title = escape_latex(&inline(if plan.header.headline.is_empty() {
+        "Software Engineer"
+    } else {
+        &plan.header.headline
+    }));
 
     let mut contact_parts: Vec<String> = Vec::new();
     if !plan.header.location.is_empty() {
         contact_parts.push(escape_latex(&plan.header.location));
     }
     if !plan.header.website.is_empty() {
-        contact_parts.push(escape_latex(plan.header.website.trim_start_matches("https://").trim_start_matches("http://")));
+        contact_parts.push(escape_latex(
+            plan.header
+                .website
+                .trim_start_matches("https://")
+                .trim_start_matches("http://"),
+        ));
     }
     if !plan.header.github.is_empty() {
-        let raw = plan.header.github
+        let raw = plan
+            .header
+            .github
             .trim_start_matches("https://www.github.com/")
             .trim_start_matches("https://github.com/");
         contact_parts.push(format!("github.com/{}", escape_latex(raw)));
     }
     if !plan.header.linkedin.is_empty() {
-        let raw = plan.header.linkedin
+        let raw = plan
+            .header
+            .linkedin
             .trim_start_matches("https://www.linkedin.com/in/")
             .trim_start_matches("https://linkedin.com/in/");
         contact_parts.push(format!("linkedin.com/in/{}", escape_latex(raw)));
@@ -634,7 +732,9 @@ fn render_plushcv(plan: &ResumePlan) -> String {
 
     tex.push_str(&format!(
         "\\namesection{{{}}}{{{}}}{{{}}}{{{}}}\n\n",
-        first, last, title,
+        first,
+        last,
+        title,
         contact_parts.join(" \\quad ")
     ));
 
@@ -647,9 +747,17 @@ fn render_plushcv(plan: &ResumePlan) -> String {
         tex.push_str("\\needspace{4\\baselineskip}\n\\section{Experience}\n");
         for item in exp {
             let (company, role) = split_title_role(&item.title);
-            let loc   = escape_latex(&inline(&item.subtitle));
-            let dates = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
-            let loc_date = if loc.is_empty() { dates.clone() } else { format!("{} | {}", loc, dates) };
+            let loc = escape_latex(&inline(&item.subtitle));
+            let dates = escape_latex(&fmt_dates(
+                &item.start_date,
+                &item.end_date,
+                item.is_current,
+            ));
+            let loc_date = if loc.is_empty() {
+                dates.clone()
+            } else {
+                format!("{} | {}", loc, dates)
+            };
             tex.push_str("\\needspace{4\\baselineskip}\n");
             tex.push_str(&format!("\\runsubsection{{{}}}\n", company));
             if !role.is_empty() {
@@ -673,11 +781,18 @@ fn render_plushcv(plan: &ResumePlan) -> String {
         tex.push_str("\\needspace{4\\baselineskip}\n\\section{Projects}\n\n");
         for item in proj {
             let title = escape_latex(&inline(&item.title));
-            let dates = escape_latex(&fmt_dates(&item.start_date, &item.end_date, item.is_current));
+            let dates = escape_latex(&fmt_dates(
+                &item.start_date,
+                &item.end_date,
+                item.is_current,
+            ));
             tex.push_str("\\needspace{4\\baselineskip}\n");
             tex.push_str(&format!("\\runsubsection{{{}}}\n", title));
             if !item.skills.is_empty() {
-                tex.push_str(&format!("\\descript{{| {}}}\n", escape_latex(&item.skills.join(", "))));
+                tex.push_str(&format!(
+                    "\\descript{{| {}}}\n",
+                    escape_latex(&item.skills.join(", "))
+                ));
             }
             tex.push_str(&format!("\\location{{{}}}\n", dates));
             let lines = item_bullet_lines(item);
@@ -703,7 +818,11 @@ fn render_plushcv(plan: &ResumePlan) -> String {
             tex.push_str(&format!(
                 "\\subsection{{{}}}\n\\location{{}}\n{{\\small {} }}\n\\sectionsep\n\n",
                 escape_latex(cat),
-                names.iter().map(|s| escape_latex(&inline(s))).collect::<Vec<_>>().join(" \\textbullet{} ")
+                names
+                    .iter()
+                    .map(|s| escape_latex(&inline(s)))
+                    .collect::<Vec<_>>()
+                    .join(" \\textbullet{} ")
             ));
         }
     }
@@ -743,7 +862,10 @@ fn render_plushcv(plan: &ResumePlan) -> String {
                 tex.push_str(&format!("\\location{{{}}}\n", date));
             }
             if !a.description.is_empty() {
-                tex.push_str(&format!("\\small {}\n", escape_latex(&inline(&a.description))));
+                tex.push_str(&format!(
+                    "\\small {}\n",
+                    escape_latex(&inline(&a.description))
+                ));
             }
             tex.push_str("\\sectionsep\n\n");
         }
@@ -759,7 +881,10 @@ mod tests {
 
     #[test]
     fn escapes_all_specials() {
-        assert_eq!(escape_latex("100% & $5 #1 a_b {c} d~e f^g"), "100\\% \\& \\$5 \\#1 a\\_b \\{c\\} d\\textasciitilde{}e f\\textasciicircum{}g");
+        assert_eq!(
+            escape_latex("100% & $5 #1 a_b {c} d~e f^g"),
+            "100\\% \\& \\$5 \\#1 a\\_b \\{c\\} d\\textasciitilde{}e f\\textasciicircum{}g"
+        );
         assert_eq!(escape_latex("back\\slash"), "back\\textbackslash{}slash");
         assert_eq!(escape_latex("line\nbreak"), "line\\par break");
         assert_eq!(escape_latex("ctrl\u{7}char"), "ctrlchar");
@@ -781,8 +906,14 @@ mod tests {
         assert_eq!(pretty_date("2027"), "2027");
         assert_eq!(pretty_date("junk"), "junk");
         assert_eq!(pretty_date(""), "");
-        assert_eq!(fmt_dates(&Some("2022-08".into()), &None, true), "Aug 2022 -- Present");
-        assert_eq!(fmt_dates(&Some("2025-06".into()), &Some("2025-07".into()), false), "Jun 2025 -- Jul 2025");
+        assert_eq!(
+            fmt_dates(&Some("2022-08".into()), &None, true),
+            "Aug 2022 -- Present"
+        );
+        assert_eq!(
+            fmt_dates(&Some("2025-06".into()), &Some("2025-07".into()), false),
+            "Jun 2025 -- Jul 2025"
+        );
         assert_eq!(fmt_dates(&None, &None, false), "");
         assert_eq!(fmt_dates(&None, &None, true), "Present");
         // old bug: "-- Present" with a missing start
@@ -827,19 +958,20 @@ mod tests {
         let plan = sample_plan();
         for t in ["jake", "expressive", "plushcv"] {
             let tex = render_plan(&plan, t);
-            assert!(tex.contains("Hyderabad, India"), "template {t} drops location");
+            assert!(
+                tex.contains("Hyderabad, India"),
+                "template {t} drops location"
+            );
         }
     }
 
     #[test]
     fn grouped_skills_render_per_template() {
         let mut plan = sample_plan();
-        plan.skills_grouped = vec![
-            crate::composer::PlanSkillGroup {
-                category: "Languages".into(),
-                skills: vec!["Python".into(), "Rust".into()],
-            },
-        ];
+        plan.skills_grouped = vec![crate::composer::PlanSkillGroup {
+            category: "Languages".into(),
+            skills: vec!["Python".into(), "Rust".into()],
+        }];
         let jake = render_plan(&plan, "jake");
         assert!(jake.contains("\\textbf{Languages}{: Python, Rust}"));
         let expr = render_plan(&plan, "expressive");

@@ -21,23 +21,47 @@ pub mod matching;
 pub mod pdf;
 pub mod tailor;
 pub mod trust;
-pub mod versions;
 pub mod vault;
+pub mod versions;
 
 pub struct DbState(pub Mutex<Connection>);
 
 const MIGRATIONS: &[(&str, &str)] = &[
     ("0001_init", include_str!("../../migrations/0001_init.sql")),
-    ("0002_career_vault", include_str!("../../migrations/0002_career_vault.sql")),
-    ("0003_evidence_trust", include_str!("../../migrations/0003_evidence_trust.sql")),
+    (
+        "0002_career_vault",
+        include_str!("../../migrations/0002_career_vault.sql"),
+    ),
+    (
+        "0003_evidence_trust",
+        include_str!("../../migrations/0003_evidence_trust.sql"),
+    ),
     ("0004_jobs", include_str!("../../migrations/0004_jobs.sql")),
-    ("0005_match", include_str!("../../migrations/0005_match.sql")),
-    ("0006_composer", include_str!("../../migrations/0006_composer.sql")),
-    ("0007_tailor", include_str!("../../migrations/0007_tailor.sql")),
+    (
+        "0005_match",
+        include_str!("../../migrations/0005_match.sql"),
+    ),
+    (
+        "0006_composer",
+        include_str!("../../migrations/0006_composer.sql"),
+    ),
+    (
+        "0007_tailor",
+        include_str!("../../migrations/0007_tailor.sql"),
+    ),
     ("0008_pdf", include_str!("../../migrations/0008_pdf.sql")),
-    ("0009_versions", include_str!("../../migrations/0009_versions.sql")),
-    ("0010_applications", include_str!("../../migrations/0010_applications.sql")),
-    ("0011_artifact_template", include_str!("../../migrations/0011_artifact_template.sql")),
+    (
+        "0009_versions",
+        include_str!("../../migrations/0009_versions.sql"),
+    ),
+    (
+        "0010_applications",
+        include_str!("../../migrations/0010_applications.sql"),
+    ),
+    (
+        "0011_artifact_template",
+        include_str!("../../migrations/0011_artifact_template.sql"),
+    ),
 ];
 
 pub fn open_and_migrate(path: &Path) -> Result<Connection, Box<dyn Error>> {
@@ -128,7 +152,9 @@ mod tests {
         )
         .unwrap();
         let value: String = conn
-            .query_row("SELECT value FROM meta WHERE key = 't'", [], |row| row.get(0))
+            .query_row("SELECT value FROM meta WHERE key = 't'", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(value, "abc");
     }
@@ -174,10 +200,14 @@ mod tests {
 
         // Pre-upgrade data survives byte-for-byte.
         let title: String = conn
-            .query_row("SELECT title FROM projects WHERE title = 'Kept'", [], |r| r.get(0))
+            .query_row("SELECT title FROM projects WHERE title = 'Kept'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(title, "Kept");
-        let jobs: i64 = conn.query_row("SELECT COUNT(*) FROM jobs", [], |r| r.get(0)).unwrap();
+        let jobs: i64 = conn
+            .query_row("SELECT COUNT(*) FROM jobs", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(jobs, 1);
 
         // The new schema is usable immediately.
@@ -192,11 +222,8 @@ mod tests {
     fn upgrade_from_very_old_release_applies_everything_in_order() {
         // A database migrated only through 0003 (phase-2 era).
         let conn = old_schema_db(3);
-        conn.execute(
-            "INSERT INTO projects (title) VALUES ('Ancient')",
-            [],
-        )
-        .unwrap();
+        conn.execute("INSERT INTO projects (title) VALUES ('Ancient')", [])
+            .unwrap();
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
         assert_eq!(names.len(), MIGRATIONS.len());

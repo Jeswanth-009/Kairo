@@ -44,9 +44,7 @@ pub fn save_plan(
 }
 
 #[tauri::command]
-pub fn estimate_plan_lines(
-    plan: crate::composer::ResumePlan,
-) -> Result<u32, String> {
+pub fn estimate_plan_lines(plan: crate::composer::ResumePlan) -> Result<u32, String> {
     Ok(crate::composer::estimate_plan_lines(&plan))
 }
 

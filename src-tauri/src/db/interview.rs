@@ -45,8 +45,15 @@ pub fn generate_for_job(conn: &Connection, job_id: i64) -> Result<InterviewPrep,
             entity_type: "project".to_string(),
             id: project.id,
             title: project.title,
-            bullet_texts: bullets.iter().map(|b| effective_text(&b.text, plan_ref, b.id)).collect(),
-            skill_names: project.skills.iter().map(|r| r.canonical_name.clone()).collect(),
+            bullet_texts: bullets
+                .iter()
+                .map(|b| effective_text(&b.text, plan_ref, b.id))
+                .collect(),
+            skill_names: project
+                .skills
+                .iter()
+                .map(|r| r.canonical_name.clone())
+                .collect(),
             evidence_count: evidence.len() as i64,
             evidence_titles: evidence.iter().map(|e| e.title.clone()).collect(),
             relevance: relevance_of(&report, "project", project.id),
@@ -55,16 +62,28 @@ pub fn generate_for_job(conn: &Connection, job_id: i64) -> Result<InterviewPrep,
     for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
         let bullets = super::trust::list_bullets(conn, "experience", experience.id)?;
         let evidence = super::trust::list_evidence(conn, "experience", experience.id)?;
-        let title = format!("{} {} {}", experience.organization, char_emdash(), experience.role)
-            .trim_end_matches(char_emdash())
-            .trim()
-            .to_string();
+        let title = format!(
+            "{} {} {}",
+            experience.organization,
+            char_emdash(),
+            experience.role
+        )
+        .trim_end_matches(char_emdash())
+        .trim()
+        .to_string();
         entities.push(PrepEntity {
             entity_type: "experience".to_string(),
             id: experience.id,
             title,
-            bullet_texts: bullets.iter().map(|b| effective_text(&b.text, plan_ref, b.id)).collect(),
-            skill_names: experience.skills.iter().map(|r| r.canonical_name.clone()).collect(),
+            bullet_texts: bullets
+                .iter()
+                .map(|b| effective_text(&b.text, plan_ref, b.id))
+                .collect(),
+            skill_names: experience
+                .skills
+                .iter()
+                .map(|r| r.canonical_name.clone())
+                .collect(),
             evidence_count: evidence.len() as i64,
             evidence_titles: evidence.iter().map(|e| e.title.clone()).collect(),
             relevance: relevance_of(&report, "experience", experience.id),
@@ -77,7 +96,12 @@ pub fn generate_for_job(conn: &Connection, job_id: i64) -> Result<InterviewPrep,
     } else {
         format!("{} {} {}", job.role_title, char_emdash(), job.company)
     };
-    Ok(generate(&label, raw_jd_chars, &prep_requirements, &entities))
+    Ok(generate(
+        &label,
+        raw_jd_chars,
+        &prep_requirements,
+        &entities,
+    ))
 }
 
 pub use crate::interview::InterviewPrep;
@@ -87,7 +111,11 @@ fn char_emdash() -> char {
 }
 
 /// Effective text: accepted tailored wording if present, else canonical.
-fn effective_text(canonical: &str, plan: Option<&crate::composer::ResumePlan>, bullet_id: i64) -> String {
+fn effective_text(
+    canonical: &str,
+    plan: Option<&crate::composer::ResumePlan>,
+    bullet_id: i64,
+) -> String {
     if let Some(plan) = plan {
         for item in plan.experience.iter().chain(plan.projects.iter()) {
             for b in &item.bullets {
@@ -100,11 +128,7 @@ fn effective_text(canonical: &str, plan: Option<&crate::composer::ResumePlan>, b
     canonical.to_string()
 }
 
-fn relevance_of(
-    report: &Option<crate::matching::MatchReport>,
-    entity_type: &str,
-    id: i64,
-) -> f64 {
+fn relevance_of(report: &Option<crate::matching::MatchReport>, entity_type: &str, id: i64) -> f64 {
     report
         .as_ref()
         .and_then(|r| {

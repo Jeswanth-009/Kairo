@@ -26,28 +26,26 @@ pub fn load_composer_input(
         linkedin: p.linkedin,
     });
 
-    let education: Vec<ComposerEducation> = super::vault::vault_list::<super::vault::Education>(conn)?
-        .into_iter()
-        .map(|e| ComposerEducation {
-            id: e.id,
-            institution: e.institution,
-            degree: e.degree,
-            field_of_study: e.field_of_study,
-            start_date: e.start_date,
-            end_date: e.end_date,
-            is_current: e.is_current,
-        })
-        .collect();
+    let education: Vec<ComposerEducation> =
+        super::vault::vault_list::<super::vault::Education>(conn)?
+            .into_iter()
+            .map(|e| ComposerEducation {
+                id: e.id,
+                institution: e.institution,
+                degree: e.degree,
+                field_of_study: e.field_of_study,
+                start_date: e.start_date,
+                end_date: e.end_date,
+                is_current: e.is_current,
+            })
+            .collect();
 
     // Relevance per (entity_type, id): from the stored match report, else 0
     // (the solver still ranks by evidence/skill tie-breakers).
     let mut relevance: HashMap<(String, i64), f64> = HashMap::new();
     if let Some(report) = super::matching::get_report(conn, job_id)? {
         for ranked in &report.entity_ranking {
-            relevance.insert(
-                (ranked.entity_type.clone(), ranked.id),
-                ranked.relevance,
-            );
+            relevance.insert((ranked.entity_type.clone(), ranked.id), ranked.relevance);
         }
         let requirement_texts = report
             .results
@@ -57,7 +55,6 @@ pub fn load_composer_input(
         let mut extra_warnings = Vec::new();
         let out = assemble(
             conn,
-            job_id,
             &mut extra_warnings,
             profile,
             education,
@@ -74,7 +71,6 @@ pub fn load_composer_input(
     let mut extra_warnings = Vec::new();
     let out = assemble(
         conn,
-        job_id,
         &mut extra_warnings,
         profile,
         education,
@@ -99,11 +95,7 @@ fn looks_like_narrative_meta_line(line: &str) -> bool {
         .iter()
         .filter(|p| match p.find(": ") {
             Some(i) => {
-                i > 0
-                    && i <= 28
-                    && p[..i]
-                        .chars()
-                        .all(|c| c.is_ascii_alphabetic() || c == ' ')
+                i > 0 && i <= 28 && p[..i].chars().all(|c| c.is_ascii_alphabetic() || c == ' ')
             }
             None => false,
         })
@@ -144,7 +136,11 @@ fn ensure_entity_bullets(
         let mut paragraph_count = 0usize;
         let lines: Vec<String> = raw_lines
             .into_iter()
-            .map(|l| l.trim_start_matches(['•', '-', '*', '▪', '·']).trim().to_string())
+            .map(|l| {
+                l.trim_start_matches(['•', '-', '*', '▪', '·'])
+                    .trim()
+                    .to_string()
+            })
             .filter(|l| l.chars().count() > 5)
             .filter(|l| !looks_like_narrative_meta_line(l))
             .collect();
@@ -189,7 +185,6 @@ fn ensure_entity_bullets(
 
 fn assemble(
     conn: &Connection,
-    job_id: i64,
     extra_warnings: &mut Vec<String>,
     profile: Option<ComposerProfile>,
     education: Vec<ComposerEducation>,
@@ -197,11 +192,16 @@ fn assemble(
     requirement_texts: Vec<String>,
     config: &ComposerConfig,
 ) -> Result<ComposerInput, String> {
-    let _ = job_id;
     let mut entities: Vec<ComposerEntity> = Vec::new();
 
     for project in super::vault::vault_list::<super::vault::Project>(conn)? {
-        let bullets = ensure_entity_bullets(conn, "project", project.id, &project.description, extra_warnings)?;
+        let bullets = ensure_entity_bullets(
+            conn,
+            "project",
+            project.id,
+            &project.description,
+            extra_warnings,
+        )?;
         entities.push(ComposerEntity {
             entity_type: "project".to_string(),
             id: project.id,
@@ -211,7 +211,11 @@ fn assemble(
             start_date: project.start_date,
             end_date: project.end_date,
             is_current: project.is_current,
-            skill_names: project.skills.iter().map(|r| r.canonical_name.clone()).collect(),
+            skill_names: project
+                .skills
+                .iter()
+                .map(|r| r.canonical_name.clone())
+                .collect(),
             evidence_count: project.evidence_count,
             bullets,
             relevance: relevance
@@ -222,7 +226,13 @@ fn assemble(
     }
 
     for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
-        let bullets = ensure_entity_bullets(conn, "experience", experience.id, &experience.description, extra_warnings)?;
+        let bullets = ensure_entity_bullets(
+            conn,
+            "experience",
+            experience.id,
+            &experience.description,
+            extra_warnings,
+        )?;
         entities.push(ComposerEntity {
             entity_type: "experience".to_string(),
             id: experience.id,
@@ -234,7 +244,11 @@ fn assemble(
             start_date: experience.start_date,
             end_date: experience.end_date,
             is_current: experience.is_current,
-            skill_names: experience.skills.iter().map(|r| r.canonical_name.clone()).collect(),
+            skill_names: experience
+                .skills
+                .iter()
+                .map(|r| r.canonical_name.clone())
+                .collect(),
             evidence_count: experience.evidence_count,
             bullets,
             relevance: relevance
@@ -260,7 +274,11 @@ fn assemble(
             .into_iter()
             .map(|s| crate::composer::ComposerSkill {
                 name: s.canonical_name.trim().to_string(),
-                category: if s.category.is_empty() { "other".to_string() } else { s.category },
+                category: if s.category.is_empty() {
+                    "other".to_string()
+                } else {
+                    s.category
+                },
             })
             .filter(|s| !s.name.is_empty())
             .collect();
@@ -308,9 +326,8 @@ pub struct StoredPlan {
 }
 
 pub fn get_plan(conn: &Connection, job_id: i64) -> Result<Option<StoredPlan>, String> {
-    let mut stmt = sql_err(conn.prepare(
-        "SELECT config_json, plan_json FROM resume_plans WHERE job_id = ?1",
-    ))?;
+    let mut stmt =
+        sql_err(conn.prepare("SELECT config_json, plan_json FROM resume_plans WHERE job_id = ?1"))?;
     match stmt.query_row([job_id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     }) {
@@ -326,7 +343,11 @@ pub fn get_plan(conn: &Connection, job_id: i64) -> Result<Option<StoredPlan>, St
 }
 
 /// Entry point used by the command: load → compose → persist.
-pub fn run_composer(conn: &Connection, job_id: i64, config: &ComposerConfig) -> Result<ResumePlan, String> {
+pub fn run_composer(
+    conn: &Connection,
+    job_id: i64,
+    config: &ComposerConfig,
+) -> Result<ResumePlan, String> {
     let input = load_composer_input(conn, job_id, config)?;
     let plan = compose(&input);
     save_plan(conn, job_id, config, &plan)?;

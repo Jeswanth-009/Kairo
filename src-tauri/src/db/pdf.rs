@@ -47,10 +47,7 @@ pub fn get_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfArtifact
     }
 }
 
-pub fn save_artifact(
-    conn: &Connection,
-    artifact: &PdfArtifact,
-) -> Result<(), String> {
+pub fn save_artifact(conn: &Connection, artifact: &PdfArtifact) -> Result<(), String> {
     sql_err(conn.execute(
         "UPDATE resume_plans SET pdf_path = ?1, tex_path = ?2, page_count = ?3, \
            artifact_template_id = ?4, artifact_paper = ?5, \
@@ -71,9 +68,7 @@ pub fn save_artifact(
 /// install used on this machine. Returns a helpful error when absent.
 pub fn find_tectonic(conn: &Connection) -> Result<PathBuf, String> {
     let override_path: Option<String> = {
-        let mut stmt = sql_err(conn.prepare(
-            "SELECT value FROM meta WHERE key = 'tectonic_path'",
-        ))?;
+        let mut stmt = sql_err(conn.prepare("SELECT value FROM meta WHERE key = 'tectonic_path'"))?;
         match stmt.query_row([], |r| r.get(0)) {
             Ok(v) => Some(v),
             Err(rusqlite::Error::QueryReturnedNoRows) => None,
@@ -113,10 +108,12 @@ pub fn find_tectonic(conn: &Connection) -> Result<PathBuf, String> {
             return Ok(local);
         }
     }
-    Err("Tectonic not found. Install it (winget install Tectonic.Typesetting or download from \
+    Err(
+        "Tectonic not found. Install it (winget install Tectonic.Typesetting or download from \
          github.com/tectonic-typesetting/tectonic/releases) and either add it to PATH or set the \
          path in Settings."
-        .to_string())
+            .to_string(),
+    )
 }
 
 fn dirs_home() -> Option<PathBuf> {
@@ -140,7 +137,10 @@ fn count_pages(pdf_path: &Path) -> Option<i64> {
                 j += 1;
             }
             if j > i + 7 {
-                if let Ok(n) = std::str::from_utf8(&bytes[i + 7..j]).unwrap_or_default().parse::<i64>() {
+                if let Ok(n) = std::str::from_utf8(&bytes[i + 7..j])
+                    .unwrap_or_default()
+                    .parse::<i64>()
+                {
                     if n > 0 && max.map(|m| n > m).unwrap_or(true) {
                         max = Some(n);
                     }
@@ -170,9 +170,7 @@ pub fn compile_locked(
 ) -> Result<CompileOutput, String> {
     let tex = crate::latex::render_plan(&plan, template_id);
 
-    let out_dir = app_data_dir
-        .join("pdf")
-        .join(format!("job_{job_id}"));
+    let out_dir = app_data_dir.join("pdf").join(format!("job_{job_id}"));
     std::fs::create_dir_all(&out_dir).map_err(|e| format!("could not create build dir: {e}"))?;
     let tex_path = out_dir.join("resume.tex");
     std::fs::write(&tex_path, &tex).map_err(|e| format!("could not write .tex: {e}"))?;
@@ -209,11 +207,15 @@ pub fn compile_locked(
 
     let pdf_path = out_dir.join("resume.pdf");
     if !pdf_path.exists() {
-        return Err(format!("Tectonic reported success but resume.pdf is missing.\n{log_tail}"));
+        return Err(format!(
+            "Tectonic reported success but resume.pdf is missing.\n{log_tail}"
+        ));
     }
     let size = std::fs::metadata(&pdf_path).map(|m| m.len()).unwrap_or(0);
     if size < 500 {
-        return Err(format!("resume.pdf looks truncated ({size} bytes).\n{log_tail}"));
+        return Err(format!(
+            "resume.pdf looks truncated ({size} bytes).\n{log_tail}"
+        ));
     }
     // Page count: the TeX log states "Output written on resume.xdv (N page".
     // Raw-byte /Count scanning fails here because xdvipdfmx compresses objects.
