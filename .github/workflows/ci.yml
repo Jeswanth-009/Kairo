@@ -10,7 +10,7 @@ jobs:
     name: Rust fmt · clippy · tests
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -43,7 +43,7 @@ jobs:
     name: Frontend lint · type-check · tests · build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
