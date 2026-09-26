@@ -43,11 +43,27 @@ jobs:
       - name: Build Tauri release bundle
         run: npm run tauri build
 
+      - name: Extract release notes for this version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Keep-a-Changelog: body runs from "## [VERSION]" to the next "## [" heading.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+          # Fallback so a missing section never publishes an empty release body.
+          if [ ! -s release_notes.md ]; then
+            echo "See CHANGELOG.md for the full history." > release_notes.md
+          fi
+          cat release_notes.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Kairo ${{ github.ref_name }}
-          body_path: CHANGELOG.md
+          body_path: release_notes.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
           files: |

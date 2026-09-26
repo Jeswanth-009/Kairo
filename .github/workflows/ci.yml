@@ -6,14 +6,16 @@ on:
   pull_request:
 
 jobs:
-  test:
-    name: Rust tests + frontend build
+  rust:
+    name: Rust fmt · clippy · tests
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -25,6 +27,24 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Check formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy (all targets, warnings are errors)
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Run Rust tests
+        working-directory: src-tauri
+        run: cargo test --locked
+
+  frontend:
+    name: Frontend lint · type-check · tests · build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -34,9 +54,11 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Run Rust tests
-        working-directory: src-tauri
-        run: cargo test --locked
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
 
       - name: Type-check and build frontend
         run: npm run build

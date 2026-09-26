@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/Jeswanth-009/Kairo/discussions
+    about: Ask how Kairo works, share your setup, or propose ideas before filing a feature request.
+  - name: Security vulnerability
+    url: https://github.com/Jeswanth-009/Kairo/security/advisories/new
+    about: Report vulnerabilities privately — please do not open a public issue. See SECURITY.md.
