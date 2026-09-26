@@ -63,7 +63,7 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
         setLoaded(true);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [jobId]);
 
   const run = async () => {

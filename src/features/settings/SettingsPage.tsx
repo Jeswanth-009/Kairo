@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Field, Input } from "../../components/ui/inputs";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
+import { APP_VERSION } from "../../lib/version";
 import type { BackupInfo } from "../../lib/types";
 import { useAppStore } from "../../stores/appStore";
 import { useThemeStore } from "../../stores/themeStore";
@@ -117,7 +118,7 @@ function AboutCard({ version }: { version?: string }) {
         />
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-ink">
-            v{version ?? "4.0.0"} · Local-first career intelligence workspace
+            v{version ?? APP_VERSION} · Local-first career intelligence workspace
           </h2>
           <p className="mt-1 text-xs text-muted">
             Tauri 2 · React · TypeScript · SQLite · Rust domain services

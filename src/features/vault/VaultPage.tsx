@@ -48,14 +48,26 @@ export default function VaultPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const records: Record<TabKey, AnyVaultRecord[]> = {
-    projects: store.projects,
-    experiences: store.experiences,
-    education: store.education,
-    certifications: store.certifications,
-    achievements: store.achievements,
-    skills: store.skills,
-  };
+  // Stable identity per store slice so `filtered` recomputes only when data
+  // actually changes, not on every render.
+  const records: Record<TabKey, AnyVaultRecord[]> = useMemo(
+    () => ({
+      projects: store.projects,
+      experiences: store.experiences,
+      education: store.education,
+      certifications: store.certifications,
+      achievements: store.achievements,
+      skills: store.skills,
+    }),
+    [
+      store.projects,
+      store.experiences,
+      store.education,
+      store.certifications,
+      store.achievements,
+      store.skills,
+    ],
+  );
 
   const totalCount = TABS.reduce((sum, t) => sum + records[t.key].length, 0);
   const config = tab === "skills" ? null : ENTITY_CONFIGS[tab];
@@ -73,7 +85,7 @@ export default function VaultPage() {
       }
       return parts.join(" ").toLowerCase().includes(q);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [records, tab, query]);
 
   const deleteRecord = useVaultStore((s) => s.deleteRecord);
