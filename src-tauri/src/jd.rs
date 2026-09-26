@@ -49,9 +49,14 @@ enum Section {
 }
 
 fn detect_section(line: &str) -> Option<Section> {
+    // Markdown posts wrap headings in emphasis ("**About You**") — strip the
+    // markers or the trailing "**" defeats every match below.
     let cleaned: String = line
         .trim()
         .trim_start_matches(['#', '-', '*', '•', '·', '▪', '◦', '‣'])
+        .trim()
+        .trim_end_matches([':', '*', '_'])
+        .trim_start_matches(['*', '_'])
         .trim()
         .trim_end_matches(':')
         .trim()
@@ -137,10 +142,16 @@ fn detect_section(line: &str) -> Option<Section> {
         return Some(Section::Skip);
     }
 
-    // Preferred / Nice to have
-    if cleaned.contains("preferred")
-        || cleaned.contains("nice to have")
-        || cleaned.contains("good to have")
+    // Preferred / Nice to have. starts_with, not contains — bullet text like
+    // "backend programming languages (Golang/Java/PHP preferred)" must not be
+    // mistaken for a heading.
+    if cleaned.starts_with("preferred")
+        || cleaned.starts_with("nice to have")
+        || cleaned.starts_with("good to have")
+        || cleaned == "bonus"
+        || cleaned == "bonus points"
+        || cleaned == "it would be a plus"
+        || cleaned == "desirable"
     {
         return Some(Section::Preferred);
     }
@@ -166,7 +177,21 @@ fn detect_section(line: &str) -> Option<Section> {
     }
 
     // Responsibilities
-    if cleaned.contains("responsibilit") {
+    // starts_with rather than contains: a bullet like "Sense of ownership and
+    // responsibility" must not hijack the section state mid-list.
+    if cleaned.starts_with("responsibilit") {
+        return Some(Section::Responsibilities);
+    }
+    // Real postings append the track to the heading ("What you'll do as a
+    // Product Engineer Intern") — prefix-match the family instead of
+    // requiring the bare heading.
+    if cleaned.starts_with("what you'll do")
+        || cleaned.starts_with("what you will do")
+        || cleaned.starts_with("what you'll be doing")
+        || cleaned.starts_with("what you will be doing")
+        || cleaned.starts_with("what you'll work on")
+        || cleaned.starts_with("what you will work on")
+    {
         return Some(Section::Responsibilities);
     }
     const RESPONSIBILITIES: &[&str] = &[
@@ -195,14 +220,29 @@ fn detect_section(line: &str) -> Option<Section> {
         return Some(Section::Responsibilities);
     }
 
-    // Required qualifications
-    if cleaned != "description & requirements"
-        && cleaned != "job description & requirements"
-        && cleaned != "job description"
-        && cleaned != "description"
+    // Required qualifications — prefix-matched so requirement *bullets*
+    // ("requirements gathering", "required: X") don't hijack the state.
+    // NOTE: "Description & Requirements" is deliberately NOT a heading — ATS
+    // labels like it introduce prose, not requirement lists.
+    const REQUIREMENT_HEADINGS: &[&str] = &[
+        "requirement",
+        "qualification",
+        "minimum requirement",
+        "minimum qualification",
+        "basic requirement",
+        "basic qualification",
+        "technical requirement",
+        "technical qualification",
+        "job requirement",
+        "role requirement",
+        "key requirement",
+        "other requirement",
+        "education requirement",
+    ];
+    if cleaned != "description"
         && cleaned != "overview"
         && cleaned != "job overview"
-        && (cleaned.contains("qualification") || cleaned.contains("requirement"))
+        && REQUIREMENT_HEADINGS.iter().any(|s| cleaned.starts_with(s))
     {
         return Some(Section::Required);
     }
@@ -755,9 +795,22 @@ fn extract_role_from_text(lines: &[&str]) -> Option<String> {
     None
 }
 
+/// Strips a markdown-bold wrapper ("**Heading**") so heading and bullet
+/// detection see the real text — "**" is itself a bullet character, so an
+/// unstripped bold title parses as a bullet.
+fn strip_md_bold(line: &str) -> &str {
+    let t = line.trim();
+    if t.len() >= 4 && t.starts_with("**") && t.ends_with("**") {
+        t[2..t.len() - 2].trim()
+    } else {
+        t
+    }
+}
+
 pub fn parse_jd(text: &str) -> JobExtraction {
     let raw_lines: Vec<&str> = text
         .lines()
+        .map(strip_md_bold)
         .map(|l| l.trim())
         .filter(|l| !l.is_empty())
         .collect();
@@ -784,6 +837,8 @@ pub fn parse_jd(text: &str) -> JobExtraction {
     }
 
     for &line in &raw_lines {
+        #[cfg(test)]
+        eprintln!("JDLINE sec={:?} | {}", section, line);
         if let Some(next) = detect_section(line) {
             section = Some(next);
             if next != Section::Skip {
@@ -808,9 +863,9 @@ pub fn parse_jd(text: &str) -> JobExtraction {
         if content.is_empty() || content.len() < 4 {
             continue;
         }
-        let is_bullet = starts_with_bullet(line) || content != line;
-        if !is_bullet && content.ends_with([':', '?']) {
-            continue; // sub-headings inside sections
+        // Sub-headings (bulleted or not) never become requirements.
+        if content.ends_with([':', '?']) {
+            continue;
         }
 
         if is_boilerplate_requirement(content)
@@ -1310,6 +1365,122 @@ Electronic Arts is an equal opportunity employer. All employment decisions are m
 
     // --- Regression (v4): UTF-8 char-boundary panics ------------------------
     // The Jobs "paste a JD" path shared the import parser's byte-slicing bugs.
+
+    #[test]
+    fn jd_parser_handles_markdown_postings() {
+        // Real-world shape (Chess.com): markdown-bold headings, "as a ..."
+        // heading variants, nested bullet lists.
+        let text = r#"
+**Engineering Internship**
+
+**About Us**
+
+Chess.com is one of the largest gaming sites in the world and the #1 platform for playing, learning, and enjoying chess.
+
+We are a tech company. A gaming company. A content company.
+
+**About You**
+
+Above all, you love chess and want to share it with the world! You also naturally resonate with a variable mix of the following qualities:
+
+- Multidisciplinary: ability to switch between relevant subject matter with relative ease.
+- Resilient: high tolerance for ambiguity during initial discovery phases in projects.
+- Ability to simplify: absorb inherent complexity within your projects.
+- Agile: able to maximize output and future-proof for further growth.
+- Unorthodox thinker: find novel solutions to the limitations inherent in every technology.
+
+**What you'll do as a Product Engineer Intern**
+
+- Build features and optimize systems, scaling for a global top 100 website
+- Contribute to technology, architecture, workflow, and design decisions
+- Contribute to the team knowledge-base
+
+**What you'll do as an AI/ML Intern**
+
+- Optimize data preprocessing and feature engineering pipelines
+- Develop, train, and deploy ML models, and integrate them into Chess.com products
+- Build AI applications powered by LLMs
+
+**Preferred Skills for All Internship Opportunities**
+
+- Chess player
+- Sense of ownership and responsibility
+- Excellent communicator and team player
+- Degree-seeking student currently enrolled at a college or university
+
+**Preferred Skills for Product Engineer Intern**
+
+- Training, relevant coursework or experience with:
+
+* client side programming languages (HTML, CSS, Typescript, Swift, Kotlin)
+* backend programming languages (Golang/Java/PHP preferred)
+* web application frameworks
+* relational databases (MySQL preferred)
+
+**Preferred Skills for AI/ML Engineer Intern**
+
+- Strong math foundation and understanding of traditional ML algorithms
+- Training, relevant coursework or experience with:
+
+* Python or another programming language (TypeScript/Go/Java preferred)
+* ML libraries and frameworks such as scikit-learn or PyTorch
+* LLMs/RAG/context engineering/evals/agentic patterns
+* SQL (BigQuery, MySQL, Postgres, etc.)
+
+**About the Opportunity**
+
+- This is a full-time position
+- We are 100% remote (work from anywhere!)
+"#;
+
+        let extraction = parse_jd(text);
+
+        let resp = extraction
+            .requirements
+            .iter()
+            .filter(|r| r.kind == RequirementKind::Responsibility)
+            .count();
+        let required = extraction
+            .requirements
+            .iter()
+            .filter(|r| r.kind == RequirementKind::RequiredSkill)
+            .count();
+        let preferred = extraction
+            .requirements
+            .iter()
+            .filter(|r| r.kind == RequirementKind::PreferredSkill)
+            .count();
+
+        assert!(resp >= 5, "responsibilities: {resp}");
+        assert!(required >= 4, "required: {required}");
+        assert!(preferred >= 8, "preferred: {preferred}");
+
+        let names: Vec<String> = extraction
+            .requirements
+            .iter()
+            .map(|r| r.raw_text.to_lowercase())
+            .collect();
+        assert!(names
+            .iter()
+            .any(|n| n.starts_with("build features and optimize systems")));
+        assert!(names
+            .iter()
+            .any(|n| n.starts_with("optimize data preprocessing")));
+        assert!(names.iter().any(|n| n.contains("chess player")));
+        assert!(names.iter().any(|n| n.contains("sense of ownership")));
+        assert!(names.iter().any(|n| n.contains("pytorch")));
+        // Company copy under Skip headings must not leak in.
+        assert!(!names.iter().any(|n| n.contains("600+ fully remote")));
+        assert!(!names.iter().any(|n| n.contains("equal opportunity")));
+        // The bulleted sub-heading line is a label, not a requirement.
+        assert!(!names
+            .iter()
+            .any(|n| n.starts_with("training, relevant coursework")));
+        // A bold title line is not a bullet.
+        assert!(!names
+            .iter()
+            .any(|n| n.starts_with("engineering internship")));
+    }
 
     #[test]
     fn jd_parser_survives_unspaced_dashes() {

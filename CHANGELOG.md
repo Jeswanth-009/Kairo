@@ -4,7 +4,25 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [4.1.2] — 2026-09-26
+## [4.1.3] — 2026-09-26
+
+JD extraction fixed for markdown job postings — the engine now reads
+real-world posts (e.g. Chess.com's) fully instead of a handful of lines.
+
+### Fixed
+- Markdown-bold headings ("**What you'll do as an Intern**") defeated
+  section detection: the "**" markers broke every heading match, and the
+  bold title line itself parsed as a bullet. Full-line bold wrappers are
+  stripped before parsing
+- "What you'll do as a <track>" heading variants now match
+  responsibilities (prefix-matched instead of exact)
+- A bullet containing the word "responsibility" or "preferred" (e.g.
+  "Sense of ownership and responsibility", "Golang/Java/PHP preferred")
+  hijacked the section state mid-list or was swallowed as a heading —
+  those heading checks are prefix-based now, and bullets ending in a
+  colon are sub-headings, never requirements
+
+## [4.1.2] — 2026-09-26 — 2026-09-26
 
 Engine-quality release: the deterministic JD reader and the plan composer no
 longer starve on the two most common real-world inputs — prose job
