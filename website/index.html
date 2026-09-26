@@ -57,20 +57,20 @@
     <section class="hero">
       <div class="bg-grid" aria-hidden="true"></div>
       <div class="container hero-inner">
-        <p class="hero-pill reveal">
+        <p class="hero-pill" style="--rise: 0">
           <span class="pill-dot" aria-hidden="true"></span>
           open source · MIT · <span id="hero-version">v4.1.0</span> · windows
         </p>
-        <h1 class="reveal">
+        <h1 style="--rise: 1">
           Every resume line,<br />
           <span class="accent">backed by proof.</span>
         </h1>
-        <p class="hero-sub reveal">
+        <p class="hero-sub" style="--rise: 2">
           Kairo is a local-first career workspace. Store your verified experience once, match it
           against any job description, and compose a tailored, ATS-safe one-page resume —
           with AI that rewords but <strong>never invents</strong>.
         </p>
-        <div class="hero-ctas reveal">
+        <div class="hero-ctas" style="--rise: 3">
           <a class="btn btn-primary btn-lg" id="hero-download" href="https://github.com/Jeswanth-009/Kairo/releases/latest">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             Download for Windows
@@ -80,16 +80,16 @@
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/></svg>
           </a>
         </div>
-        <ul class="spec-strip reveal" role="list">
+        <ul class="spec-strip" style="--rise: 4" role="list">
           <li><b>0</b> telemetry</li>
-          <li><b>11</b> migrations</li>
-          <li><b>116</b> Rust tests</li>
-          <li><b>3</b> LaTeX templates</li>
+          <li><b data-count="11">11</b> migrations</li>
+          <li><b data-count="116">116</b> Rust tests</li>
+          <li><b data-count="3">3</b> LaTeX templates</li>
           <li><b>1</b>-page discipline</li>
-          <li><b>MIT</b> licensed</li>
+          <li>MIT licensed</li>
         </ul>
 
-        <figure class="hero-shot reveal">
+        <figure class="hero-shot" style="--rise: 5">
           <div class="shot-frame">
             <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span></div>
             <img src="assets/img/shot-dashboard.webp" alt="Kairo dashboard — vault stats, application pipeline and recent activity" width="1600" height="1000" fetchpriority="high" />
@@ -266,10 +266,10 @@
           </p>
         </header>
         <figure class="demo-shot reveal">
-          <div class="shot-frame">
+          <a class="shot-frame shot-link" href="demo/" target="_blank" rel="noopener" aria-label="Open the live Kairo demo">
             <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span></div>
             <img src="assets/img/shot-studio.webp" alt="Kairo Resume Studio — plan editor, live PDF preview and template picker" width="1600" height="1000" loading="lazy" />
-          </div>
+          </a>
         </figure>
         <div class="demo-cta reveal">
           <a class="btn btn-primary btn-lg" href="demo/" target="_blank" rel="noopener">

@@ -1,11 +1,13 @@
 /* Kairo website — progressive enhancement.
-   Everything works without this file; it adds scroll reveals, the mobile
-   menu, and live GitHub data (latest release, star count). */
+   Everything works without this file; it adds the hero entrance, scroll
+   reveals, count-up spec numbers, the card cursor spotlight, hero parallax,
+   active-section nav highlighting, the mobile menu, and live GitHub data. */
 
 (function () {
   "use strict";
 
   var REPO = "Jeswanth-009/Kairo";
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* ---------------------------- Nav scroll state ---------------------------- */
 
@@ -37,13 +39,12 @@
   /* --------------------------- Reveal on scroll ---------------------------- */
 
   var revealables = Array.prototype.slice.call(document.querySelectorAll(".reveal"));
-  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   if (!("IntersectionObserver" in window) || reduceMotion) {
     revealables.forEach(function (el) { el.classList.add("in"); });
   } else {
     // Stagger siblings that become visible in the same frame.
-    var observer = new IntersectionObserver(
+    var revealObserver = new IntersectionObserver(
       function (entries) {
         var delay = 0;
         entries.forEach(function (entry) {
@@ -52,12 +53,107 @@
           el.style.transitionDelay = (delay * 70) + "ms";
           delay += 1;
           el.classList.add("in");
-          observer.unobserve(el);
+          revealObserver.unobserve(el);
         });
       },
       { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
     );
-    revealables.forEach(function (el) { observer.observe(el); });
+    revealables.forEach(function (el) { revealObserver.observe(el); });
+  }
+
+  /* ------------------------------ Count-up specs --------------------------- */
+
+  var counters = Array.prototype.slice.call(document.querySelectorAll("[data-count]"));
+
+  function countUp(el) {
+    var target = parseInt(el.getAttribute("data-count"), 10);
+    if (isNaN(target) || target === 0) return;
+    var duration = 1100;
+    var start = null;
+    function frame(ts) {
+      if (start === null) start = ts;
+      var t = Math.min((ts - start) / duration, 1);
+      var eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = String(Math.round(eased * target));
+      if (t < 1) window.requestAnimationFrame(frame);
+    }
+    window.requestAnimationFrame(frame);
+  }
+
+  if (!("IntersectionObserver" in window) || reduceMotion) {
+    /* keep the static values */
+  } else {
+    var countObserver = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          countUp(entry.target);
+          countObserver.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.6 }
+    );
+    counters.forEach(function (el) { countObserver.observe(el); });
+  }
+
+  /* --------------------------- Card cursor spotlight ------------------------ */
+
+  if (window.matchMedia("(hover: hover)").matches && !reduceMotion) {
+    document.querySelectorAll(".card").forEach(function (card) {
+      card.addEventListener("mousemove", function (e) {
+        var rect = card.getBoundingClientRect();
+        card.style.setProperty("--mx", (e.clientX - rect.left) + "px");
+        card.style.setProperty("--my", (e.clientY - rect.top) + "px");
+      });
+    });
+  }
+
+  /* ---------------------------- Hero shot parallax -------------------------- */
+
+  var heroShot = document.querySelector(".hero-shot");
+  var hero = document.querySelector(".hero");
+  if (heroShot && hero && !reduceMotion) {
+    var ticking = false;
+    window.addEventListener("scroll", function () {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () {
+        var y = window.scrollY;
+        var limit = hero.offsetHeight;
+        if (y <= limit) {
+          heroShot.style.transform = "translateY(" + (y * 0.05).toFixed(1) + "px)";
+        }
+        ticking = false;
+      });
+    }, { passive: true });
+  }
+
+  /* --------------------------- Active nav section --------------------------- */
+
+  var navLinks = Array.prototype.slice.call(document.querySelectorAll(".nav-links a"));
+  var sections = navLinks
+    .map(function (link) {
+      var hash = link.getAttribute("href") || "";
+      return hash.charAt(0) === "#" ? document.getElementById(hash.slice(1)) : null;
+    })
+    .filter(Boolean);
+
+  if ("IntersectionObserver" in window && sections.length) {
+    var sectionObserver = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          navLinks.forEach(function (link) {
+            link.classList.toggle(
+              "active",
+              link.getAttribute("href") === "#" + entry.target.id
+            );
+          });
+        });
+      },
+      { rootMargin: "-35% 0px -55% 0px" }
+    );
+    sections.forEach(function (section) { sectionObserver.observe(section); });
   }
 
   /* ------------------------- Live GitHub release data ---------------------- */
