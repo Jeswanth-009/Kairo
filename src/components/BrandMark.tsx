@@ -8,7 +8,9 @@ import { useThemeStore } from "../stores/themeStore";
  */
 export function BrandMark({ size = 32, glow = false }: { size?: number; glow?: boolean }) {
   const theme = useThemeStore((s) => s.theme);
-  const src = theme === "dark" ? "/brand/mark-128.png" : "/brand/mark-light-128.png";
+  // Relative path — resolves identically in the desktop build (served from
+  // the origin root) and on the website demo (served from a subdirectory).
+  const src = theme === "dark" ? "brand/mark-128.png" : "brand/mark-light-128.png";
   return (
     <img
       src={src}

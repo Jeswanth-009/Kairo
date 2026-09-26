@@ -1,4 +1,6 @@
 dist/
+dist-demo/
+site-dist/
 node_modules/
 coverage/
 src-tauri/

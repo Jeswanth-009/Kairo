@@ -7,6 +7,8 @@ export default tseslint.config(
   {
     ignores: [
       "dist/",
+      "dist-demo/",
+      "site-dist/",
       "node_modules/",
       "coverage/",
       "src-tauri/",
@@ -15,6 +17,18 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    // Landing-page script: plain browser JS, no bundler.
+    files: ["website/**/*.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        fetch: "readonly",
+        IntersectionObserver: "readonly",
+      },
+    },
+  },
   {
     files: ["**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },

@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kairo — Every resume line, backed by proof</title>
+  <meta name="description" content="Kairo is a free, open-source, local-first career workspace. Turn verified experience into tailored, ATS-safe one-page resumes — with AI that rewords but never invents." />
+  <link rel="icon" type="image/png" href="assets/img/icon-64.png" />
+  <link rel="apple-touch-icon" href="assets/img/icon-180.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Kairo — Every resume line, backed by proof" />
+  <meta property="og:description" content="A local-first career workspace with grounded AI tailoring, deterministic planning and ATS-safe PDF export. Free and open source." />
+  <meta property="og:image" content="assets/img/og-card.jpg" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="preload" as="font" type="font/woff2" href="assets/fonts/inter-var.woff2" crossorigin />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav" id="top">
+    <div class="container nav-inner">
+      <a class="brand" href="#top" aria-label="Kairo home">
+        <img src="assets/img/icon-64.png" alt="" width="34" height="34" />
+        <span class="brand-name">Kairo</span>
+      </a>
+      <nav class="nav-links" aria-label="Main">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#trust">Trust</a>
+        <a href="#demo">Live demo</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="gh-pill" href="https://github.com/Jeswanth-009/Kairo" target="_blank" rel="noopener" aria-label="Kairo on GitHub">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          <span id="gh-stars" title="GitHub stars">★ —</span>
+        </a>
+        <a class="btn btn-primary btn-sm" href="#download">Download</a>
+        <button class="nav-toggle" aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu">
+          <span></span><span></span>
+        </button>
+      </div>
+    </div>
+    <div class="mobile-menu" id="mobile-menu">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#trust">Trust</a>
+      <a href="#demo">Live demo</a>
+      <a href="#faq">FAQ</a>
+      <a class="btn btn-primary" href="#download">Download</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ============================== HERO ============================== -->
+    <section class="hero">
+      <div class="bg-grid" aria-hidden="true"></div>
+      <div class="container hero-inner">
+        <p class="hero-pill reveal">
+          <span class="pill-dot" aria-hidden="true"></span>
+          open source · MIT · <span id="hero-version">v4.1.0</span> · windows
+        </p>
+        <h1 class="reveal">
+          Every resume line,<br />
+          <span class="accent">backed by proof.</span>
+        </h1>
+        <p class="hero-sub reveal">
+          Kairo is a local-first career workspace. Store your verified experience once, match it
+          against any job description, and compose a tailored, ATS-safe one-page resume —
+          with AI that rewords but <strong>never invents</strong>.
+        </p>
+        <div class="hero-ctas reveal">
+          <a class="btn btn-primary btn-lg" id="hero-download" href="https://github.com/Jeswanth-009/Kairo/releases/latest">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn btn-ghost btn-lg" href="demo/">
+            Try the live demo
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+        <ul class="spec-strip reveal" role="list">
+          <li><b>0</b> telemetry</li>
+          <li><b>11</b> migrations</li>
+          <li><b>116</b> Rust tests</li>
+          <li><b>3</b> LaTeX templates</li>
+          <li><b>1</b>-page discipline</li>
+          <li><b>MIT</b> licensed</li>
+        </ul>
+
+        <figure class="hero-shot reveal">
+          <div class="shot-frame">
+            <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+            <img src="assets/img/shot-dashboard.webp" alt="Kairo dashboard — vault stats, application pipeline and recent activity" width="1600" height="1000" fetchpriority="high" />
+          </div>
+          <figcaption class="sr-only">The Kairo dashboard showing Career Vault statistics and the application pipeline.</figcaption>
+        </figure>
+      </div>
+      <div class="horizon" aria-hidden="true"></div>
+    </section>
+
+    <!-- ============================ FEATURES ============================ -->
+    <section class="section" id="features">
+      <div class="container">
+        <header class="section-head reveal">
+          <div class="head-rule"><span class="kicker"><b>01</b> · why kairo</span><span class="head-line"></span></div>
+          <h2>A resume builder that can't lie for you</h2>
+          <p class="section-sub">
+            Most tools generate plausible text and hope it's true. Kairo starts from what you can
+            prove, and never lets a rewrite drift away from it.
+          </p>
+        </header>
+        <div class="grid grid-3">
+          <article class="card reveal">
+            <span class="card-index">01</span>
+            <h3>Career Vault</h3>
+            <p>Store each project, role and achievement once — with the evidence behind it. Skills
+              carry a 0–5 confidence, so “read about it in a course” can never claim “production
+              experience”.</p>
+          </article>
+          <article class="card reveal">
+            <span class="card-index">02</span>
+            <h3>Deterministic planning</h3>
+            <p>Pure functions score every requirement and pick the strongest relevant lines — same
+              input, byte-identical output. The interesting part is deciding, not guessing.</p>
+          </article>
+          <article class="card reveal">
+            <span class="card-index">03</span>
+            <h3>Grounded AI tailoring</h3>
+            <p>The AI may reword a bullet only within what the evidence supports. Validation gates
+              reject inflation, and you approve or reject every single change.</p>
+          </article>
+          <article class="card reveal">
+            <span class="card-index">04</span>
+            <h3>ATS-safe PDF export</h3>
+            <p>Three LaTeX templates compiled by Tectonic. Full character escaping, ruled section
+              headings, and a live line estimate that keeps you to one page.</p>
+          </article>
+          <article class="card reveal">
+            <span class="card-index">05</span>
+            <h3>Local-first &amp; private</h3>
+            <p>Your data lives in a SQLite database on your machine; API keys go to the OS keyring.
+              There is no Kairo server, no account, and no telemetry.</p>
+          </article>
+          <article class="card reveal">
+            <span class="card-index">06</span>
+            <h3>Bring your own model</h3>
+            <p>Any OpenAI-compatible endpoint works — or go fully offline with Ollama and LM
+              Studio, no API key needed. Tailoring is optional either way.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ BRAND MOMENT ============================ -->
+    <section class="brand-moment" aria-hidden="true">
+      <img src="assets/img/art-pillars.webp" alt="" width="1920" height="1193" loading="lazy" />
+    </section>
+
+    <!-- ============================ HOW IT WORKS ============================ -->
+    <section class="section" id="how">
+      <div class="container">
+        <header class="section-head reveal">
+          <div class="head-rule"><span class="kicker"><b>02</b> · the pipeline</span><span class="head-line"></span></div>
+          <h2>From job description to submitted PDF</h2>
+          <p class="section-sub">One workspace per application. Every step is inspectable, and
+            nothing moves forward without you.</p>
+        </header>
+        <ol class="pipeline" role="list">
+          <li class="step reveal">
+            <span class="step-num" aria-hidden="true">1</span>
+            <h3>Paste the JD</h3>
+            <p>Requirements are extracted for you — confirm, edit, and weight what matters.</p>
+          </li>
+          <li class="step reveal">
+            <span class="step-num" aria-hidden="true">2</span>
+            <h3>See the match</h3>
+            <p>Every requirement lands Covered, Partial or Missing against your Vault.</p>
+          </li>
+          <li class="step reveal">
+            <span class="step-num" aria-hidden="true">3</span>
+            <h3>Compose the plan</h3>
+            <p>The strongest evidence-backed lines are ranked, capped to one page, and editable.</p>
+          </li>
+          <li class="step reveal">
+            <span class="step-num" aria-hidden="true">4</span>
+            <h3>Tailor &amp; review</h3>
+            <p>One AI pass rewords the plan. You accept, reject, or hand-edit each bullet.</p>
+          </li>
+          <li class="step reveal">
+            <span class="step-num" aria-hidden="true">5</span>
+            <h3>Export &amp; snapshot</h3>
+            <p>A reproducible PDF plus an immutable version — reopen exactly what you sent, forever.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============================== TRUST ============================== -->
+    <section class="section" id="trust">
+      <div class="container trust-grid">
+        <div class="trust-copy reveal">
+          <div class="head-rule"><span class="kicker"><b>03</b> · the trust model</span><span class="head-line"></span></div>
+          <h2>No fabrication, ever</h2>
+          <p class="section-sub">
+            An AI resume tool is only as good as its worst hallucination. Kairo treats wording as a
+            thin layer over facts — and the facts are yours, with receipts.
+          </p>
+          <ul class="trust-list" role="list">
+            <li class="reveal">
+              <strong>Evidence links.</strong> Every approved bullet lists the proof behind it —
+              notes, repos, certificates.
+            </li>
+            <li class="reveal">
+              <strong>Claim rules.</strong> Forbid phrases you never want on your resume; Kairo
+              enforces them on every rewrite.
+            </li>
+            <li class="reveal">
+              <strong>Validation gates.</strong> A rewrite that introduces facts the evidence
+              doesn't support is rejected before you ever see it.
+            </li>
+            <li class="reveal">
+              <strong>Human review.</strong> Suggestions stay “pending” until you accept them.
+              Nothing ships on autopilot.
+            </li>
+          </ul>
+        </div>
+        <div class="trust-visual reveal" aria-hidden="true">
+          <div class="proof-card">
+            <p class="proof-label">Canonical bullet · approved</p>
+            <p class="proof-text">“Cut model costs 60% with a cross-region Bedrock architecture while
+              keeping sub-2&nbsp;s end-to-end latency.”</p>
+            <div class="proof-chips">
+              <span class="chip chip-ok">benchmark-notes.md</span>
+              <span class="chip chip-blue">cost-report.csv</span>
+              <span class="chip chip-violet">repo commit #481</span>
+            </div>
+            <div class="proof-meta">
+              <span class="chip chip-ok">✓ facts covered</span>
+              <span class="chip chip-ok">✓ no forbidden claims</span>
+              <span class="chip chip-dawn">confidence 4/5</span>
+            </div>
+          </div>
+          <div class="proof-card proof-rejected">
+            <p class="proof-label">AI suggestion · rejected by validation</p>
+            <p class="proof-text">“…led a team of <s>12 engineers</s> across <s>three continents</s>…”</p>
+            <div class="proof-chips">
+              <span class="chip chip-bad">unsupported fact: team size</span>
+              <span class="chip chip-bad">unsupported fact: scope</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== DEMO ============================== -->
+    <section class="section section-alt" id="demo">
+      <div class="container demo-inner">
+        <header class="section-head reveal">
+          <div class="head-rule"><span class="kicker"><b>04</b> · live demo</span><span class="head-line"></span></div>
+          <h2>Try the real thing, right now</h2>
+          <p class="section-sub">
+            This is the actual Kairo interface — Vault, job workspaces, Resume Studio and all —
+            running in your browser on sample data. Nothing to sign up for.
+          </p>
+        </header>
+        <figure class="demo-shot reveal">
+          <div class="shot-frame">
+            <div class="shot-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+            <img src="assets/img/shot-studio.webp" alt="Kairo Resume Studio — plan editor, live PDF preview and template picker" width="1600" height="1000" loading="lazy" />
+          </div>
+        </figure>
+        <div class="demo-cta reveal">
+          <a class="btn btn-primary btn-lg" href="demo/" target="_blank" rel="noopener">
+            Open the live demo
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></svg>
+          </a>
+          <p class="demo-note">Full app on fixtures · AI tailoring shown in mock mode · your input stays in the tab</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ DOWNLOAD ============================ -->
+    <section class="section" id="download">
+      <div class="container">
+        <div class="download-card reveal">
+          <div class="glow glow-dawn" aria-hidden="true"></div>
+          <div class="download-copy">
+            <div class="head-rule"><span class="kicker"><b>05</b> · get kairo</span><span class="head-line"></span></div>
+            <h2>Download for Windows</h2>
+            <p class="section-sub">
+              Free and open source under MIT. No account, no subscription, no telemetry.
+            </p>
+            <div class="download-ctas">
+              <a class="btn btn-primary btn-lg" id="download-btn" href="https://github.com/Jeswanth-009/Kairo/releases/latest">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Download <span id="dl-version">v4.1.0</span>
+              </a>
+              <a class="btn btn-ghost btn-lg" href="https://github.com/Jeswanth-009/Kairo" target="_blank" rel="noopener">View source on GitHub</a>
+            </div>
+            <ul class="download-meta" role="list">
+              <li>Windows 10 / 11 · 64-bit · ~9 MB installer</li>
+              <li>PDF export uses the free <a href="https://tectonic-typesetting.github.io" target="_blank" rel="noopener">Tectonic</a> engine — install once, Kairo finds it</li>
+              <li>Optional AI: any OpenAI-compatible endpoint, or local Ollama / LM Studio</li>
+            </ul>
+          </div>
+          <div class="download-side" aria-hidden="true">
+            <img src="assets/img/lockup-vertical.webp" alt="" width="220" height="220" loading="lazy" />
+            <p class="dl-fact"><strong id="dl-fact-version">v4.1.0</strong><span>latest release</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== FAQ ============================== -->
+    <section class="section section-alt" id="faq">
+      <div class="container container-narrow">
+        <header class="section-head reveal">
+          <div class="head-rule"><span class="kicker"><b>06</b> · questions</span><span class="head-line"></span></div>
+          <h2>Frequently asked</h2>
+        </header>
+        <div class="faq-list">
+          <details class="faq reveal">
+            <summary>Does my data ever leave my machine?<span class="faq-icon" aria-hidden="true"></span></summary>
+            <p>No. Kairo stores everything in a SQLite database in your user directory. AI
+              tailoring calls go directly from your machine to the provider you configure —
+              or to a local model, where nothing leaves at all. There is no Kairo server.</p>
+          </details>
+          <details class="faq reveal">
+            <summary>Can the AI invent experience to sound better?<span class="faq-icon" aria-hidden="true"></span></summary>
+            <p>That's the first thing Kairo was designed to prevent. Rewrites are grounded in your
+              evidence notes, checked by validation gates (technology diff, fact coverage, forbidden
+              claim rules), and nothing reaches your resume until you personally accept it.</p>
+          </details>
+          <details class="faq reveal">
+            <summary>Do I need an API key or a paid AI plan?<span class="faq-icon" aria-hidden="true"></span></summary>
+            <p>No. Tailoring is optional. Point Kairo at Ollama or LM Studio and it works fully
+              offline with local models — no key, no cost. Cloud providers work too if you prefer.</p>
+          </details>
+          <details class="faq reveal">
+            <summary>Is it really free? What's the catch?<span class="faq-icon" aria-hidden="true"></span></summary>
+            <p>It's MIT-licensed open source. There are no paid tiers, no watermarks, no “credits”.
+              The catch is that you review your own resume — Kairo refuses to do it on autopilot.</p>
+          </details>
+          <details class="faq reveal">
+            <summary>Is there a macOS or Linux version?<span class="faq-icon" aria-hidden="true"></span></summary>
+            <p>Windows today; macOS and Linux builds are on the roadmap. The core is Rust and
+              React, so the heavy lifting is already platform-independent.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ BRAND STRIP ============================ -->
+    <section class="brand-strip" aria-hidden="true">
+      <img src="assets/img/art-values.webp" alt="" width="1600" height="1098" loading="lazy" />
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <img src="assets/img/icon-64.png" alt="" width="30" height="30" />
+        <div>
+          <p class="footer-name">Kairo</p>
+          <p class="footer-tag">Your career. A brighter next step.</p>
+        </div>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <div>
+          <p>Product</p>
+          <a href="#download">Download</a>
+          <a href="demo/">Live demo</a>
+          <a href="https://github.com/Jeswanth-009/Kairo/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+        </div>
+        <div>
+          <p>Project</p>
+          <a href="https://github.com/Jeswanth-009/Kairo" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/Jeswanth-009/Kairo/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+          <a href="https://github.com/Jeswanth-009/Kairo/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+        </div>
+        <div>
+          <p>Community</p>
+          <a href="https://github.com/Jeswanth-009/Kairo/discussions" target="_blank" rel="noopener">Discussions</a>
+          <a href="https://github.com/Jeswanth-009/Kairo/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noopener">Code of Conduct</a>
+          <a href="https://github.com/Jeswanth-009/Kairo/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+        </div>
+      </nav>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 Kairo contributors</p>
+      <p>Built with Rust, React &amp; SQLite · No cookies, no tracking</p>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js" defer></script>
+</body>
+</html>

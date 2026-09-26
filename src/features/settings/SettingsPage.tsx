@@ -111,7 +111,7 @@ function AboutCard({ version }: { version?: string }) {
     <Card className="overflow-hidden p-0">
       <div className="flex flex-wrap items-center gap-5 p-6">
         <img
-          src={theme === "dark" ? "/brand/lockup-horizontal-dark-400.png" : "/brand/lockup-horizontal-light-400.png"}
+          src={theme === "dark" ? "brand/lockup-horizontal-dark-400.png" : "brand/lockup-horizontal-light-400.png"}
           alt="Kairo — Your career. A brighter next step."
           draggable={false}
           className="h-16 w-auto rounded-xl select-none"

@@ -19,3 +19,5 @@ tmp_baseline/
 *.db-wal
 *.db-shm
 src-tauri/gen/
+site-dist/
+dist-demo/

@@ -27,7 +27,7 @@ export function Splash() {
       }`}
     >
       <img
-        src="/brand/lockup-vertical-dark-night-800.png"
+        src="brand/lockup-vertical-dark-night-800.png"
         alt=""
         draggable={false}
         className="glow-pulse w-64 rounded-3xl shadow-float select-none"
