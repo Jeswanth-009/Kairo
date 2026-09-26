@@ -539,7 +539,11 @@ img { max-width: 100%; height: auto; display: block; }
   font-size: 1.04rem; line-height: 1.55; color: var(--ink);
   font-weight: 480;
 }
-.proof-text s { color: #fca5a5; text-decoration-color: rgb(220 38 38 / 0.7); }
+.proof-text em.bad {
+  color: #fca5a5;
+  font-style: italic;
+  font-weight: 550;
+}
 .proof-chips, .proof-meta {
   display: flex; flex-wrap: wrap; gap: 8px;
 }
