@@ -20,6 +20,17 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: "development"
+    # React 18 → 19 is a deliberate migration (types + renderer peer deps move
+    # together), not a routine bump. Bumping half the pair breaks npm resolve.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
