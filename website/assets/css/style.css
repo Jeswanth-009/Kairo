@@ -673,19 +673,48 @@ img { max-width: 100%; height: auto; display: block; }
   max-width: 640px;
 }
 
-/* ---------------------------- Brand moments ---------------------------- */
+/* ---------------------------- Brand moment ----------------------------- */
 
-.brand-moment, .brand-strip {
-  border-block: 1px solid var(--line);
-  line-height: 0;
+.brand-moment {
+  padding: 84px 0;
   background: var(--midnight-deep);
-  position: relative;
+  border-bottom: 1px solid var(--line);
 }
-.brand-moment img, .brand-strip img {
-  width: 100%;
-  height: clamp(240px, 30vw, 400px);
-  object-fit: cover;
-  object-position: center 30%;
+.brand-art {
+  margin: 0;
+  max-width: 880px;
+  margin-inline: auto;
+  border-radius: 18px;
+  border: 1px solid var(--line-strong);
+  overflow: hidden;
+  box-shadow: 0 40px 90px -40px rgb(2 6 23 / 0.9);
+}
+.brand-art img { width: 100%; }
+
+/* --------------------------- Closing band ------------------------------ */
+
+.closing-band {
+  border-top: 1px solid var(--line);
+  background:
+    radial-gradient(ellipse 55% 120% at 50% 130%, rgb(246 193 119 / 0.09), transparent 65%),
+    var(--midnight-deep);
+  padding: 44px 0;
+}
+.closing-inner {
+  display: flex; align-items: center; gap: 20px;
+  flex-wrap: wrap;
+}
+.closing-inner img { border-radius: 10px; }
+.closing-copy { margin-right: auto; }
+.closing-title {
+  margin: 0;
+  font-size: 1.28rem; font-weight: 700; letter-spacing: -0.02em;
+}
+.closing-values {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 /* ------------------------------- Footer -------------------------------- */
