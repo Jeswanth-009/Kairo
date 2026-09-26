@@ -4,6 +4,29 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [4.1.1] — 2026-09-26
+
+A UI-correctness release: every dialog now opens in the viewport no matter
+where you scrolled, and the browser demo's Career Vault and job workspaces
+carry real fixture data instead of empty lists.
+
+### Fixed
+- All dialogs (record inspector, job forms, confirmations) could open
+  off-screen above the current scroll position: the route-transition
+  animation kept a CSS transform on the page container, which became the
+  positioning context for fixed-position modals. The keyframes now end at
+  `transform: none`, so modals always center in the viewport — and nested
+  dialogs inside the record inspector are no longer clipped
+- Switching tabs in the Job Workspace or Career Vault resets the scroll to
+  the top instead of landing mid-page
+
+### Changed
+- Browser demo: the Career Vault serves the full fixture set (3 projects,
+  2 experiences, 2 certifications, 4 achievements, 18 evidence items, 9
+  canonical bullets, 3 claim rules) with working create/edit/delete; job
+  workspaces carry requirement sets matching their badges; the previously
+  missing evidence/bullet/claim-rule and requirement commands are mocked
+
 ## [4.1.0] — 2026-09-26
 
 The tailor & plan engine revamp — one bounded LLM call rewrites the whole
