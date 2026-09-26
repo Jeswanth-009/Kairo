@@ -859,6 +859,14 @@ pub fn parse_jd(text: &str) -> JobExtraction {
         requirements.truncate(40);
     }
 
+    // Thin-extraction rescue: prose-style JDs (no headings, no bullets) leave
+    // the section pass nearly empty, starving matching and planning. Scan the
+    // whole text for known technology terms and add the ones no captured
+    // requirement already mentions.
+    if requirements.len() < 4 {
+        push_tech_requirements(text, &mut requirements, &mut seen);
+    }
+
     let domain = {
         let context = format!(
             "{} {}",
@@ -884,6 +892,135 @@ pub fn parse_jd(text: &str) -> JobExtraction {
         seniority: detect_seniority(text),
         domain,
         requirements,
+    }
+}
+
+/// Known technologies for the thin-extraction rescue pass, matched as padded
+/// substrings of a punctuation-normalized lowercase copy of the JD. Terms are
+/// chosen so plain substring matching is safe ("java" cannot match inside
+/// "javascript", "git" not inside "github"). Single-letter names ("R", "C")
+/// are deliberately excluded — too false-positive-prone.
+const TECH_TERMS: &[&str] = &[
+    "python",
+    "javascript",
+    "typescript",
+    "java",
+    "kotlin",
+    "swift",
+    "golang",
+    "rust",
+    "c++",
+    "c#",
+    "ruby",
+    "php",
+    "scala",
+    "solidity",
+    "react",
+    "next.js",
+    "angular",
+    "vue",
+    "svelte",
+    "node.js",
+    "express",
+    "django",
+    "flask",
+    "fastapi",
+    "spring boot",
+    ".net",
+    "tailwind",
+    "sql",
+    "postgresql",
+    "mysql",
+    "sqlite",
+    "mongodb",
+    "redis",
+    "dynamodb",
+    "cassandra",
+    "elasticsearch",
+    "graphql",
+    "aws",
+    "azure",
+    "gcp",
+    "docker",
+    "kubernetes",
+    "terraform",
+    "github actions",
+    "jenkins",
+    "linux",
+    "ci/cd",
+    "pytorch",
+    "tensorflow",
+    "langchain",
+    "openai",
+    "hugging face",
+    "llm",
+    "rag",
+    "kafka",
+    "rabbitmq",
+    "microservices",
+    "grpc",
+    "websockets",
+    "rest api",
+    "git",
+];
+
+/// Terms that must be matched as a capitalised standalone word — lowercase
+/// matching would flood requirements ("good", "go to").
+const TECH_TERMS_CAPITALISED: &[&str] = &["Go"];
+
+/// Preferred-skill markers: a tech term mentioned near one of these reads as
+/// optional rather than required.
+const PREFERRED_MARKERS: &[&str] = &["nice to have", "plus", "bonus", "preferred", "familiarity"];
+
+fn push_tech_requirements(
+    text: &str,
+    requirements: &mut Vec<RequirementDraft>,
+    seen: &mut Vec<String>,
+) {
+    let mut normalized = text.to_lowercase();
+    for marker in [',', ';', ':', '(', ')', '[', ']', '·', '•', '\n', '\r'] {
+        normalized = normalized.replace(marker, " ");
+    }
+    let padded = format!(" {} ", normalized);
+
+    for term in TECH_TERMS {
+        let needle = format!(" {term} ");
+        let Some(pos) = padded.find(&needle) else {
+            continue;
+        };
+        // A tech term already mentioned inside a captured requirement is not a
+        // new requirement.
+        if seen.iter().any(|s| s.contains(term)) {
+            continue;
+        }
+        let kind = if PREFERRED_MARKERS
+            .iter()
+            .any(|w| padded[..pos + needle.len()].contains(w))
+        {
+            RequirementKind::PreferredSkill
+        } else {
+            RequirementKind::RequiredSkill
+        };
+        let importance = match kind {
+            RequirementKind::PreferredSkill => 0.4,
+            _ => 0.65,
+        };
+        push_requirement(requirements, seen, kind, term, importance);
+    }
+
+    for term in TECH_TERMS_CAPITALISED {
+        let word_match = text.split_whitespace().any(|w| {
+            w.trim_matches(|c: char| !c.is_alphanumeric() && c != '+' && c != '#') == *term
+        });
+        if word_match && !seen.iter().any(|s| s.contains(&term.to_lowercase())) {
+            push_requirement(
+                requirements,
+                seen,
+                RequirementKind::RequiredSkill,
+                term,
+                0.65,
+            );
+        }
     }
 }
 
@@ -1023,6 +1160,49 @@ mod tests {
         }
         let extraction = parse_jd(&text);
         assert_eq!(extraction.requirements.len(), 1);
+    }
+
+    #[test]
+    fn jd_parser_prose_jd_gets_tech_requirements() {
+        // No sections, no bullets — the section pass extracts nothing and the
+        // technology rescue pass must fill the pipeline.
+        let text = "Platform Engineer\n\nYou will join our platform team working with Go and Kubernetes daily. We run PostgreSQL and Redis at scale. Familiarity with Rust is a plus.\n";
+        let extraction = parse_jd(text);
+        assert!(
+            !extraction.requirements.is_empty(),
+            "prose JD must not starve the pipeline"
+        );
+        let names: Vec<String> = extraction
+            .requirements
+            .iter()
+            .map(|r| r.raw_text.to_lowercase())
+            .collect();
+        for term in ["kubernetes", "postgresql", "redis", "go"] {
+            assert!(
+                names.contains(&term.to_string()),
+                "missing {term}: {names:?}"
+            );
+        }
+        let rust_req = extraction
+            .requirements
+            .iter()
+            .find(|r| r.raw_text.eq_ignore_ascii_case("rust"))
+            .expect("Rust must be extracted");
+        assert_eq!(rust_req.kind, RequirementKind::PreferredSkill);
+    }
+
+    #[test]
+    fn jd_parser_structured_jds_do_not_get_tech_noise() {
+        // A JD whose sections already produced >= 4 requirements must not gain
+        // dictionary duplicates.
+        let extraction = parse_jd(SAMPLE_JD);
+        let count = extraction.requirements.len();
+        assert_eq!(count, 8, "structured JD extraction must stay stable");
+        let typescript_free = extraction
+            .requirements
+            .iter()
+            .all(|r| !r.raw_text.to_lowercase().contains("typescript"));
+        assert!(typescript_free);
     }
 
     #[test]

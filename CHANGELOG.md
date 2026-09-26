@@ -4,6 +4,28 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [4.1.2] — 2026-09-26
+
+Engine-quality release: the deterministic JD reader and the plan composer no
+longer starve on the two most common real-world inputs — prose job
+descriptions and paragraph-style imported records.
+
+### Changed
+- **JD extraction rescue pass**: job descriptions written as prose (no
+  "Requirements" headings, no bullet lists) previously extracted almost
+  nothing. When the section pass yields fewer than 4 requirements, a
+  technology-dictionary scan of the full text now adds the stacks it finds
+  (60+ terms: languages, frameworks, databases, cloud, AI/ML, tooling),
+  classified required vs preferred by nearby "nice to have / plus / bonus /
+  familiarity" markers. Well-structured JDs are extracted exactly as before
+- **Paragraph imports produce approvable bullets**: record descriptions
+  imported as long paragraphs used to become single over-length *unapproved*
+  bullets each — the plan then had nothing approved, and tailoring refused
+  with "approve some in the record inspector first". Long paragraphs are now
+  split into sentence-packed bullets (verbatim record content, so they are
+  approved); only a single sentence that alone exceeds the length limit
+  stays unapproved for review
+
 ## [4.1.1] — 2026-09-26
 
 A UI-correctness release: every dialog now opens in the viewport no matter

@@ -1720,7 +1720,7 @@ dependencies = [
 
 [[package]]
 name = "kairo"
-version = "4.1.1"
+version = "4.1.2"
 dependencies = [
  "keyring",
  "rusqlite",

@@ -84,6 +84,83 @@ pub fn load_composer_input(
     })
 }
 
+/// Bullet-length limit: auto-split bullets longer than this are paragraphs.
+const PARAGRAPH_BULLET_CHARS: usize = 320;
+
+/// Long paragraph lines are split into sentence-packed bullets (verbatim
+/// record content, so they remain approved). A single sentence that alone
+/// exceeds `limit` is returned as-is and will stay unapproved.
+fn expand_paragraphs(lines: Vec<String>) -> Vec<String> {
+    let mut expanded = Vec::with_capacity(lines.len());
+    for line in lines {
+        if line.chars().count() <= PARAGRAPH_BULLET_CHARS {
+            expanded.push(line);
+            continue;
+        }
+        let mut buffer = String::new();
+        for sentence in split_sentences(&line) {
+            let count = sentence.chars().count();
+            if count > PARAGRAPH_BULLET_CHARS {
+                if !buffer.trim().is_empty() {
+                    expanded.push(buffer.trim().to_string());
+                    buffer.clear();
+                }
+                expanded.push(sentence);
+                continue;
+            }
+            if !buffer.is_empty() && buffer.chars().count() + count + 1 > PARAGRAPH_BULLET_CHARS {
+                expanded.push(buffer.trim().to_string());
+                buffer.clear();
+            }
+            if !buffer.is_empty() {
+                buffer.push(' ');
+            }
+            buffer.push_str(&sentence);
+        }
+        if !buffer.trim().is_empty() {
+            expanded.push(buffer.trim().to_string());
+        }
+    }
+    expanded
+}
+
+/// Splits on sentence terminators (`.!?`) followed by whitespace or
+/// end-of-line, keeping the terminator attached. Char-boundary safe.
+fn split_sentences(line: &str) -> Vec<String> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let mut sentences: Vec<String> = Vec::new();
+    let mut start = 0usize;
+    let mut iter = trimmed.char_indices().peekable();
+    while let Some((idx, c)) = iter.next() {
+        if c != '.' && c != '!' && c != '?' {
+            continue;
+        }
+        let breaks = match iter.peek() {
+            None => true,
+            Some((_, next)) => matches!(*next, ' ' | '\t' | '\n' | '\r'),
+        };
+        if breaks {
+            let end = idx + c.len_utf8();
+            let sentence = trimmed[start..end].trim();
+            if !sentence.is_empty() {
+                sentences.push(sentence.to_string());
+            }
+            start = end;
+        }
+    }
+    let tail = trimmed[start..].trim();
+    if !tail.is_empty() {
+        sentences.push(tail.to_string());
+    }
+    if sentences.is_empty() {
+        sentences.push(trimmed.to_string());
+    }
+    sentences
+}
+
 /// Narrative-import descriptions summarize their source with "Key: value ·
 /// Key: value" segments; those lines are record metadata, not resume bullets.
 fn looks_like_narrative_meta_line(line: &str) -> bool {
@@ -115,8 +192,6 @@ fn ensure_entity_bullets(
     description: &str,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<ComposerBullet>, String> {
-    const PARAGRAPH_BULLET_CHARS: usize = 320;
-
     let mut bullets = super::trust::list_bullets(conn, entity_type, entity_id)?;
     if bullets.is_empty() && !description.trim().is_empty() {
         let mut raw_lines = Vec::new();
@@ -144,7 +219,12 @@ fn ensure_entity_bullets(
             .filter(|l| l.chars().count() > 5)
             .filter(|l| !looks_like_narrative_meta_line(l))
             .collect();
-        for (i, line) in lines.into_iter().enumerate() {
+        // Paragraph-style descriptions (the common import shape) used to fall
+        // through as one over-length unapproved bullet each, starving the
+        // plan. Split them into sentence-packed bullets — still verbatim
+        // record content, so they stay approved; only a single sentence that
+        // alone exceeds the limit remains unapproved for review.
+        for (i, line) in expand_paragraphs(lines).into_iter().enumerate() {
             let is_paragraph = line.chars().count() > PARAGRAPH_BULLET_CHARS;
             if is_paragraph {
                 paragraph_count += 1;
@@ -352,4 +432,61 @@ pub fn run_composer(
     let plan = compose(&input);
     save_plan(conn, job_id, config, &plan)?;
     Ok(plan)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_paragraphs_pack_into_approved_sentence_bullets() {
+        let s1 = "Built the ingestion service and scaled it to two million events per day while keeping p99 latency under eighty milliseconds for all consumers.";
+        let s2 = "Migrated the storage layer to PostgreSQL declarative partitioning and cut query times on the largest tables by an order of magnitude in production.";
+        let s3 = "Led the migration of the deployment pipeline to Kubernetes with canary releases and zero downtime across every service rollout this year.";
+        let paragraph = format!("{s1} {s2} {s3}");
+
+        let expanded = expand_paragraphs(vec![paragraph]);
+        assert_eq!(expanded.len(), 2, "got {expanded:?}");
+        for bullet in &expanded {
+            assert!(
+                bullet.chars().count() <= PARAGRAPH_BULLET_CHARS,
+                "too long: {bullet}"
+            );
+        }
+        assert!(expanded[0].starts_with("Built the ingestion"));
+        assert!(expanded.iter().any(|b| b.contains("zero downtime")));
+    }
+
+    #[test]
+    fn pathological_single_sentences_stay_unapproved_length() {
+        let long_sentence = format!("{}.", "word ".repeat(120));
+        let expanded = expand_paragraphs(vec![long_sentence]);
+        assert_eq!(expanded.len(), 1);
+        assert!(expanded[0].chars().count() > PARAGRAPH_BULLET_CHARS);
+    }
+
+    #[test]
+    fn short_lines_pass_through_unsplit() {
+        let lines = vec!["Short line one".to_string(), "Short line two".to_string()];
+        assert_eq!(expand_paragraphs(lines.clone()), lines);
+    }
+
+    #[test]
+    fn split_sentences_keeps_terminators_attached() {
+        let s = split_sentences("First sentence. Second one! Third? tail without dot");
+        assert_eq!(
+            s,
+            vec![
+                "First sentence.",
+                "Second one!",
+                "Third?",
+                "tail without dot"
+            ]
+        );
+        assert!(split_sentences("   ").is_empty());
+        assert_eq!(
+            split_sentences("No terminator here"),
+            vec!["No terminator here"]
+        );
+    }
 }

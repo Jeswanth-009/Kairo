@@ -9,7 +9,7 @@ opportunity, select the strongest relevant proof, improve the wording without ch
 review every change, and produce a reproducible application artifact.
 
 [![CI](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml/badge.svg)](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml)
-![release](https://img.shields.io/badge/release-v4.1.1-2563EB)
+![release](https://img.shields.io/badge/release-v4.1.2-2563EB)
 ![license](https://img.shields.io/badge/license-MIT-10B981)
 ![tests](https://img.shields.io/badge/tests-116%20passing-10B981)
 ![migrations](https://img.shields.io/badge/migrations-11%20applied-8B5CF6)
