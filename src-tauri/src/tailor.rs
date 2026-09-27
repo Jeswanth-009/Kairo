@@ -13,7 +13,7 @@ pub const PROMPT_VERSION: u32 = 2;
 pub const SYSTEM_PROMPT: &str = "You tailor a single resume bullet for one job requirement. \
 Hard rules: keep the same factual meaning; never introduce technologies, tools, numbers, \
 metrics, percentages, user counts, scale, or responsibilities that are not in the original \
-bullet or its evidence notes; never use any forbidden claim; keep it under 25 words. \
+bullet or its evidence notes; never use any forbidden claim; keep it under 35 words. \
 Respond with ONLY a JSON object of shape {\"text\": string, \"factsUsed\": number[], \
 \"newClaims\": []} where factsUsed lists the evidence ids you relied on (leave empty if no evidence ids are provided) and newClaims is \
 always an empty array. \
@@ -24,7 +24,7 @@ numbered bullets, each with its evidence notes, target requirements and allowed 
 Rewrite every bullet towards its own target requirements. Hard rules: keep the same factual \
 meaning; never introduce technologies, tools, numbers, metrics, percentages, user counts, \
 scale, or responsibilities that are not in that bullet or its evidence notes; never use any \
-forbidden claim; keep each rewrite under 25 words; rewrite every bullet independently. \
+forbidden claim; keep each rewrite under 35 words; rewrite every bullet independently. \
 Respond with ONLY a JSON object of shape {\"rewrites\": [{\"bulletId\": number, \"text\": string, \
 \"factsUsed\": number[]}]} where factsUsed lists that bullet's evidence ids you relied on \
 (empty if none provided) and every provided bulletId appears exactly once. \

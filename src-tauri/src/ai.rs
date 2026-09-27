@@ -41,7 +41,7 @@ pub const BATCH_CALL_TIMEOUT: Duration = Duration::from_secs(240);
 
 #[derive(Debug, Clone)]
 pub struct ChatOptions {
-    /// Hard ceiling on generated tokens. The tailor contract is a ~25-word
+    /// Hard ceiling on generated tokens. The tailor contract is a ~35-word
     /// JSON object; an uncapped generation is what turned rewrites into
     /// multi-minute waits on thinking models.
     pub max_tokens: u32,
@@ -54,7 +54,7 @@ pub struct ChatOptions {
 impl Default for ChatOptions {
     fn default() -> Self {
         ChatOptions {
-            max_tokens: 200,
+            max_tokens: 300,
             timeout: SINGLE_CALL_TIMEOUT,
             force_json_mode: false,
         }
