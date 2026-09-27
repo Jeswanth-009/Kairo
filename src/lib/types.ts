@@ -647,6 +647,33 @@ export interface InterviewPrep {
 
 // --- Dashboard (Phase 13) ----------------------------------------------------
 
+export type TrashEntityType =
+  | "project"
+  | "experience"
+  | "education"
+  | "certification"
+  | "achievement"
+  | "skill"
+  | "job";
+
+/** One entry in the Recently Deleted view (30-day soft delete). */
+export interface TrashItem {
+  entityType: TrashEntityType;
+  entityId: number;
+  label: string;
+  deletedAt: string;
+}
+
+export const TRASH_ENTITY_LABELS: Record<TrashEntityType, string> = {
+  project: "Project",
+  experience: "Experience",
+  education: "Education",
+  certification: "Certification",
+  achievement: "Achievement",
+  skill: "Skill",
+  job: "Job workspace",
+};
+
 export interface DashboardCounts {
   projects: number;
   experiences: number;

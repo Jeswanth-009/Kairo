@@ -364,6 +364,11 @@ const handlers: Record<string, Handler> = {
   create_backup: () => ({ fileName: "kairo-backup-mock.db", path: "mock://backups", bytes: 10240, createdAt: new Date().toISOString() }),
   restore_backup: () => ({ ok: true, appliedMigrations: 11 }),
 
+  // Recently deleted — the mock keeps everything live (nothing trashed).
+  trash_list: () => [],
+  trash_restore: () => ({ ok: true }),
+  trash_purge: () => ({ ok: true }),
+
   // import parsers (pure heuristics — the real extraction lives in the backend)
   parse_resume_text: (a) => parseResume(String(a.text ?? "")),
   parse_certificate_text: (a) => parseCertificate(String(a.text ?? "")),

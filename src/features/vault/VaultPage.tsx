@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { TrashDialog } from "../../components/ui/TrashDialog";
 import { Input } from "../../components/ui/inputs";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Archive, Sparkles } from "lucide-react";
@@ -44,11 +45,14 @@ export default function VaultPage() {
   const [editing, setEditing] = useState<AnyVaultRecord | null>(null);
   const [detail, setDetail] = useState<{ key: EntityKey; record: AnyVaultRecord } | null>(null);
   const [deleting, setDeleting] = useState<AnyVaultRecord | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
 
   // Intents raised by the command palette (Ctrl+K): deep-open a record once
   // this page and its data are on screen.
   const vaultFocus = useUiStore((s) => s.vaultFocus);
   const clearVaultFocus = useUiStore((s) => s.clearVaultFocus);
+  const vaultAction = useUiStore((s) => s.vaultAction);
+  const clearVaultAction = useUiStore((s) => s.clearVaultAction);
 
   useEffect(() => {
     store.load().catch(() => { /* surfaced via store error */ });
@@ -75,6 +79,12 @@ export default function VaultPage() {
       store.skills,
     ],
   );
+
+  useEffect(() => {
+    if (!vaultAction) return;
+    setImportOpen(true);
+    clearVaultAction();
+  }, [vaultAction, clearVaultAction]);
 
   useEffect(() => {
     if (!vaultFocus || !loaded) return;
@@ -174,7 +184,13 @@ export default function VaultPage() {
       <PageHeader
         title="Career Vault"
         description="Your verified history — every record here is the source material the rest of Kairo builds on."
+        actions={
+          <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>
+            Recently deleted
+          </Button>
+        }
       />
+      <TrashDialog open={trashOpen} onClose={() => setTrashOpen(false)} />
       <ProfileCard />
 
       {loadError ? (
@@ -337,14 +353,14 @@ export default function VaultPage() {
       <ConfirmDialog
         open={!!deleting}
         title={`Delete ${tabLabel.toLowerCase()}`}
-        message="This permanently removes the record from your Vault. Evidence attachments that reference it will need review."
+        message="The record moves to Recently deleted for 30 days — restoring brings it back with its proof and links."
         onConfirm={() => void confirmDelete()}
         onClose={() => setDeleting(null)}
       />
       <ConfirmDialog
         open={confirmBatchDelete}
         title={`Delete ${selectedIds.size} ${selectedIds.size === 1 ? config?.singular.toLowerCase() : config?.label.toLowerCase()}`}
-        message={`This will permanently remove ${selectedIds.size} record${selectedIds.size === 1 ? "" : "s"} from your Career Vault. This cannot be undone.`}
+        message={`These ${selectedIds.size} record${selectedIds.size === 1 ? "" : "s"} move to Recently deleted for 30 days, then are removed for good.`}
         onConfirm={() => void handleBatchDelete()}
         onClose={() => setConfirmBatchDelete(false)}
       />

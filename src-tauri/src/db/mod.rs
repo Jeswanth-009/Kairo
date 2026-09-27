@@ -20,6 +20,7 @@ pub mod jobs;
 pub mod matching;
 pub mod pdf;
 pub mod tailor;
+pub mod trash;
 pub mod trust;
 pub mod vault;
 pub mod versions;
@@ -62,6 +63,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0011_artifact_template",
         include_str!("../../migrations/0011_artifact_template.sql"),
     ),
+    (
+        "0012_soft_delete",
+        include_str!("../../migrations/0012_soft_delete.sql"),
+    ),
 ];
 
 pub fn open_and_migrate(path: &Path) -> Result<Connection, Box<dyn Error>> {
@@ -72,6 +77,10 @@ pub fn open_and_migrate(path: &Path) -> Result<Connection, Box<dyn Error>> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
     apply_migrations(&conn)?;
+    // Trash expiry runs at startup only — a failure must not block opening.
+    if let Err(e) = trash::purge_expired(&conn) {
+        eprintln!("[kairo] trash purge failed: {e}");
+    }
     Ok(conn)
 }
 
@@ -127,7 +136,8 @@ mod tests {
                 "0008_pdf".to_string(),
                 "0009_versions".to_string(),
                 "0010_applications".to_string(),
-                "0011_artifact_template".to_string()
+                "0011_artifact_template".to_string(),
+                "0012_soft_delete".to_string()
             ]
         );
     }
@@ -138,7 +148,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
-        assert_eq!(names.len(), 11);
+        assert_eq!(names.len(), 12);
     }
 
     #[test]
@@ -196,7 +206,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
         assert_eq!(names.len(), MIGRATIONS.len());
-        assert_eq!(names.last().unwrap(), "0011_artifact_template");
+        assert_eq!(names.last().unwrap(), "0012_soft_delete");
 
         // Pre-upgrade data survives byte-for-byte.
         let title: String = conn

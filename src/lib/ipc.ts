@@ -33,6 +33,7 @@ import type {
   DashboardOverview,
   BackupInfo,
   RestoreOk,
+  TrashItem,
 } from "./types";
 
 /**
@@ -239,4 +240,11 @@ export const ipc = {
     text: string,
   ): Promise<TailorSuggestion> =>
     invoke<TailorSuggestion>("tailor_save_manual_edit", { jobId, bulletId, text }),
+
+  // Recently deleted (trash)
+  trashList: (): Promise<TrashItem[]> => invoke<TrashItem[]>("trash_list"),
+  trashRestore: (entityType: string, entityId: number): Promise<{ ok: boolean }> =>
+    invoke<{ ok: boolean }>("trash_restore", { entityType, entityId }),
+  trashPurge: (entityType: string, entityId: number): Promise<{ ok: boolean }> =>
+    invoke<{ ok: boolean }>("trash_purge", { entityType, entityId }),
 };

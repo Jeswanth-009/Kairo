@@ -307,11 +307,9 @@ pub fn delete_requirement(conn: &Connection, id: i64) -> Result<(), String> {
 }
 
 pub fn delete_job(conn: &Connection, id: i64) -> Result<(), String> {
-    let changed = sql_err(conn.execute("DELETE FROM jobs WHERE id = ?1", [id]))?;
-    if changed == 0 {
-        return Err("Job not found".to_string());
-    }
-    Ok(())
+    // Soft delete: requirements, plans, matches and versions stay attached so
+    // a restore from the trash brings the whole workspace back.
+    super::vault::vault_delete::<Job>(conn, id)
 }
 
 #[cfg(test)]
@@ -379,8 +377,15 @@ mod tests {
         let updated = update_requirement(&conn, &req).unwrap();
         assert_eq!(updated.kind, "required_skill");
 
-        // Delete job cascades requirements.
+        // Delete job: soft delete keeps the workspace; purging from the trash
+        // cascades requirements.
         delete_job(&conn, created.job.id).unwrap();
+        let left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM job_requirements", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 3, "soft delete keeps requirements for restore");
+
+        crate::db::vault::vault_purge::<Job>(&conn, created.job.id).unwrap();
         let left: i64 = conn
             .query_row("SELECT COUNT(*) FROM job_requirements", [], |r| r.get(0))
             .unwrap();

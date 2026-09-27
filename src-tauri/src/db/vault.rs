@@ -69,11 +69,17 @@ pub(crate) fn sql_err<T>(r: rusqlite::Result<T>) -> Result<T, String> {
     r.map_err(|e| e.to_string())
 }
 
+/// The `deleted_at IS NULL` filter every live-row read must apply. Tables
+/// without a soft-delete column (evidence, bullets, …) don't flow through the
+/// generic engine, so this is safe everywhere it is used.
+const LIVE_WHERE: &str = "deleted_at IS NULL";
+
 pub fn vault_list<E: VaultEntity>(conn: &Connection) -> Result<Vec<E>, String> {
     let sql = format!(
-        "SELECT id, {} FROM {} ORDER BY {}",
+        "SELECT id, {} FROM {} WHERE {} ORDER BY {}",
         E::INSERT_COLS.join(", "),
         E::TABLE,
+        LIVE_WHERE,
         E::ORDER_BY
     );
     let mut stmt = sql_err(conn.prepare(&sql))?;
@@ -94,9 +100,10 @@ pub fn vault_get<E: VaultEntity>(conn: &Connection, id: i64) -> Result<E, String
 
 fn vault_get_opt<E: VaultEntity>(conn: &Connection, id: i64) -> Result<Option<E>, String> {
     let sql = format!(
-        "SELECT id, {} FROM {} WHERE id = ?1",
+        "SELECT id, {} FROM {} WHERE id = ?1 AND {}",
         E::INSERT_COLS.join(", "),
-        E::TABLE
+        E::TABLE,
+        LIVE_WHERE
     );
     let mut stmt = sql_err(conn.prepare(&sql))?;
     match stmt.query_row([id], |row| E::from_row(row)) {
@@ -157,7 +164,36 @@ pub fn vault_update<E: VaultEntity>(conn: &Connection, value: &E) -> Result<E, S
     vault_get::<E>(conn, id)
 }
 
+/// Soft delete: the row stays in place (with its evidence, bullets and skill
+/// links) and disappears from every live read. `deleted_at` stamps the time so
+/// the trash can expire entries after 30 days.
 pub fn vault_delete<E: VaultEntity>(conn: &Connection, id: i64) -> Result<(), String> {
+    let sql = format!(
+        "UPDATE {} SET deleted_at = datetime('now') WHERE id = ?1 AND {}",
+        E::TABLE,
+        LIVE_WHERE
+    );
+    let changed = sql_err(conn.execute(&sql, [id]))?;
+    if changed == 0 {
+        return Err("Record not found".to_string());
+    }
+    Ok(())
+}
+
+/// Brings a trashed row back into the live set.
+pub fn vault_restore<E: VaultEntity>(conn: &Connection, id: i64) -> Result<(), String> {
+    let sql = format!("UPDATE {} SET deleted_at = NULL WHERE id = ?1", E::TABLE);
+    let changed = sql_err(conn.execute(&sql, [id]))?;
+    if changed == 0 {
+        return Err("Record not found".to_string());
+    }
+    Ok(())
+}
+
+/// Hard delete — fires the cleanup triggers that remove children (evidence,
+/// bullets, skill links). Only the trash ("delete forever") and the 30-day
+/// expiry may call this.
+pub fn vault_purge<E: VaultEntity>(conn: &Connection, id: i64) -> Result<(), String> {
     let sql = format!("DELETE FROM {} WHERE id = ?1", E::TABLE);
     let changed = sql_err(conn.execute(&sql, [id]))?;
     if changed == 0 {
@@ -414,12 +450,22 @@ impl VaultEntity for Project {
     }
 
     fn enrich(conn: &Connection, rows: &mut [Self]) -> rusqlite::Result<()> {
-        load_links(conn, "project", rows)?;
-        apply_evidence_counts(conn, "project", rows, |p| (&mut p.evidence_count, p.id))
+        load_links(conn, crate::db::trust::EntityKind::Project.as_str(), rows)?;
+        apply_evidence_counts(
+            conn,
+            crate::db::trust::EntityKind::Project.as_str(),
+            rows,
+            |p| (&mut p.evidence_count, p.id),
+        )
     }
 
     fn after_write(conn: &Connection, id: i64, value: &Self) -> Result<(), String> {
-        write_links(conn, "project", id, &value.skills)
+        write_links(
+            conn,
+            crate::db::trust::EntityKind::Project.as_str(),
+            id,
+            &value.skills,
+        )
     }
 }
 
@@ -511,12 +557,26 @@ impl VaultEntity for Experience {
     }
 
     fn enrich(conn: &Connection, rows: &mut [Self]) -> rusqlite::Result<()> {
-        load_links(conn, "experience", rows)?;
-        apply_evidence_counts(conn, "experience", rows, |e| (&mut e.evidence_count, e.id))
+        load_links(
+            conn,
+            crate::db::trust::EntityKind::Experience.as_str(),
+            rows,
+        )?;
+        apply_evidence_counts(
+            conn,
+            crate::db::trust::EntityKind::Experience.as_str(),
+            rows,
+            |e| (&mut e.evidence_count, e.id),
+        )
     }
 
     fn after_write(conn: &Connection, id: i64, value: &Self) -> Result<(), String> {
-        write_links(conn, "experience", id, &value.skills)
+        write_links(
+            conn,
+            crate::db::trust::EntityKind::Experience.as_str(),
+            id,
+            &value.skills,
+        )
     }
 }
 
@@ -1026,8 +1086,15 @@ mod tests {
         assert_eq!(updated.skills[0].skill_id, sql_skill.id);
         assert_eq!(updated.skills[0].confidence, 5);
 
-        // Delete cascades links via trigger.
+        // Soft delete hides the record but keeps its links; purging fires the
+        // cleanup trigger that removes them.
         vault_delete::<Project>(&conn, created.id).unwrap();
+        let orphans: i64 = conn
+            .query_row("SELECT COUNT(*) FROM entity_skills", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(orphans, 1);
+
+        vault_purge::<Project>(&conn, created.id).unwrap();
         let orphans: i64 = conn
             .query_row("SELECT COUNT(*) FROM entity_skills", [], |r| r.get(0))
             .unwrap();

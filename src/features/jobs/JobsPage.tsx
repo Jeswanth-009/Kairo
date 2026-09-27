@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { TrashDialog } from "../../components/ui/TrashDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Briefcase } from "lucide-react";
@@ -55,6 +56,7 @@ export default function JobsPage() {
 
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Job | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
 
   useEffect(() => {
     load().catch(() => { /* surfaced via store error */ });
@@ -76,8 +78,16 @@ export default function JobsPage() {
       <PageHeader
         title="Job workspaces"
         description="The exact job description is stored verbatim; requirements are only saved after your review."
-        actions={<Button onClick={() => setCreating(true)}>New workspace</Button>}
+        actions={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>
+              Recently deleted
+            </Button>
+            <Button onClick={() => setCreating(true)}>New workspace</Button>
+          </>
+        }
       />
+      <TrashDialog open={trashOpen} onClose={() => setTrashOpen(false)} />
 
       {loadError ? (
         <div className="mb-6 rounded-xl border border-bad/25 bg-bad-soft p-4 text-sm text-bad dark:border-red-500/30 dark:bg-bad/10 dark:text-red-300">
@@ -116,7 +126,7 @@ export default function JobsPage() {
       <ConfirmDialog
         open={!!deleting}
         title="Delete job workspace"
-        message={`Delete the workspace for "${deleting?.roleTitle || "Untitled role"}"? The stored job description and its requirements are removed.`}
+        message={`Delete the workspace for "${deleting?.roleTitle || "Untitled role"}"? It moves to Recently deleted for 30 days — restoring brings back the description, requirements, match and plan.`}
         onConfirm={() => void confirmDelete()}
         onClose={() => setDeleting(null)}
       />

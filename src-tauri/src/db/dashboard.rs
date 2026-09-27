@@ -87,19 +87,20 @@ pub fn overview(conn: &Connection) -> Result<DashboardOverview, String> {
 }
 
 pub fn counts(conn: &Connection) -> Result<DashboardCounts, String> {
+    // Trashed (soft-deleted) records never count toward the dashboard.
     const SQL: &str = "SELECT
-        (SELECT COUNT(*) FROM projects),
-        (SELECT COUNT(*) FROM experiences),
-        (SELECT COUNT(*) FROM education),
-        (SELECT COUNT(*) FROM certifications),
-        (SELECT COUNT(*) FROM achievements),
-        (SELECT COUNT(*) FROM skills),
+        (SELECT COUNT(*) FROM projects WHERE deleted_at IS NULL),
+        (SELECT COUNT(*) FROM experiences WHERE deleted_at IS NULL),
+        (SELECT COUNT(*) FROM education WHERE deleted_at IS NULL),
+        (SELECT COUNT(*) FROM certifications WHERE deleted_at IS NULL),
+        (SELECT COUNT(*) FROM achievements WHERE deleted_at IS NULL),
+        (SELECT COUNT(*) FROM skills WHERE deleted_at IS NULL),
         (SELECT COUNT(*) FROM evidence),
         (SELECT COALESCE(SUM(verified), 0) FROM evidence),
         (SELECT COUNT(*) FROM canonical_bullets),
         (SELECT COALESCE(SUM(approved), 0) FROM canonical_bullets),
         (SELECT COUNT(*) FROM claim_rules),
-        (SELECT COUNT(*) FROM jobs),
+        (SELECT COUNT(*) FROM jobs WHERE deleted_at IS NULL),
         (SELECT COUNT(*) FROM match_reports),
         (SELECT COUNT(*) FROM resume_plans),
         (SELECT COUNT(*) FROM resume_plans WHERE pdf_path IS NOT NULL AND pdf_path <> ''),
