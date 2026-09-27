@@ -4,15 +4,15 @@
 
 # Kairo v4
 
-A local-first Windows career intelligence workspace. Store verified career evidence once; for every
+A local-first career intelligence workspace, built Windows-first. Store verified career evidence once; for every
 opportunity, select the strongest relevant proof, improve the wording without changing the facts,
 review every change, and produce a reproducible application artifact.
 
 [![CI](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml/badge.svg)](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml)
 ![release](https://img.shields.io/badge/release-v4.1.3-2563EB)
 ![license](https://img.shields.io/badge/license-MIT-10B981)
-![tests](https://img.shields.io/badge/tests-116%20passing-10B981)
-![migrations](https://img.shields.io/badge/migrations-11%20applied-8B5CF6)
+![tests](https://img.shields.io/badge/tests-133%20passing-10B981)
+![migrations](https://img.shields.io/badge/migrations-12%20applied-8B5CF6)
 ![platform](https://img.shields.io/badge/platform-Windows-64748B)
 
 </div>
@@ -425,14 +425,20 @@ Manager, Tauri capabilities still `core:default` only, CSP set.
 
 ## Download
 
-Grab the signed-off installer for the latest release from
+Grab the installer for the latest release from
 [GitHub Releases](https://github.com/Jeswanth-009/Kairo/releases) — no build
-toolchain needed. Note: installers are currently unsigned, so Windows
-SmartScreen may ask you to confirm.
+toolchain needed and the Tectonic PDF engine ships inside the installer.
+Installers are currently unsigned, so Windows SmartScreen may ask you to
+confirm.
+
+Try it without installing: the [landing page](https://jeswanth-009.github.io/Kairo/)
+has a live in-browser demo (fixture data, no backend) at
+[/demo/](https://jeswanth-009.github.io/Kairo/demo/).
 
 ## Run
 
-Prereqs: Node 18+, Rust (stable-msvc), Visual Studio Build Tools (C++ workload) and Tectonic.
+Prereqs: Node 18+, Rust (stable-msvc), Visual Studio Build Tools (C++ workload).
+Tectonic is optional in dev — see below.
 
 ```bash
 npm install
@@ -440,7 +446,7 @@ npm run tauri dev        # dev window (vite :5173 + cargo)
 npm run build            # frontend type-check + production bundle
 
 cd src-tauri
-cargo test               # 116 unit + integration tests
+cargo test               # unit + integration tests
 ```
 
 In-app quick tour: Settings → AI provider (optional) → Vault (profile + records + evidence +
@@ -460,8 +466,9 @@ npm run tauri dev        # dev window (vite :5173 + cargo)
 - `dev.ps1` / `scripts/dev-env.sh` activate a portable MSVC toolchain for
   machines where Visual Studio Build Tools are not on `PATH`; on a normal
   admin install of the Build Tools you don't need them.
-- **Tectonic** is auto-discovered from `PATH`; first compile downloads the
-  TeX bundle (~100 MB, once).
+- **Tectonic** is bundled with the installer and auto-discovered next to the
+  executable, from `PATH`, or via a Settings override; first compile downloads
+  the TeX bundle (~100 MB, once).
 - Frontend-only UI work can run against fixtures with `npm run dev` →
   `http://localhost:5173/mock.html` (no backend needed).
 

@@ -12,6 +12,13 @@ mkdir -p site-dist
 
 cp -r website/. site-dist/
 
+# Keep the landing page's version fallback in sync with package.json — the
+# runtime JS fetch overrides it again when the GitHub API is reachable.
+VERSION=$(node -p "require('./package.json').version")
+for id in hero-version dl-version dl-fact-version; do
+  sed -i "s/<span id=\"$id\">[^<]*</<span id=\"$id\">v${VERSION}</" site-dist/index.html
+done
+
 npx vite build --config vite.demo.config.ts
 
 mkdir -p site-dist/demo

@@ -4,6 +4,53 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+The "make it great" release: first-run friction removed, PDF engine bundled,
+every destructive action recoverable, and CI now proves the Rust code on
+macOS and Ubuntu.
+
+### Added
+- **Tectonic ships inside the installer** (Tauri sidecar) — no more
+  "Tectonic not installed" on first export; the app also streams live
+  compiler output during the (first) compile instead of a frozen spinner
+- **Ctrl+K command palette** — search vault records, skills, jobs and
+  actions from anywhere; record results deep-link into the Vault inspector
+- **30-day soft delete** — deleting a record or job workspace moves it to
+  "Recently deleted" with restore / delete-forever; children (evidence,
+  bullets, links, requirements) survive and come back with a restore
+- **PDF / DOCX / TXT file import** — resume import accepts files (PDF text
+  via pdf.js, DOCX via the document XML); scanned PDFs without a text
+  layer say so clearly
+- **Resume quick-start** — the dashboard's first step is now "Import your
+  resume", opening the Vault with the import dialog raised
+- **Tailor onboarding card** — an unconfigured AI provider shows a setup
+  card with a Settings link instead of raw error strings
+- Rust CI matrix now covers macOS and Ubuntu (fmt/clippy/tests); per-OS
+  keyring backends (windows/apple/linux-native); CONTRIBUTING documents
+  macOS and Linux setup
+- Frontend component tests for the command palette, trash dialog and
+  tailor onboarding card
+
+### Changed
+- Tailor rewrites target up to 35 words (was 25), with the token ceiling
+  raised to match; the bullet editor shows a live word counter
+- Plain-language UI naming: Evidence → Proof, canonical bullets →
+  resume points, claim rules → Guardrails (identifiers and storage
+  unchanged)
+- Destructive actions that lacked confirmation (requirement remove, alias
+  remove, tailor reset) now confirm first
+
+### Fixed
+- PDF export could be TOCTOU-exploited via symlink swap between the
+  path check and the read; it now reads the canonicalized path
+- Saving a PDF to Downloads trusted the caller-supplied file name; names
+  are reduced to a bare file name so `..` cannot escape the folder
+- Log rotation silently overwrote the previous log and only ran at
+  startup — two generations are kept and size is checked per write
+- GitHub import now handles rate limits: honors 429/403 quota headers
+  with one capped backoff retry, caps response bodies at 2 MB
+
 ## [4.1.3] — 2026-09-26
 
 JD extraction fixed for markdown job postings — the engine now reads
