@@ -36,6 +36,11 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # tauri-build validates bundle.externalBin when its build script runs,
+      # so the sidecar must exist before the first cargo invocation.
+      - name: Fetch Tectonic sidecar
+        run: npm run ensure-tectonic
+
       - name: Run Rust tests
         working-directory: src-tauri
         run: cargo test --locked
