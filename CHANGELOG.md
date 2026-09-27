@@ -4,7 +4,7 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [4.2.0] — 2026-09-27
 
 The "make it great" release: first-run friction removed, PDF engine bundled,
 every destructive action recoverable, and CI now proves the Rust code on
