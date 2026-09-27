@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { Splash } from "../components/Splash";
+import { CommandPalette, useCommandPalette } from "../components/CommandPalette";
 import { Sidebar } from "./shell/Sidebar";
 import { TopBar } from "./shell/TopBar";
 import { ToastHost } from "../components/ui/Toast";
@@ -32,6 +33,7 @@ function titleFor(pathname: string): string {
 export default function App() {
   const location = useLocation();
   const loadDiagnostics = useAppStore((s) => s.loadDiagnostics);
+  const { open: paletteOpen, openPalette, closePalette } = useCommandPalette();
 
   useEffect(() => {
     void loadDiagnostics();
@@ -42,7 +44,7 @@ export default function App() {
       <Splash />
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar title={titleFor(location.pathname)} />
+        <TopBar title={titleFor(location.pathname)} onSearchClick={openPalette} />
         <main id="app-main" className="flex-1 overflow-y-auto">
           {/* Keyed by path so each page plays the enter animation on navigation. */}
           <div key={location.pathname} className="page-enter h-full">
@@ -60,6 +62,7 @@ export default function App() {
         </main>
       </div>
       <ToastHost />
+      <CommandPalette open={paletteOpen} onClose={closePalette} />
     </div>
   );
 }

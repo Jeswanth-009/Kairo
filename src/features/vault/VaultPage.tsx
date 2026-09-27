@@ -8,6 +8,7 @@ import { Archive, Sparkles } from "lucide-react";
 import { Tabs } from "../../components/ui/Tabs";
 import { Skeleton } from "../../components/ui/Feedback";
 import { useVaultStore } from "../../stores/vaultStore";
+import { useUiStore } from "../../stores/uiStore";
 import { toast } from "../../stores/toastStore";
 import type { AnyVaultRecord } from "../../lib/types";
 import { ImportDialog } from "../imports/ImportDialog";
@@ -44,6 +45,11 @@ export default function VaultPage() {
   const [detail, setDetail] = useState<{ key: EntityKey; record: AnyVaultRecord } | null>(null);
   const [deleting, setDeleting] = useState<AnyVaultRecord | null>(null);
 
+  // Intents raised by the command palette (Ctrl+K): deep-open a record once
+  // this page and its data are on screen.
+  const vaultFocus = useUiStore((s) => s.vaultFocus);
+  const clearVaultFocus = useUiStore((s) => s.clearVaultFocus);
+
   useEffect(() => {
     store.load().catch(() => { /* surfaced via store error */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,6 +75,20 @@ export default function VaultPage() {
       store.skills,
     ],
   );
+
+  useEffect(() => {
+    if (!vaultFocus || !loaded) return;
+    const list = records[vaultFocus.key] ?? [];
+    const target = list.find((r) => r.id === vaultFocus.id);
+    if (target) {
+      setTab(vaultFocus.key);
+      if (vaultFocus.key !== "skills") {
+        setDetail({ key: vaultFocus.key, record: target });
+      }
+    }
+    clearVaultFocus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaultFocus, loaded, clearVaultFocus]);
 
   const totalCount = TABS.reduce((sum, t) => sum + records[t.key].length, 0);
   const config = tab === "skills" ? null : ENTITY_CONFIGS[tab];

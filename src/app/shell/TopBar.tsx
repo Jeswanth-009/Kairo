@@ -1,4 +1,4 @@
-import { Moon, Sun } from "lucide-react";
+import { Moon, Search, Sun } from "lucide-react";
 import { useAppStore } from "../../stores/appStore";
 import { useThemeStore } from "../../stores/themeStore";
 import { cn } from "../../lib/cn";
@@ -37,7 +37,7 @@ function ThemeToggle() {
   );
 }
 
-export function TopBar({ title }: { title: string }) {
+export function TopBar({ title, onSearchClick }: { title: string; onSearchClick?: () => void }) {
   const dbStatus = useAppStore((s) => s.dbStatus);
   const meta = STATUS_META[dbStatus];
 
@@ -45,6 +45,21 @@ export function TopBar({ title }: { title: string }) {
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-card/80 px-8 backdrop-blur-md">
       <h1 className="text-[15px] font-semibold tracking-tight text-ink">{title}</h1>
       <div className="flex items-center gap-3">
+        {onSearchClick ? (
+          <button
+            type="button"
+            onClick={onSearchClick}
+            title="Search everything (Ctrl+K)"
+            aria-label="Search everything (Ctrl+K)"
+            className="flex items-center gap-2 rounded-lg border border-line bg-card px-2.5 py-1.5 text-xs text-muted shadow-sm transition-all duration-150 hover:border-line-strong hover:bg-accent-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kairo-blue/60"
+          >
+            <Search className="size-3.5" />
+            <span className="hidden md:inline">Search</span>
+            <kbd className="hidden rounded border border-line bg-accent-soft px-1 py-0.5 font-mono text-[10px] md:inline">
+              ⌃K
+            </kbd>
+          </button>
+        ) : null}
         <span className="hidden text-xs text-muted sm:inline">Local-first · Offline</span>
         <span
           className={cn(
