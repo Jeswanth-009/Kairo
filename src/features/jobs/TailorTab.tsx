@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Wand2 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Input } from "../../components/ui/inputs";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { ipc } from "../../lib/ipc";
@@ -32,6 +35,19 @@ export function TailorTab({
   const [runningAll, setRunningAll] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [report, setReport] = useState<TailorBatchReport | null>(null);
+  const [aiReady, setAiReady] = useState<boolean | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const cfg = await ipc.aiGetConfig();
+        setAiReady(Boolean(cfg.baseUrl.trim() && cfg.model.trim() && cfg.hasApiKey));
+      } catch {
+        setAiReady(false);
+      }
+    })();
+  }, [jobId]);
 
   const reload = async () => {
     try {
@@ -65,6 +81,10 @@ export function TailorTab({
     });
 
   const suggest = async (bulletId: number) => {
+    if (aiReady === false) {
+      toast.error("AI is not set up yet — configure a provider in Settings first (free local options work too)");
+      return;
+    }
     setBusyBullet(bulletId);
     try {
       const suggestion = await ipc.tailorSuggest(jobId, bulletId);
@@ -82,6 +102,10 @@ export function TailorTab({
   };
 
   const tailorAll = async () => {
+    if (aiReady === false) {
+      toast.error("AI is not set up yet — configure a provider in Settings first (free local options work too)");
+      return;
+    }
     setRunningAll(true);
     setReport(null);
     try {
@@ -186,6 +210,30 @@ export function TailorTab({
           </div>
         ) : null}
       </Card>
+
+      {aiReady === false ? (
+        <Card className="border-kairo-blue/30 p-6">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-kairo-blue/10 text-kairo-blue">
+              <Wand2 className="size-4.5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold text-ink">Set up AI to unlock tailoring</h3>
+              <p className="mt-1 text-xs leading-relaxed text-muted">
+                Matching, composing and exporting all work without AI. Connect a provider and Kairo
+                will rewrite your planned bullets against this job's requirements — using only
+                approved, evidence-backed language, with every suggestion reviewed by you first.
+                Works with any OpenAI-compatible API, or a free local model through Ollama.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => navigate("/settings")}>
+                  Configure AI provider
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       {!plan ? (
         <p className="rounded-lg border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">
@@ -301,6 +349,7 @@ function AcceptRow({
   onDone: (updated: TailorSuggestion | null) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [text, setText] = useState(suggestion.suggestedText);
 
   return (
@@ -336,20 +385,28 @@ function AcceptRow({
           size="sm"
           variant="ghost"
           className="text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10"
-          onClick={() =>
-            void (async () => {
-              try {
-                await ipc.tailorDelete(suggestion.id);
-                await onDone(null);
-              } catch (e) {
-                toast.error(String(e));
-              }
-            })()
-          }
+          onClick={() => setConfirmReset(true)}
         >
           Reset
         </Button>
       </div>
+      <ConfirmDialog
+        open={confirmReset}
+        title="Reset suggestion"
+        message="Discard this AI rewrite? The bullet goes back to using its approved wording in the plan."
+        confirmLabel="Reset"
+        onConfirm={() =>
+          void (async () => {
+            try {
+              await ipc.tailorDelete(suggestion.id);
+              await onDone(null);
+            } catch (e) {
+              toast.error(String(e));
+            }
+          })()
+        }
+        onClose={() => setConfirmReset(false)}
+      />
     </div>
   );
 }
