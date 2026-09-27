@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { BrandMark } from "../../components/BrandMark";
 import {
   ArrowUpRight,
@@ -19,6 +19,7 @@ import { Card, CardTitle } from "../../components/ui/Card";
 import { Skeleton } from "../../components/ui/Feedback";
 import { fmtAgo } from "../../lib/dateFmt";
 import { ipc } from "../../lib/ipc";
+import { useUiStore } from "../../stores/uiStore";
 import type { ActivityItem, DashboardOverview, EvidenceReviewItem } from "../../lib/types";
 
 const KIND_COLORS: Record<string, string> = {
@@ -129,24 +130,30 @@ function CountPill({ value, tone = "neutral" }: { value: string; tone?: "neutral
 }
 
 function GettingStarted() {
-  const steps = [
+  const navigate = useNavigate();
+  const requestVaultAction = useUiStore((s) => s.requestVaultAction);
+
+  const steps: { title: string; body: string; cta: string; action: () => void }[] = [
     {
-      title: "Build your Vault",
-      body: "Add your profile, projects and experience. Attach evidence to every claim and approve the canonical bullets you want on a resume.",
-      to: "/vault",
-      cta: "Open Career Vault",
+      title: "Import your resume",
+      body: "Paste the text or load a PDF / DOCX — Kairo turns it into Vault records you can review, correct and back with proof.",
+      cta: "Import now",
+      action: () => {
+        navigate("/vault");
+        requestVaultAction({ type: "import" });
+      },
     },
     {
       title: "Add a job",
       body: "Paste the job description verbatim. Kairo extracts the requirements and you review every one before matching.",
-      to: "/jobs",
       cta: "Open Jobs",
+      action: () => navigate("/jobs"),
     },
     {
       title: "Match, plan, tailor",
       body: "Run the deterministic match, generate the one-page plan, review AI rewording, export the PDF and save an immutable version.",
-      to: "/jobs",
       cta: "Open Jobs",
+      action: () => navigate("/jobs"),
     },
   ];
   return (
@@ -162,13 +169,14 @@ function GettingStarted() {
             </span>
             <p className="mt-3 text-sm font-semibold text-ink">{step.title}</p>
             <p className="mt-1 flex-1 text-xs leading-relaxed text-muted">{step.body}</p>
-            <Link
-              to={step.to}
-              className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-kairo-blue hover:underline"
+            <button
+              type="button"
+              onClick={step.action}
+              className="mt-3 inline-flex w-fit items-center gap-1 text-xs font-medium text-kairo-blue hover:underline"
             >
               {step.cta}
               <ArrowUpRight className="size-3" />
-            </Link>
+            </button>
           </li>
         ))}
       </ol>

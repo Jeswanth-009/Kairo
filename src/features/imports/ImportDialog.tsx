@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Textarea } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
+import { extractTextFromFile } from "./extractFile";
 import type {
   Achievement,
   AchievementDraft,
@@ -202,6 +203,24 @@ function ResumeImportTab({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [fileBusy, setFileBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const takeFile = async (file: File) => {
+    setFileBusy(true);
+    setError(null);
+    try {
+      const extracted = await extractTextFromFile(file);
+      setText(extracted.slice(0, MAX_IMPORT_CHARS));
+      setFileName(file.name);
+    } catch (e) {
+      setFileName(null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFileBusy(false);
+    }
+  };
 
   const analyze = async () => {
     if (text.length > MAX_IMPORT_CHARS) {
@@ -228,21 +247,45 @@ function ResumeImportTab({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
-      <Field label="Paste resume text" hint="Plain text — sections named Projects / Experience / Education / Skills work best">
+      <Field
+        label="Paste resume text"
+        hint="Plain text — sections named Projects / Experience / Education / Skills work best"
+      >
         <Textarea
           rows={6}
           value={text}
-          placeholder="Paste the full text of an existing resume here…"
+          placeholder="Paste the full text of an existing resume here, or load a PDF / DOCX file…"
           onChange={(e) => setText(e.target.value)}
         />
       </Field>
-      <div className="flex items-center gap-3">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.docx,.txt,.md,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void takeFile(file);
+        }}
+      />
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={() => void analyze()}
           disabled={busy || text.trim().length < 10 || text.length > MAX_IMPORT_CHARS}
         >
           {busy ? "Analyzing…" : "Analyze"}
         </Button>
+        <Button
+          variant="secondary"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={fileBusy}
+        >
+          {fileBusy ? "Reading file…" : "Use a file (PDF / DOCX / TXT)"}
+        </Button>
+        {fileName && !fileBusy ? (
+          <span className="text-xs text-ok">Loaded {fileName} — review the text, then Analyze</span>
+        ) : null}
         {error ? <span className="text-xs text-bad">{error}</span> : null}
         {text.length > 100_000 ? (
           <span className="text-xs text-warn">{text.length.toLocaleString()} characters — large documents may take a moment</span>
