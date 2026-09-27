@@ -302,11 +302,25 @@ pub fn build_grounding_index(conn: &Connection, job_id: i64) -> Result<Grounding
             .map(|s| s.canonical_name.clone())
             .collect();
         entities.insert(
-            ("project".to_string(), project.id),
+            (
+                crate::db::trust::EntityKind::Project.as_str().to_string(),
+                project.id,
+            ),
             (project.title.clone(), skills),
         );
-        for bullet in super::trust::list_bullets(conn, "project", project.id)? {
-            bullets.insert(bullet.id, ("project".to_string(), project.id, bullet.text));
+        for bullet in super::trust::list_bullets(
+            conn,
+            crate::db::trust::EntityKind::Project.as_str(),
+            project.id,
+        )? {
+            bullets.insert(
+                bullet.id,
+                (
+                    crate::db::trust::EntityKind::Project.as_str().to_string(),
+                    project.id,
+                    bullet.text,
+                ),
+            );
         }
     }
     for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
@@ -316,16 +330,31 @@ pub fn build_grounding_index(conn: &Connection, job_id: i64) -> Result<Grounding
             .map(|s| s.canonical_name.clone())
             .collect();
         entities.insert(
-            ("experience".to_string(), experience.id),
+            (
+                crate::db::trust::EntityKind::Experience
+                    .as_str()
+                    .to_string(),
+                experience.id,
+            ),
             (
                 format!("{} at {}", experience.role, experience.organization),
                 skills,
             ),
         );
-        for bullet in super::trust::list_bullets(conn, "experience", experience.id)? {
+        for bullet in super::trust::list_bullets(
+            conn,
+            crate::db::trust::EntityKind::Experience.as_str(),
+            experience.id,
+        )? {
             bullets.insert(
                 bullet.id,
-                ("experience".to_string(), experience.id, bullet.text),
+                (
+                    crate::db::trust::EntityKind::Experience
+                        .as_str()
+                        .to_string(),
+                    experience.id,
+                    bullet.text,
+                ),
             );
         }
     }
