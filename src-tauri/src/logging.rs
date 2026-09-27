@@ -1,17 +1,23 @@
 //! Structured logging (Phase 14 · hardening). JSON lines in
-//! `AppData/logs/kairo.log`, rotated at 1 MB to `kairo.log.1`. Any field whose
-//! key looks secret-bearing (key/token/secret/password/authorization) is
-//! redacted before it reaches disk. Logging is best-effort: failures never
-//! propagate into command results.
+//! `AppData/logs/kairo.log`, rotated at 1 MB keeping two generations
+//! (`kairo.log.1` = previous, `kairo.log.2` = the one before). Rotation is
+//! checked at startup and before every write. Any field whose key looks
+//! secret-bearing (key/token/secret/password/authorization) is redacted
+//! before it reaches disk. Logging is best-effort: failures never propagate
+//! into command results.
 
 use serde_json::{json, Map, Value};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const ROTATE_BYTES: u64 = 1024 * 1024;
+/// How many rotated generations to keep. `kairo.log.1` is the previous
+/// session, `kairo.log.2` the one before — enough to report a bug seen
+/// "two sessions ago" without growing the log dir unboundedly.
+const KEEP_GENERATIONS: u64 = 2;
 
 static LOG_STATE: Mutex<Option<PathBuf>> = Mutex::new(None);
 static WRITE_FAILURE_WARNED: std::sync::atomic::AtomicBool =
@@ -24,10 +30,7 @@ pub fn init(log_dir: &PathBuf) -> Result<(), String> {
     let mut rotation_error: Option<String> = None;
     if let Ok(meta) = fs::metadata(&path) {
         if meta.len() >= ROTATE_BYTES {
-            let rotated = log_dir.join("kairo.log.1");
-            if let Err(e) = fs::rename(&path, &rotated) {
-                rotation_error = Some(format!("log rotation failed ({}): {e}", rotated.display()));
-            }
+            rotation_error = rotate(log_dir).err();
         }
     }
     *LOG_STATE
@@ -37,6 +40,29 @@ pub fn init(log_dir: &PathBuf) -> Result<(), String> {
     // unrotated file is degraded, not fatal.
     if let Some(error) = rotation_error {
         log_event("warn", "log_rotation_failed", &[("error", error)]);
+    }
+    Ok(())
+}
+
+/// Shift the generations: `.1` → `.2` → (dropped), current → `.1`.
+/// Called with the DB-style state lock already held or from `init`.
+fn rotate(log_dir: &Path) -> Result<(), String> {
+    let current = log_dir.join("kairo.log");
+    for generation in (2..=KEEP_GENERATIONS).rev() {
+        let from = log_dir.join(format!("kairo.log.{}", generation - 1));
+        let to = log_dir.join(format!("kairo.log.{generation}"));
+        if from.exists() {
+            // fs::rename replaces an existing destination on every supported
+            // platform, so the oldest generation is silently retired here.
+            if let Err(e) = fs::rename(&from, &to) {
+                return Err(format!("log rotation failed ({}): {e}", to.display()));
+            }
+        }
+    }
+    if current.exists() {
+        let first = log_dir.join("kairo.log.1");
+        fs::rename(&current, &first)
+            .map_err(|e| format!("log rotation failed ({}): {e}", first.display()))?;
     }
     Ok(())
 }
@@ -51,6 +77,18 @@ pub fn log_event(level: &str, event: &str, fields: &[(&str, String)]) {
     let Some(path) = guard.as_ref() else {
         return;
     };
+
+    // Mid-session rotation: a long session must not outgrow the cap just
+    // because `init` only ran once at startup.
+    if let Ok(meta) = fs::metadata(path) {
+        if meta.len() >= ROTATE_BYTES {
+            if let Some(dir) = path.parent() {
+                if let Err(e) = rotate(dir) {
+                    warn_write_failure_once(&std::io::Error::other(e));
+                }
+            }
+        }
+    }
 
     let mut record = Map::new();
     record.insert("ts".into(), json!(unix_millis()));
@@ -101,6 +139,9 @@ fn unix_millis() -> u128 {
 mod tests {
     use super::*;
 
+    /// `LOG_STATE` is process-global; parallel tests would race on `init`.
+    static LOG_TEST_LOCK: Mutex<()> = Mutex::new(());
+
     #[test]
     fn secret_bearing_keys_are_redacted() {
         assert_eq!(redact("api_key", "sk-123"), "[REDACTED]");
@@ -114,6 +155,7 @@ mod tests {
 
     #[test]
     fn events_are_written_as_redacted_json_lines_and_rotate() {
+        let _guard = LOG_TEST_LOCK.lock().unwrap();
         let dir = std::env::temp_dir().join(format!("kairo-log-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         init(&dir).unwrap();
@@ -150,6 +192,67 @@ mod tests {
             fs::read_to_string(dir.join("kairo.log.1")).unwrap().len() as u64,
             ROTATE_BYTES + 1
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rotation_keeps_two_generations() {
+        let _guard = LOG_TEST_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("kairo-log-gen-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        init(&dir).unwrap();
+
+        // Session A: one event, then the log grows past the cap.
+        log_event("info", "session_a", &[]);
+        let oversized = "x".repeat(ROTATE_BYTES as usize);
+        {
+            use std::io::Write;
+            let mut f = fs::OpenOptions::new()
+                .append(true)
+                .open(dir.join("kairo.log"))
+                .unwrap();
+            f.write_all(oversized.as_bytes()).unwrap();
+        }
+        init(&dir).unwrap(); // rotates A → .1
+
+        // Session B: fills again.
+        fs::write(dir.join("kairo.log"), &oversized).unwrap();
+        init(&dir).unwrap(); // rotates B → .1, A → .2
+        log_event("info", "session_b", &[]);
+
+        assert!(fs::read_to_string(dir.join("kairo.log.2"))
+            .unwrap()
+            .contains("session_a"));
+        assert_eq!(
+            fs::read_to_string(dir.join("kairo.log.1")).unwrap().len() as u64,
+            ROTATE_BYTES
+        );
+        assert!(fs::read_to_string(dir.join("kairo.log"))
+            .unwrap()
+            .contains("session_b"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mid_session_write_rotates_oversized_log() {
+        let _guard = LOG_TEST_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("kairo-log-mid-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        init(&dir).unwrap();
+        // Fill the log without re-initializing — only `log_event` runs.
+        fs::write(
+            dir.join("kairo.log"),
+            "x".repeat((ROTATE_BYTES + 1) as usize),
+        )
+        .unwrap();
+        log_event("info", "after_mid_rotation", &[]);
+        assert_eq!(
+            fs::read_to_string(dir.join("kairo.log.1")).unwrap().len() as u64,
+            ROTATE_BYTES + 1
+        );
+        assert!(fs::read_to_string(dir.join("kairo.log"))
+            .unwrap()
+            .contains("after_mid_rotation"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
