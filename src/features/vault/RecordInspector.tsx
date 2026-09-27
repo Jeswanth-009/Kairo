@@ -499,7 +499,7 @@ function BulletsTab({
 
       {bullets.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">
-          No canonical bullets yet. Write the factual sentences a resume would use — nothing gets
+          No resume points yet. Write the factual sentences a resume would use — nothing gets
           approved without support.
         </div>
       ) : (
@@ -707,7 +707,7 @@ function BulletDialog({
         </Field>
 
         <div>
-          <h4 className="mb-1.5 text-xs font-medium text-ink">Supporting evidence</h4>
+          <h4 className="mb-1.5 text-xs font-medium text-ink">Supporting proof</h4>
           {evidence.length === 0 ? (
             <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
               No evidence records exist for this record yet — add evidence first so this bullet can

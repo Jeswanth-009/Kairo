@@ -88,7 +88,7 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
         <h3 className="text-base font-semibold text-ink">No match computed yet</h3>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
           The matcher compares each reviewed requirement against your Vault evidence — skills with
-          confidence, canonical bullets, dates — and explains every verdict. Deterministic: the same
+          confidence, resume points, dates — and explains every verdict. Deterministic: the same
           Vault always produces the same result.
         </p>
         <div className="mt-5">
@@ -201,7 +201,7 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
 
       {report.entityRanking.length > 0 ? (
         <Card className="p-6">
-          <CardTitle>Your strongest evidence for this job</CardTitle>
+          <CardTitle>Your strongest proof for this job</CardTitle>
           <p className="mt-1 text-xs text-muted">
             Ranked by requirement coverage, skill confidence and recency.
           </p>

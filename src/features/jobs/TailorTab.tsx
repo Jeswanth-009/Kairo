@@ -146,7 +146,7 @@ export function TailorTab({
         <CardTitle>Grounded tailoring</CardTitle>
         <p className="mt-1 text-xs leading-relaxed text-muted">
           One AI pass rewrites every planned bullet — each with its target requirement, evidence
-          notes and claim rules as the only inputs. Every rewrite passes the validation pipeline —
+          notes and guardrails as the only inputs. Every rewrite passes the validation pipeline —
           new technologies, new metrics, forbidden claims and uncited facts are rejected before you
           ever see them. Nothing is applied without your Accept.
         </p>
@@ -330,7 +330,7 @@ export function TailorTab({
               })}
               {item.bullets.length === 0 ? (
                 <li className="text-xs text-warn">
-                  No approved canonical bullets for this record — nothing to tailor.
+                  No approved resume points for this record — nothing to tailor.
                 </li>
               ) : null}
             </ul>

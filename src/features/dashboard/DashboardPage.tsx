@@ -215,7 +215,7 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Welcome to Kairo</h1>
               <p className="mt-1 text-sm text-muted/60">
-                Store verified career evidence once. For every opportunity, select the strongest
+                Store verified career proof once. For every opportunity, select the strongest
                 proof, improve the wording without changing the facts, and review every change.
               </p>
             </div>
@@ -406,7 +406,7 @@ export default function DashboardPage() {
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-warn-soft text-warn dark:bg-warn/15 dark:text-amber-400">
                   <ShieldCheck className="size-3.5" />
                 </span>
-                <CardTitle>Evidence needing review</CardTitle>
+                <CardTitle>Proof needing review</CardTitle>
               </div>
               <CountPill
                 tone={counts.evidenceUnverified > 0 ? "amber" : "green"}

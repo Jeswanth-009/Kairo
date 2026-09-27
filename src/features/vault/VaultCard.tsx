@@ -85,7 +85,7 @@ export function VaultCard({
               evidenceCount > 0 ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn"
             }`}
           >
-            {evidenceCount > 0 ? "✓" : "…"} {evidenceCount} evidence
+            {evidenceCount > 0 ? "✓" : "…"} {evidenceCount} proof
           </span>
         </div>
       ) : null}

@@ -77,7 +77,7 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
         </ul>
       ) : (
         <p className="mt-2 text-[11px] text-warn">
-          No approved canonical bullets — approve some in the record inspector.
+          No approved resume points — approve some in the record inspector.
         </p>
       )}
 
