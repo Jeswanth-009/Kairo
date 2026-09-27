@@ -116,7 +116,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         keywords,
         run: () => {
           navigate("/vault");
-          focusVaultRecord(key, Number(id.split(":")[2]));
+          focusVaultRecord(key, Number(id.split(":")[1]));
         },
       });
 
@@ -231,7 +231,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
-    el?.scrollIntoView({ block: "nearest" });
+    // Optional call — jsdom and some embedded webviews lack scrollIntoView.
+    el?.scrollIntoView?.({ block: "nearest" });
   }, [activeIndex]);
 
   if (!open) return null;
