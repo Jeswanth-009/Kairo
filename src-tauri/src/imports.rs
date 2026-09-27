@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::io::Read;
 use std::time::Duration;
 
 use crate::text::{find_ci, strip_ci_prefix};
@@ -1594,13 +1595,84 @@ pub fn parse_certificate_text(text: &str) -> CertificateCandidate {
 // GitHub repository import (public repos, unauthenticated API)
 // ---------------------------------------------------------------------------
 
-fn github_err(e: ureq::Error) -> String {
-    match e {
-        ureq::Error::Status(code, _) => format!(
-            "GitHub returned HTTP {code} (404 = repository not found or private, 403 = rate limited)"
-        ),
-        other => format!("Network error: {other}"),
+/// Unauthenticated GitHub allows 60 requests/hour per IP and each import
+/// makes two calls (repo meta + languages). Responses are capped so a
+/// pathological payload can't balloon memory.
+const MAX_GITHUB_BODY_BYTES: u64 = 2 * 1024 * 1024;
+
+fn github_status_error(code: u16, resp: &ureq::Response) -> String {
+    match code {
+        404 => "GitHub returned HTTP 404 — repository not found or private".to_string(),
+        403 | 429 => {
+            let when = rate_limit_wait(resp).as_secs();
+            format!(
+                "GitHub API rate limit reached (unauthenticated limit: 60 requests/hour). \
+                 Try again in about {when} s, or paste the repository details manually."
+            )
+        }
+        other => format!("GitHub returned HTTP {other}"),
     }
+}
+
+/// Best-effort wait taken from `Retry-After` / `X-RateLimit-Reset`, capped so
+/// a single retry can never stall the import for minutes.
+fn rate_limit_wait(resp: &ureq::Response) -> Duration {
+    let from_headers = resp
+        .header("Retry-After")
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .or_else(|| {
+            resp.header("X-RateLimit-Reset")
+                .and_then(|v| v.trim().parse::<u64>().ok())
+                .and_then(|reset| {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .ok()?
+                        .as_secs();
+                    reset.checked_sub(now).map(Duration::from_secs)
+                })
+        })
+        .unwrap_or(Duration::from_secs(2));
+    from_headers.min(Duration::from_secs(15))
+}
+
+/// One GET against api.github.com returning parsed JSON. Rate-limited
+/// responses (429, or 403 with the quota exhausted) get exactly one
+/// backoff retry; everything else surfaces as a readable error.
+fn github_get_json<T: serde::de::DeserializeOwned>(
+    agent: &ureq::Agent,
+    url: &str,
+) -> Result<T, String> {
+    for attempt in 0..2 {
+        let call = agent
+            .get(url)
+            .set("Accept", "application/vnd.github+json")
+            .call();
+        match call {
+            Ok(resp) => {
+                let mut body = String::new();
+                resp.into_reader()
+                    .take(MAX_GITHUB_BODY_BYTES)
+                    .read_to_string(&mut body)
+                    .map_err(|e| format!("Network error reading GitHub response: {e}"))?;
+                return serde_json::from_str(&body)
+                    .map_err(|e| format!("Unexpected response from GitHub: {e}"));
+            }
+            // 429 always means throttled; 403 only when the quota header says so.
+            Err(ureq::Error::Status(code, resp))
+                if code == 429
+                    || (code == 403 && resp.header("X-RateLimit-Remaining") == Some("0")) =>
+            {
+                if attempt == 1 {
+                    return Err(github_status_error(code, &resp));
+                }
+                std::thread::sleep(rate_limit_wait(&resp));
+            }
+            Err(ureq::Error::Status(code, resp)) => return Err(github_status_error(code, &resp)),
+            Err(other) => return Err(format!("Network error: {other}")),
+        }
+    }
+    unreachable!("retry loop returns on every iteration")
 }
 
 pub fn github_repo_candidate(owner: &str, repo: &str) -> Result<GithubRepoCandidate, String> {
@@ -1622,23 +1694,9 @@ pub fn github_repo_candidate(owner: &str, repo: &str) -> Result<GithubRepoCandid
         .build();
 
     let base = format!("https://api.github.com/repos/{owner}/{repo}");
-    let meta: serde_json::Value = agent
-        .get(&base)
-        .set("Accept", "application/vnd.github+json")
-        .call()
-        .map_err(github_err)?
-        .into_json()
-        .map_err(|e| e.to_string())?;
-
-    let mut languages: Vec<(String, u64)> = agent
-        .get(&format!("{base}/languages"))
-        .set("Accept", "application/vnd.github+json")
-        .call()
-        .map_err(github_err)?
-        .into_json::<HashMap<String, u64>>()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .collect();
+    let meta: serde_json::Value = github_get_json(&agent, &base)?;
+    let languages: HashMap<String, u64> = github_get_json(&agent, &format!("{base}/languages"))?;
+    let mut languages: Vec<(String, u64)> = languages.into_iter().collect();
     languages.sort_by_key(|a| std::cmp::Reverse(a.1));
 
     let mut skills: Vec<String> = Vec::new();

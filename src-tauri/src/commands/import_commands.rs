@@ -42,8 +42,11 @@ pub async fn github_repo_candidate(
     owner: String,
     repo: String,
 ) -> Result<imports::GithubRepoCandidate, String> {
-    // Blocking network I/O — kept off the main thread like the parsers.
-    imports::github_repo_candidate(&owner, &repo)
+    // Blocking network I/O with a possible rate-limit backoff sleep — keep it
+    // off both the main thread and the async runtime workers.
+    tauri::async_runtime::spawn_blocking(move || imports::github_repo_candidate(&owner, &repo))
+        .await
+        .map_err(|e| format!("Import task failed: {e}"))?
 }
 
 #[cfg(test)]
