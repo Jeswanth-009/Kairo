@@ -28,6 +28,7 @@ import { Skeleton, Spinner } from "../../components/ui/Feedback";
 import { ProfileDialog } from "../vault/ProfileDialog";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
+import { usePdfProgress } from "../../lib/pdfProgress";
 import { fmtAgo, fmtRange } from "../../lib/dateFmt";
 import { PdfViewer } from "./PdfViewer";
 import type {
@@ -316,6 +317,7 @@ export default function ResumeStudioPage() {
   const [estimatedLines, setEstimatedLines] = useState<number | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
   const [exporting, setExporting] = useState(false);
+  const pdfProgress = usePdfProgress(exporting);
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [savingVersion, setSavingVersion] = useState(false);
   const [previewMode, setPreviewMode] = useState<"pdf" | "plan">("pdf");
@@ -1195,6 +1197,24 @@ export default function ResumeStudioPage() {
                 "Export PDF"
               )}
             </Button>
+            {exporting ? (
+              <div className="mt-3 rounded-lg border border-line bg-accent-soft p-3">
+                <p className="text-[11px] leading-relaxed text-muted">
+                  {pdfProgress.waiting
+                    ? "Starting the compiler… the very first run also downloads the TeX bundle, which can take a few minutes."
+                    : "Compiler output — first run downloads the TeX bundle and can take a few minutes."}
+                </p>
+                {pdfProgress.lines.length > 0 ? (
+                  <ul className="mt-2 space-y-0.5 font-mono text-[10px] text-muted/80">
+                    {pdfProgress.lines.map((line, i) => (
+                      <li key={i} className="truncate">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
             {overflows ? (
               <p className="mt-2 text-[11px] leading-relaxed text-warn dark:text-amber-400">
                 Estimate exceeds {pages} page{pages > 1 ? "s" : ""} for this template — raise "Target pages" or trim content, and check the page count after export.

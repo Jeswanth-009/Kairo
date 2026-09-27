@@ -5,6 +5,7 @@ import { Card } from "../../components/ui/Card";
 import { Skeleton, Spinner } from "../../components/ui/Feedback";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
+import { usePdfProgress } from "../../lib/pdfProgress";
 import { fmtAgo } from "../../lib/dateFmt";
 import { toast } from "../../stores/toastStore";
 import type { PdfArtifact } from "../../lib/types";
@@ -22,6 +23,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
   const [error, setError] = useState<string | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const progress = usePdfProgress(busy);
 
   useEffect(() => {
     setLoaded(false);
@@ -126,6 +128,25 @@ export function ResumeTab({ jobId }: { jobId: number }) {
                 "Generate Resume"
               )}
             </Button>
+
+            {busy ? (
+              <div className="rounded-lg border border-line bg-accent-soft p-3">
+                <p className="text-[11px] leading-relaxed text-muted">
+                  {progress.waiting
+                    ? "Starting the compiler… the very first run also downloads the TeX bundle, which can take a few minutes."
+                    : "Compiler output — first run downloads the TeX bundle and can take a few minutes."}
+                </p>
+                {progress.lines.length > 0 ? (
+                  <ul className="mt-2 space-y-0.5 font-mono text-[10px] text-muted/80">
+                    {progress.lines.map((line, i) => (
+                      <li key={i} className="truncate">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
 
             {error && (
               <div className="rounded-lg border border-bad/25 bg-bad-soft p-3 text-xs text-bad whitespace-pre-wrap font-mono dark:border-red-500/30 dark:bg-bad/10 dark:text-red-300">

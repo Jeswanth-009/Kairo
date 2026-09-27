@@ -109,6 +109,7 @@ fn compile_locked_produces_valid_pdf() {
         "jake",
         &candidate,
         &out_dir.parent().unwrap().join("kairo-pdf-root"),
+        &|_line| {},
     )
     .unwrap_or_else(|e| {
         if e.contains("bundle") || e.contains("network") {
