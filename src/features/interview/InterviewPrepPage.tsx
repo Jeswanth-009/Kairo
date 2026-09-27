@@ -66,7 +66,7 @@ export default function InterviewPrepPage() {
     <div className="mx-auto max-w-4xl p-8">
       <PageHeader
         title="Interview Prep"
-        description="Questions generated only from the exact JD, your submitted resume, your evidence and the match gaps — no invented company-specific patterns."
+        description="Questions generated only from the exact JD, your submitted resume, your proof and the match gaps — no invented company-specific patterns."
         actions={
           jobs.length > 0 ? (
             <div className="flex items-center gap-2">
@@ -110,7 +110,7 @@ export default function InterviewPrepPage() {
         <EmptyState
           icon={<MessagesSquare className="size-6" />}
           title="Grounded interview prep"
-          description="Generate questions from the exact JD, the requirements you reviewed, the resume you submitted and your match gaps. Every question shows why it is being asked and which evidence backs the answer."
+          description="Generate questions from the exact JD, the requirements you reviewed, the resume you submitted and your match gaps. Every question shows why it is being asked and which proof backs the answer."
         >
           <Button onClick={() => void generate()} disabled={loading}>
             {loading ? "Generating…" : "Generate prep"}

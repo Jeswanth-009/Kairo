@@ -115,7 +115,7 @@ export function TailorTab({
       const ok = result.suggestions.filter((s) => s.validation.ok).length;
       toast.ok(
         `${ok} rewrite(s) ready in ${fmtSeconds(result.durationMs)}${
-          result.batchUsed ? "" : " (per-bullet fallback)"
+          result.batchUsed ? "" : " (per-resume point fallback)"
         }`,
       );
     } catch (e) {
@@ -181,7 +181,7 @@ export function TailorTab({
           <div className="mt-4 rounded-lg border border-line bg-surface p-3 text-xs">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="font-medium text-ink">
-                Last run: {report.batchUsed ? "one AI call" : "per-bullet fallback"}
+                Last run: {report.batchUsed ? "one AI call" : "per-resume point fallback"}
               </span>
               <span className="text-muted">{report.model}</span>
               <span className="text-muted">{fmtSeconds(report.durationMs)}</span>

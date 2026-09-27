@@ -15,7 +15,7 @@ const COVERAGE_META: Record<Coverage, { label: string; dot: string; badge: strin
     label: "Partial",
     dot: "bg-warn",
     badge: "bg-warn-soft text-warn dark:bg-warn/15 dark:text-kairo-dawn",
-    hint: "Strengthen the evidence: add proof or use the skill more prominently.",
+    hint: "Strengthen the proof: add proof or use the skill more prominently.",
   },
   missing: {
     label: "Missing",
@@ -142,7 +142,7 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
           <ScoreRow label="Responsibilities" value={report.components.responsibilities} />
           <ScoreRow label="Domain" value={report.components.domain} />
           <ScoreRow label="Recency" value={report.components.recency} />
-          <ScoreRow label="Evidence strength" value={report.components.evidenceStrength} />
+          <ScoreRow label="Proof strength" value={report.components.evidenceStrength} />
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-muted">
           Weighted overall relevance {report.overallScore.toFixed(2)} — a ranking of your own

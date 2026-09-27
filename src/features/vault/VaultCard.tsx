@@ -78,8 +78,8 @@ export function VaultCard({
           <span
             title={
               evidenceCount > 0
-                ? `${evidenceCount} evidence record${evidenceCount === 1 ? "" : "s"} attached`
-                : "No evidence attached yet — open the record to add proof"
+                ? `${evidenceCount} proof record${evidenceCount === 1 ? "" : "s"} attached`
+                : "No proof attached yet — open the record to add proof"
             }
             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
               evidenceCount > 0 ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn"

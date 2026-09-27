@@ -211,7 +211,7 @@ export default function VaultPage() {
         <EmptyState
           icon={<Archive className="size-6" />}
           title="Start your Career Vault"
-          description="Add your first project or import an existing resume. Every record you store here becomes verified evidence that the rest of Kairo builds on."
+          description="Add your first project or import an existing resume. Every record you store here becomes verified proof that the rest of Kairo builds on."
         >
           <Button
             onClick={() => {

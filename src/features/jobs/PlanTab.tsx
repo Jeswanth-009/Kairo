@@ -52,7 +52,7 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
                     <>
                       <span
                         className="mr-1.5 rounded-full bg-ok-soft px-1.5 py-0.5 text-[10px] font-medium text-ok"
-                        title="Accepted AI wording — canonical bullet unchanged"
+                        title="Accepted AI wording — resume point unchanged"
                       >
                         tailored
                       </span>
@@ -165,7 +165,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
               }
             />
           </Field>
-          <Field label="Max bullets / item">
+          <Field label="Max resume points / item">
             <Input
               type="number"
               min={0}

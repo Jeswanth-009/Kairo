@@ -38,7 +38,7 @@ const KIND_COLORS: Record<string, string> = {
   other: "bg-accent-soft text-muted",
 };
 
-type InspectorTab = "overview" | "evidence" | "bullets" | "rules";
+type InspectorTab = "overview" | "proof" | "resume points" | "rules";
 
 export function RecordInspector({
   onClose,
@@ -83,9 +83,9 @@ export function RecordInspector({
 
   const TABS: { key: InspectorTab; label: string; count?: number; show: boolean }[] = [
     { key: "overview", label: "Overview", show: true },
-    { key: "evidence", label: "Evidence", count: evidence.length, show: true },
-    { key: "bullets", label: "Bullets", count: bullets.length, show: hasBullets },
-    { key: "rules", label: "Claim rules", count: rules.length, show: true },
+    { key: "proof", label: "Proof", count: evidence.length, show: true },
+    { key: "resume points", label: "Resume points", count: bullets.length, show: hasBullets },
+    { key: "rules", label: "Guardrails", count: rules.length, show: true },
   ];
 
   return (
@@ -116,8 +116,8 @@ export function RecordInspector({
       </div>
 
       {tab === "overview" ? <OverviewTab entityKey={entityKey} record={record} subtitle={subtitle} /> : null}
-      {tab === "evidence" ? <EvidenceTab entityType={entityType} entityId={entityId} evidence={evidence} /> : null}
-      {tab === "bullets" && hasBullets ? (
+      {tab === "proof" ? <EvidenceTab entityType={entityType} entityId={entityId} evidence={evidence} /> : null}
+      {tab === "resume points" && hasBullets ? (
         <BulletsTab entityType={entityType} entityId={entityId} bullets={bullets} evidence={evidence} />
       ) : null}
       {tab === "rules" ? <RulesTab entityType={entityType} entityId={entityId} rules={rules} /> : null}
@@ -217,7 +217,7 @@ function EvidenceTab({
       <div className="mb-4 flex items-center justify-between">
         <p className="text-xs text-muted">
           {evidence.length === 0
-            ? "No proof attached yet — claims without evidence cannot be trusted downstream."
+            ? "No proof attached yet — claims without proof cannot be trusted downstream."
             : `${verifiedCount} of ${evidence.length} verified`}
         </p>
         <Button size="sm" onClick={() => setCreating(true)}>
@@ -305,21 +305,21 @@ function EvidenceTab({
         }}
         onSave={async (data) => {
           await saveEvidence(data);
-          toast.ok(editing ? "Evidence updated" : "Evidence added");
+          toast.ok(editing ? "Proof updated" : "Proof added");
           setCreating(false);
           setEditing(null);
         }}
       />
       <ConfirmDialog
         open={!!deleting}
-        title="Delete evidence"
-        message={`Delete "${deleting?.title ?? ""}"? Bullets referencing it will lose this proof reference.`}
+        title="Delete proof"
+        message={`Delete "${deleting?.title ?? ""}"? Resume points referencing it will lose this proof reference.`}
         onConfirm={() => {
           if (deleting) {
             void (async () => {
               try {
                 await deleteEvidence(entityType, entityId, deleting.id);
-                toast.ok("Evidence deleted");
+                toast.ok("Proof deleted");
               } catch (e) {
                 toast.error(String(e));
               }
@@ -401,7 +401,7 @@ function EvidenceDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title={evidence ? "Edit evidence" : "Add evidence"} maxWidth="max-w-md">
+    <Dialog open={open} onClose={onClose} title={evidence ? "Edit proof" : "Add proof"} maxWidth="max-w-md">
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -567,21 +567,21 @@ function BulletsTab({
         }}
         onSave={async (data, isNew) => {
           await saveBullet(data, isNew);
-          toast.ok(isNew ? "Bullet added" : "Bullet updated");
+          toast.ok(isNew ? "Resume point added" : "Resume point updated");
           setCreating(false);
           setEditing(null);
         }}
       />
       <ConfirmDialog
         open={!!deleting}
-        title="Delete bullet"
-        message="Delete this canonical bullet? This cannot be undone."
+        title="Delete resume point"
+        message="Delete this resume point? This cannot be undone."
         onConfirm={() => {
           if (deleting) {
             void (async () => {
               try {
                 await deleteBullet(entityType, entityId, deleting.id);
-                toast.ok("Bullet deleted");
+                toast.ok("Resume point deleted");
               } catch (e) {
                 toast.error(String(e));
               }
@@ -647,7 +647,7 @@ function BulletDialog({
 
   const save = async () => {
     if (!text.trim()) {
-      setError("Bullet text is required");
+      setError("Resume point text is required");
       return;
     }
     setSaving(true);
@@ -672,7 +672,7 @@ function BulletDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title={isNew ? "Add bullet" : "Edit bullet"} maxWidth="max-w-md">
+    <Dialog open={open} onClose={onClose} title={isNew ? "Add resume point" : "Edit resume point"} maxWidth="max-w-md">
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -681,7 +681,7 @@ function BulletDialog({
         }}
       >
         <Field
-          label="Bullet text"
+          label="Resume point text"
           required
           error={error ?? undefined}
           hint={
@@ -859,7 +859,7 @@ function RulesTab({
       />
       <ConfirmDialog
         open={!!deleting}
-        title="Delete claim rule"
+        title="Delete guardrail"
         message={`Delete the rule “${deleting?.pattern ?? ""}”?`}
         onConfirm={() => {
           if (deleting) {
@@ -941,7 +941,7 @@ function RuleDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title={rule ? "Edit claim rule" : "Add claim rule"} maxWidth="max-w-md">
+    <Dialog open={open} onClose={onClose} title={rule ? "Edit guardrail" : "Add guardrail"} maxWidth="max-w-md">
       <form
         className="space-y-4"
         onSubmit={(e) => {

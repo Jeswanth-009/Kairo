@@ -426,7 +426,7 @@ function ResumeCandidates({
                   skills,
                   evidenceCount: 0,
                 } satisfies Project);
-                toast.ok(`Project "${project.title}" added — add evidence in its inspector`);
+                toast.ok(`Project "${project.title}" added — add proof in its inspector`);
               })
             }
             onReject={() => dismiss(key)}
@@ -754,7 +754,7 @@ function ExperienceCandidate({
             <input type="checkbox" checked={isCurrent} onChange={(e) => setIsCurrent(e.target.checked)} />
             Currently working here
           </label>
-          <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description / Bullet points" />
+          <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description / Resume point points" />
         </div>
       ) : (
         <div className="text-sm">
@@ -1149,7 +1149,7 @@ function GithubCandidateCard({
         skills,
         evidenceCount: 0,
       } satisfies Project);
-      toast.ok(`Project "${project.title}" imported from GitHub — review and add evidence`);
+      toast.ok(`Project "${project.title}" imported from GitHub — review and add proof`);
       onDone();
     } catch (e) {
       toast.error(String(e));
@@ -1289,7 +1289,7 @@ function CertificateCandidateCard({
         credentialId: "",
         url: "",
       });
-      toast.ok(`Certification "${certification.title}" added — attach the certificate file as evidence`);
+      toast.ok(`Certification "${certification.title}" added — attach the certificate file as proof`);
       onDone();
     } catch (e) {
       toast.error(String(e));

@@ -274,12 +274,12 @@ export default function DashboardPage() {
     {
       to: "/vault",
       value: counts.evidenceVerified,
-      label: "Evidence verified",
+      label: "Proof verified",
       sub:
         counts.evidenceUnverified > 0
           ? `${counts.evidenceUnverified} awaiting review`
           : counts.evidenceTotal === 0
-            ? "no evidence yet"
+            ? "no proof yet"
             : "all verified",
       subClass: counts.evidenceUnverified > 0 ? "text-warn" : "text-ok",
       icon: ShieldCheck,
@@ -354,10 +354,10 @@ export default function DashboardPage() {
             </h1>
             <p className="mt-1 text-sm text-muted/60">
               {brandNew
-                ? "Store verified career evidence once. For every opportunity, select the strongest proof, improve the wording without changing the facts, and review every change."
+                ? "Store verified career proof once. For every opportunity, select the strongest proof, improve the wording without changing the facts, and review every change."
                 : `${counts.projects + counts.experiences} records · ${
                     counts.evidenceVerified
-                  } verified evidence ${counts.evidenceVerified === 1 ? "item" : "items"} · ${
+                  } verified proof ${counts.evidenceVerified === 1 ? "item" : "items"} · ${
                     counts.jobs
                   } job workspace${counts.jobs === 1 ? "" : "s"}`}
             </p>
@@ -424,10 +424,10 @@ export default function DashboardPage() {
                 >
                   <CircleCheck className="size-3.5 shrink-0" />
                   {counts.evidenceTotal === 0
-                    ? "No evidence yet — attach proof to your records in the Career Vault."
+                    ? "No proof yet — attach proof to your records in the Career Vault."
                     : counts.evidenceTotal === 1
-                      ? "The 1 evidence item is verified."
-                      : `All ${counts.evidenceTotal} evidence items are verified.`}
+                      ? "The 1 proof item is verified."
+                      : `All ${counts.evidenceTotal} proof items are verified.`}
                 </p>
               ) : (
                 evidenceNeedingReview.map((item) => <EvidenceRow key={item.id} item={item} />)
