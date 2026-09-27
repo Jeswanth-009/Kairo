@@ -3,7 +3,9 @@
 Thanks for your interest in improving Kairo! This guide gets you from clone to
 a running dev environment and explains the conventions the codebase follows.
 
-## Prerequisites (Windows)
+## Prerequisites
+
+### Windows
 
 | Tool | Notes |
 |---|---|
@@ -12,6 +14,24 @@ a running dev environment and explains the conventions the codebase follows.
 | Visual Studio Build Tools | "Desktop development with C++" workload — provides `cl.exe`, which bundled SQLite compiles with |
 | Tectonic | LaTeX engine used for PDF export — `winget install Tectonic.Typesetting`. The app also finds it via `PATH` or `Settings` override. First compile downloads the TeX bundle (~100 MB, once). |
 | Ollama (optional) | Only for local AI tailoring — no API key needed |
+
+### macOS
+
+| Tool | Notes |
+|---|---|
+| Node.js 18+ | `brew install node` |
+| Rust stable | `rustup` (aarch64-apple-darwin or x86_64-apple-darwin) |
+| Xcode Command Line Tools | `xcode-select --install` — provides the C compiler for bundled SQLite |
+| Tectonic | `brew install tectonic` (optional — dev builds also fetch a sidecar binary automatically) |
+
+### Linux (Debian/Ubuntu)
+
+| Tool | Notes |
+|---|---|
+| Node.js 18+ | `nvm` or distro package |
+| Rust stable | `rustup` |
+| System libraries | `sudo apt install libwebkit2gtk-4.1-dev build-essential libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev` |
+| Tectonic | Download from [tectonic releases](https://github.com/tectonic-typesetting/tectonic/releases) and put it on `PATH` |
 
 ## Setup
 
