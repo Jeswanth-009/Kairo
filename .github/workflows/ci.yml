@@ -29,6 +29,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
 
+      # tauri-build validates bundle.externalBin at compile time, so the
+      # per-triple sidecar binary must exist before any cargo invocation.
+      - name: Fetch Tectonic sidecar
+        run: npm run ensure-tectonic
+
       - name: Cache cargo
         uses: actions/cache@v4
         with:
