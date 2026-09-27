@@ -50,7 +50,7 @@ pub async fn export_pdf(
     }
 
     // 2. Write .tex + run Tectonic (no lock held).
-    let out = match pdf::compile_locked(plan, job_id, &template_id, &tectonic, &app_data_dir.0) {
+    let out = match pdf::compile_locked(plan, job_id, &template_id, &tectonic, &app_data_dir.0, &|_| {}) {
         Ok(out) => out,
         Err(e) => {
             crate::logging::log_event(
@@ -146,7 +146,10 @@ pub fn read_pdf_bytes(
     if !requested.starts_with(&allowed_root) {
         return Err("File is outside the Kairo data directory".to_string());
     }
-    std::fs::read(p).map_err(|e| format!("Failed to read file: {e}"))
+    // Read the canonicalized path: checking `p` but reading `requested` closes
+    // the TOCTOU window where a symlink swap between the two calls would
+    // smuggle a file in from outside the allowed root.
+    std::fs::read(&requested).map_err(|e| format!("Failed to read file: {e}"))
 }
 
 /// Reveal a file in the OS file explorer with the file selected.
@@ -208,13 +211,38 @@ pub fn save_pdf_to_downloads(
         })?;
     }
 
-    let file_name = custom_name.unwrap_or_else(|| {
+    let raw_name = custom_name.unwrap_or_else(|| {
         src.file_name()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| "resume.pdf".to_string())
     });
+    let file_name = sanitize_download_name(&raw_name)?;
 
     let dest = downloads.join(&file_name);
     std::fs::copy(src, &dest).map_err(|e| format!("Failed to copy to {}: {e}", dest.display()))?;
     Ok(dest.to_string_lossy().to_string())
+}
+
+/// Reduces a user-supplied name to a bare file name so the destination always
+/// stays inside Downloads — no `..`, separators, or null-byte escapes.
+fn sanitize_download_name(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("File name is empty".to_string());
+    }
+    // Cut at the platform separator first, then reject anything still
+    // carrying one (covers `a\b.pdf` on Unix, where `\` is a normal char).
+    let base = std::path::Path::new(trimmed)
+        .file_name()
+        .map(|f| f.to_string_lossy().to_string())
+        .unwrap_or_default();
+    if base.is_empty()
+        || base.contains('/')
+        || base.contains('\\')
+        || base.contains('\0')
+        || base.starts_with('.')
+    {
+        return Err(format!("Invalid file name: {trimmed}"));
+    }
+    Ok(base)
 }
