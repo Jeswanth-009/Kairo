@@ -4,6 +4,8 @@ node_modules/
 dist/
 src-tauri/target/
 src-tauri/gen/schemas/
+# Tectonic sidecar binaries (fetched by scripts/ensure-tectonic.mjs)
+src-tauri/binaries/
 # Local state
 *.local
 *.log

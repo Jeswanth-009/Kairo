@@ -2,9 +2,19 @@
 
 use crate::db::{pdf, DbState};
 use serde::Serialize;
-use tauri::State;
+use tauri::{Emitter, State};
 
 const DB_LOCK: &str = "database lock poisoned";
+/// Live compile progress channel: the backend streams Tectonic output lines
+/// here; the Studio/Resume UI renders them instead of a frozen spinner.
+const PDF_PROGRESS_EVENT: &str = "pdf://progress";
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfProgress {
+    pub job_id: i64,
+    pub line: String,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,6 +28,7 @@ pub struct ExportResult {
 #[tauri::command]
 pub async fn export_pdf(
     state: State<'_, DbState>,
+    app: tauri::AppHandle,
     job_id: i64,
     mut template_id: String,
     app_data_dir: State<'_, AppDataDir>,
@@ -49,8 +60,25 @@ pub async fn export_pdf(
         template_id = "jake".to_string();
     }
 
-    // 2. Write .tex + run Tectonic (no lock held).
-    let out = match pdf::compile_locked(plan, job_id, &template_id, &tectonic, &app_data_dir.0, &|_| {}) {
+    // 2. Write .tex + run Tectonic (no lock held), streaming each compiler
+    //    line to the webview so long first compiles visibly progress.
+    let on_line = |line: &str| {
+        let _ = app.emit(
+            PDF_PROGRESS_EVENT,
+            PdfProgress {
+                job_id,
+                line: line.to_string(),
+            },
+        );
+    };
+    let out = match pdf::compile_locked(
+        plan,
+        job_id,
+        &template_id,
+        &tectonic,
+        &app_data_dir.0,
+        &on_line,
+    ) {
         Ok(out) => out,
         Err(e) => {
             crate::logging::log_event(

@@ -64,9 +64,20 @@ pub fn save_artifact(conn: &Connection, artifact: &PdfArtifact) -> Result<(), St
     Ok(())
 }
 
-/// Locates the Tectonic binary: explicit meta override → PATH → the portable
-/// install used on this machine. Returns a helpful error when absent.
+/// Platform-correct Tectonic binary name (`tectonic.exe` only on Windows).
+fn tectonic_binary_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "tectonic.exe"
+    } else {
+        "tectonic"
+    }
+}
+
+/// Locates the Tectonic binary: explicit meta override → the binary bundled
+/// next to the app executable (the installer ships it as a Tauri sidecar) →
+/// PATH → the portable dev install. Returns a helpful error when absent.
 pub fn find_tectonic(conn: &Connection) -> Result<PathBuf, String> {
+    let binary_name = tectonic_binary_name();
     let override_path: Option<String> = {
         let mut stmt = sql_err(conn.prepare("SELECT value FROM meta WHERE key = 'tectonic_path'"))?;
         match stmt.query_row([], |r| r.get(0)) {
@@ -85,25 +96,38 @@ pub fn find_tectonic(conn: &Connection) -> Result<PathBuf, String> {
             p
         ));
     }
-    if let Ok(path_var) = std::env::var("PATH") {
-        for dir in std::env::split_paths(&path_var) {
-            let candidate = dir.join("tectonic.exe");
+    // Sidecar: Tauri places external binaries next to the main executable
+    // (install dir when packaged, target/{debug,release} during development).
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let candidate = dir.join(binary_name);
             if candidate.exists() {
                 return Ok(candidate);
             }
         }
     }
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let candidate = dir.join(binary_name);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
     if let Some(home) = dirs_home() {
-        let candidate = home.join(".kairo-dev").join("bin").join("tectonic.exe");
+        let candidate = home.join(".kairo-dev").join("bin").join(binary_name);
         if candidate.exists() {
             return Ok(candidate);
         }
+        #[cfg(target_os = "windows")]
         let local = home
             .join("AppData")
             .join("Local")
             .join("Programs")
             .join("Kairo")
-            .join("tectonic.exe");
+            .join(binary_name);
+        #[cfg(not(target_os = "windows"))]
+        let local = home.join(".local").join("bin").join(binary_name);
         if local.exists() {
             return Ok(local);
         }
@@ -161,12 +185,15 @@ pub struct CompileOutput {
 
 /// Writes the .tex, runs Tectonic, validates the PDF, and returns the artifact.
 /// Caller must NOT hold the DB lock (first run downloads the TeX bundle).
+/// `on_line` receives each compiler output line as it arrives so the UI can
+/// show live progress instead of a frozen spinner during long first compiles.
 pub fn compile_locked(
     plan: ResumePlan,
     job_id: i64,
     template_id: &str,
     tectonic: &Path,
     app_data_dir: &Path,
+    on_line: &dyn Fn(&str),
 ) -> Result<CompileOutput, String> {
     let tex = crate::latex::render_plan(&plan, template_id);
 
@@ -175,18 +202,53 @@ pub fn compile_locked(
     let tex_path = out_dir.join("resume.tex");
     std::fs::write(&tex_path, &tex).map_err(|e| format!("could not write .tex: {e}"))?;
 
-    let output = std::process::Command::new(tectonic)
+    let mut child = std::process::Command::new(tectonic)
         .arg("--outdir")
         .arg(&out_dir)
         .arg("--keep-logs")
         .arg("resume.tex")
         .current_dir(&out_dir)
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| format!("failed to launch Tectonic: {e}"))?;
 
+    // Drain stdout on a thread so a full pipe can never deadlock the compile;
+    // progress lines stream from stderr while we read it here.
+    let mut stdout_pipe = child.stdout.take();
+    let stdout_thread = std::thread::spawn(move || {
+        let mut buf = String::new();
+        if let Some(pipe) = stdout_pipe.as_mut() {
+            use std::io::Read;
+            let _ = pipe.read_to_string(&mut buf);
+        }
+        buf
+    });
+
     let mut log = String::new();
-    log.push_str(&String::from_utf8_lossy(&output.stdout));
-    log.push_str(&String::from_utf8_lossy(&output.stderr));
+    if let Some(stderr) = child.stderr.take() {
+        use std::io::{BufRead, BufReader};
+        for line in BufReader::new(stderr).lines() {
+            match line {
+                Ok(l) => {
+                    log.push_str(&l);
+                    log.push('\n');
+                    on_line(&l);
+                }
+                Err(_) => break,
+            }
+        }
+    }
+    let stdout_tail = stdout_thread.join().unwrap_or_default();
+    if !stdout_tail.is_empty() {
+        log.push_str(&stdout_tail);
+        log.push('\n');
+    }
+
+    let status = child
+        .wait()
+        .map_err(|e| format!("failed to wait for Tectonic: {e}"))?;
+
     let log_tail: String = log
         .lines()
         .rev()
@@ -197,10 +259,10 @@ pub fn compile_locked(
         .collect::<Vec<_>>()
         .join("\n");
 
-    if !output.status.success() {
+    if !status.success() {
         return Err(format!(
             "Tectonic failed (exit {:?}):\n{}",
-            output.status.code(),
+            status.code(),
             log_tail
         ));
     }
