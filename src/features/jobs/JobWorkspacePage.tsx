@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Tabs } from "../../components/ui/Tabs";
 import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Feedback";
@@ -229,6 +230,7 @@ function RequirementsTab({ job }: { job: Job }) {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [reqToRemove, setReqToRemove] = useState<JobRequirement | null>(null);
 
   const reExtract = async () => {
     setRefreshing(true);
@@ -330,16 +332,7 @@ function RequirementsTab({ job }: { job: Job }) {
                           variant="ghost"
                           size="sm"
                           className="text-bad hover:bg-bad-soft dark:hover:bg-bad/10 dark:text-red-400"
-                          onClick={() => {
-                            void (async () => {
-                              try {
-                                await deleteRequirement(job.id, req.id);
-                                toast.ok("Requirement removed");
-                              } catch (e) {
-                                toast.error(String(e));
-                              }
-                            })();
-                          }}
+                          onClick={() => setReqToRemove(req)}
                         >
                           Remove
                         </Button>
@@ -358,6 +351,25 @@ function RequirementsTab({ job }: { job: Job }) {
           No requirements yet — add them manually or recreate the workspace with the JD text.
         </p>
       ) : null}
+
+      <ConfirmDialog
+        open={reqToRemove !== null}
+        title="Remove requirement"
+        message={`Remove "${reqToRemove?.rawText ?? ""}"? Match scoring and the composer stop using it immediately — re-add it if that wasn't intended.`}
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (!reqToRemove) return;
+          void (async () => {
+            try {
+              await deleteRequirement(job.id, reqToRemove.id);
+              toast.ok("Requirement removed");
+            } catch (e) {
+              toast.error(String(e));
+            }
+          })();
+        }}
+        onClose={() => setReqToRemove(null)}
+      />
     </div>
   );
 }

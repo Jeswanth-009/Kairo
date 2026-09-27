@@ -99,6 +99,7 @@ function SkillCard({
   const deleteAlias = useVaultStore((s) => s.deleteAlias);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [aliasToRemove, setAliasToRemove] = useState<Skill["aliases"][number] | null>(null);
   const [aliasOpen, setAliasOpen] = useState(false);
   const [alias, setAlias] = useState("");
   const [aliasError, setAliasError] = useState<string | null>(null);
@@ -168,15 +169,7 @@ function SkillCard({
                 type="button"
                 aria-label={`Remove alias ${row.alias}`}
                 className="text-muted hover:text-bad"
-                onClick={() => {
-                  void (async () => {
-                    try {
-                      await deleteAlias(row.id);
-                    } catch (e) {
-                      toast.error(String(e));
-                    }
-                  })();
-                }}
+                onClick={() => setAliasToRemove(row)}
               >
                 ×
               </button>
@@ -231,6 +224,23 @@ function SkillCard({
           })();
         }}
         onClose={() => setConfirming(false)}
+      />
+      <ConfirmDialog
+        open={aliasToRemove !== null}
+        title="Remove alias"
+        message={`Remove the alias "${aliasToRemove?.alias ?? ""}" from "${skill.canonicalName}"? Job descriptions matching this spelling will no longer be recognized.`}
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (!aliasToRemove) return;
+          void (async () => {
+            try {
+              await deleteAlias(aliasToRemove.id);
+            } catch (e) {
+              toast.error(String(e));
+            }
+          })();
+        }}
+        onClose={() => setAliasToRemove(null)}
       />
     </Card>
   );

@@ -23,7 +23,8 @@ interface FieldProps {
   label: string;
   required?: boolean;
   error?: string;
-  hint?: string;
+  /** Plain text or a small ReactNode (e.g. a live counter). */
+  hint?: ReactNode;
   children: ReactNode;
 }
 

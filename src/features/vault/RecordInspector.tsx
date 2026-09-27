@@ -635,6 +635,16 @@ function BulletDialog({
   const toggle = (id: number) =>
     setEvidenceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
+  // The AI is prompted to keep rewrites under 35 words; the counter keeps
+  // manually written bullets in the same envelope so plans stay one page.
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const countTone =
+    wordCount > 40
+      ? "text-warn dark:text-kairo-dawn"
+      : wordCount > 35
+        ? "text-warn/80"
+        : "text-muted/70";
+
   const save = async () => {
     if (!text.trim()) {
       setError("Bullet text is required");
@@ -670,7 +680,20 @@ function BulletDialog({
           void save();
         }}
       >
-        <Field label="Bullet text" required error={error ?? undefined} hint="Factual language only">
+        <Field
+          label="Bullet text"
+          required
+          error={error ?? undefined}
+          hint={
+            <>
+              Factual language only ·{" "}
+              <span className={countTone}>
+                {wordCount} {wordCount === 1 ? "word" : "words"}
+                {wordCount > 35 ? " — over the 35-word guideline" : ""}
+              </span>
+            </>
+          }
+        >
           <Textarea
             autoFocus
             value={text}
