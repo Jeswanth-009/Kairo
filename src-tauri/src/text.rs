@@ -145,3 +145,39 @@ mod tests {
         assert!(line.is_char_boundary(start) && line.is_char_boundary(end));
     }
 }
+
+// ---------------------------------------------------------------------------
+// Shared stemmer (used by the matching engine and the composer)
+// ---------------------------------------------------------------------------
+
+/// Porter2 English stemmer, created once and reused for the process lifetime.
+fn english_stemmer() -> &'static rust_stemmers::Stemmer {
+    use rust_stemmers::{Algorithm, Stemmer};
+    use std::sync::OnceLock;
+    static STEMMER: OnceLock<Stemmer> = OnceLock::new();
+    STEMMER.get_or_init(|| Stemmer::create(Algorithm::English))
+}
+
+/// Porter2 stem of a single lowercase token. Both sides of every comparison
+/// (JD text and skill/record text) flow through this same function, so
+/// consistent over-stemming of proper nouns is harmless — what it removes is
+/// the naive `ends_with('s')` truncation and its false matches.
+pub fn stem(token: &str) -> String {
+    english_stemmer().stem(token).to_string()
+}
+
+#[cfg(test)]
+mod stem_tests {
+    use super::stem;
+
+    #[test]
+    fn plurals_collapse_consistently() {
+        assert_eq!(stem("projects"), stem("project"));
+        assert_eq!(stem("apis"), stem("api"));
+        // The naive strip turned "redis" into "redi" and "series" into "seriey";
+        // Porter2 keeps regular morphology without mangling these.
+        assert_eq!(stem("series"), "seri");
+        assert_eq!(stem("running"), stem("run"));
+        assert_eq!(stem("coding"), stem("code"));
+    }
+}

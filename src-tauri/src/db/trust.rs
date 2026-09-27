@@ -10,11 +10,11 @@ use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 pub const EVIDENCE_ENTITY_TYPES: &[&str] = &[
-    "project",
-    "experience",
-    "education",
-    "certification",
-    "achievement",
+    EntityKind::Project.as_str(),
+    EntityKind::Experience.as_str(),
+    EntityKind::Education.as_str(),
+    EntityKind::Certification.as_str(),
+    EntityKind::Achievement.as_str(),
 ];
 pub const EVIDENCE_KINDS: &[&str] = &[
     "repository",
@@ -25,16 +25,75 @@ pub const EVIDENCE_KINDS: &[&str] = &[
     "link",
     "other",
 ];
-pub const BULLET_ENTITY_TYPES: &[&str] = &["project", "experience"];
+pub const BULLET_ENTITY_TYPES: &[&str] = &[
+    EntityKind::Project.as_str(),
+    EntityKind::Experience.as_str(),
+];
 pub const RULE_ENTITY_TYPES: &[&str] = &[
-    "project",
-    "experience",
-    "education",
-    "certification",
-    "achievement",
-    "skill",
+    EntityKind::Project.as_str(),
+    EntityKind::Experience.as_str(),
+    EntityKind::Education.as_str(),
+    EntityKind::Certification.as_str(),
+    EntityKind::Achievement.as_str(),
+    EntityKind::Skill.as_str(),
 ];
 pub const RULE_TYPES: &[&str] = &["forbidden_claim", "allowed_claim"];
+
+/// Strongly-typed discriminant for the stringly `entity_type` columns.
+/// Call sites construct one of these instead of a bare string so a typo is
+/// a compile error; the DB and the IPC boundary keep the same lowercase
+/// string spellings, so nothing stored or serialized changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EntityKind {
+    Project,
+    Experience,
+    Education,
+    Certification,
+    Achievement,
+    Skill,
+    Job,
+}
+
+impl EntityKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            EntityKind::Project => "project",
+            EntityKind::Experience => "experience",
+            EntityKind::Education => "education",
+            EntityKind::Certification => "certification",
+            EntityKind::Achievement => "achievement",
+            EntityKind::Skill => "skill",
+            EntityKind::Job => "job",
+        }
+    }
+
+    /// The vault table backing records of this kind.
+    pub const fn table(self) -> &'static str {
+        match self {
+            EntityKind::Project => "projects",
+            EntityKind::Experience => "experiences",
+            EntityKind::Education => "education",
+            EntityKind::Certification => "certifications",
+            EntityKind::Achievement => "achievements",
+            EntityKind::Skill => "skills",
+            EntityKind::Job => "jobs",
+        }
+    }
+
+    /// Parses an IPC-supplied entity_type, rejecting unknown spellings.
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "project" => Ok(EntityKind::Project),
+            "experience" => Ok(EntityKind::Experience),
+            "education" => Ok(EntityKind::Education),
+            "certification" => Ok(EntityKind::Certification),
+            "achievement" => Ok(EntityKind::Achievement),
+            "skill" => Ok(EntityKind::Skill),
+            "job" => Ok(EntityKind::Job),
+            other => Err(format!("Unknown entity type '{other}'")),
+        }
+    }
+}
 
 fn str_err<T>(r: rusqlite::Result<T>) -> Result<T, String> {
     r.map_err(|e| e.to_string())
@@ -138,15 +197,8 @@ fn evidence_parent_exists(
     entity_type: &str,
     entity_id: i64,
 ) -> Result<(), String> {
-    let table = match entity_type {
-        "project" => "projects",
-        "experience" => "experiences",
-        "education" => "education",
-        "certification" => "certifications",
-        "achievement" => "achievements",
-        other => return Err(format!("Unknown entity type '{other}'")),
-    };
-    let sql = format!("SELECT COUNT(*) FROM {table} WHERE id = ?1");
+    let kind = EntityKind::parse(entity_type)?;
+    let sql = format!("SELECT COUNT(*) FROM {} WHERE id = ?1", kind.table());
     let count: i64 = str_err(conn.query_row(&sql, [entity_id], |r| r.get(0)))?;
     if count == 0 {
         Err("Parent record not found".to_string())
@@ -594,7 +646,7 @@ pub fn delete_claim_rule(conn: &Connection, id: i64) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::db::apply_migrations;
-    use crate::db::vault::{vault_create, vault_delete, Project};
+    use crate::db::vault::{vault_create, vault_delete, vault_purge, Project};
 
     fn mem_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
@@ -655,6 +707,12 @@ mod tests {
         assert_eq!(counts.get(&p.id), Some(&2));
 
         vault_delete::<Project>(&conn, p.id).unwrap();
+        // Soft delete keeps evidence; the trash purge (hard delete) cascades.
+        let remaining: i64 = conn
+            .query_row("SELECT COUNT(*) FROM evidence", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(remaining, 2);
+        vault_purge::<Project>(&conn, p.id).unwrap();
         let remaining: i64 = conn
             .query_row("SELECT COUNT(*) FROM evidence", [], |r| r.get(0))
             .unwrap();
@@ -730,6 +788,15 @@ mod tests {
 
         // Deleting the project cascades bullets and links.
         vault_delete::<Project>(&conn, p.id).unwrap();
+        let bullets_left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM canonical_bullets", [], |r| r.get(0))
+            .unwrap();
+        let links_left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM bullet_evidence", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(bullets_left, 1, "soft delete keeps bullets");
+        assert_eq!(links_left, 1, "soft delete keeps links");
+        vault_purge::<Project>(&conn, p.id).unwrap();
         let bullets_left: i64 = conn
             .query_row("SELECT COUNT(*) FROM canonical_bullets", [], |r| r.get(0))
             .unwrap();

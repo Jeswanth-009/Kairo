@@ -53,10 +53,14 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
     };
 
     for project in super::vault::vault_list::<super::vault::Project>(conn)? {
-        let bullets = super::trust::list_bullets(conn, "project", project.id)?
-            .into_iter()
-            .map(|b| b.text)
-            .collect::<Vec<_>>();
+        let bullets = super::trust::list_bullets(
+            conn,
+            crate::db::trust::EntityKind::Project.as_str(),
+            project.id,
+        )?
+        .into_iter()
+        .map(|b| b.text)
+        .collect::<Vec<_>>();
         let text = format!(
             "{} {} {}",
             project.title,
@@ -70,7 +74,7 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
             .collect();
         let entity_skills = enrich_skills(existing_skills, &text);
         entities.push(MatchEntity {
-            entity_type: "project".to_string(),
+            entity_type: crate::db::trust::EntityKind::Project.as_str().to_string(),
             id: project.id,
             title: project.title,
             description: project.description,
@@ -84,10 +88,14 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
     }
 
     for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
-        let bullets = super::trust::list_bullets(conn, "experience", experience.id)?
-            .into_iter()
-            .map(|b| b.text)
-            .collect::<Vec<_>>();
+        let bullets = super::trust::list_bullets(
+            conn,
+            crate::db::trust::EntityKind::Experience.as_str(),
+            experience.id,
+        )?
+        .into_iter()
+        .map(|b| b.text)
+        .collect::<Vec<_>>();
         let text = format!(
             "{} {} {} {}",
             experience.organization,
@@ -102,7 +110,9 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
             .collect();
         let entity_skills = enrich_skills(existing_skills, &text);
         entities.push(MatchEntity {
-            entity_type: "experience".to_string(),
+            entity_type: crate::db::trust::EntityKind::Experience
+                .as_str()
+                .to_string(),
             id: experience.id,
             title: format!("{} — {}", experience.organization, experience.role)
                 .trim_end_matches(" —")
@@ -133,7 +143,7 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
             }
         );
         entities.push(MatchEntity {
-            entity_type: "education".to_string(),
+            entity_type: crate::db::trust::EntityKind::Education.as_str().to_string(),
             id: education.id,
             title: education.institution,
             description: desc,
@@ -153,7 +163,9 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
             format!("{} — {}", achievement.title, achievement.issuer)
         };
         entities.push(MatchEntity {
-            entity_type: "achievement".to_string(),
+            entity_type: crate::db::trust::EntityKind::Achievement
+                .as_str()
+                .to_string(),
             id: achievement.id,
             title,
             description: achievement.description.clone(),
@@ -173,7 +185,9 @@ pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, St
             format!("{} ({})", certification.title, certification.issuer)
         };
         entities.push(MatchEntity {
-            entity_type: "certification".to_string(),
+            entity_type: crate::db::trust::EntityKind::Certification
+                .as_str()
+                .to_string(),
             id: certification.id,
             title,
             description: certification.description.clone(),

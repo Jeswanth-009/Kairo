@@ -382,13 +382,7 @@ const STOPWORDS: &[&str] = &[
     "modern",
 ];
 
-fn stem(token: &str) -> String {
-    if token.len() > 3 && token.ends_with('s') && !token.ends_with("ss") {
-        token[..token.len() - 1].to_string()
-    } else {
-        token.to_string()
-    }
-}
+use crate::text::stem;
 
 pub fn tokenize_filtered(text: &str) -> std::collections::HashSet<String> {
     text.to_lowercase()

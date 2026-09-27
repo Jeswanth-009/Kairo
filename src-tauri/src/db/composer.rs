@@ -277,13 +277,13 @@ fn assemble(
     for project in super::vault::vault_list::<super::vault::Project>(conn)? {
         let bullets = ensure_entity_bullets(
             conn,
-            "project",
+            crate::db::trust::EntityKind::Project.as_str(),
             project.id,
             &project.description,
             extra_warnings,
         )?;
         entities.push(ComposerEntity {
-            entity_type: "project".to_string(),
+            entity_type: crate::db::trust::EntityKind::Project.as_str().to_string(),
             id: project.id,
             title: project.title,
             subtitle: String::new(),
@@ -299,7 +299,10 @@ fn assemble(
             evidence_count: project.evidence_count,
             bullets,
             relevance: relevance
-                .get(&("project".to_string(), project.id))
+                .get(&(
+                    crate::db::trust::EntityKind::Project.as_str().to_string(),
+                    project.id,
+                ))
                 .copied()
                 .unwrap_or(0.0),
         });
@@ -308,13 +311,15 @@ fn assemble(
     for experience in super::vault::vault_list::<super::vault::Experience>(conn)? {
         let bullets = ensure_entity_bullets(
             conn,
-            "experience",
+            crate::db::trust::EntityKind::Experience.as_str(),
             experience.id,
             &experience.description,
             extra_warnings,
         )?;
         entities.push(ComposerEntity {
-            entity_type: "experience".to_string(),
+            entity_type: crate::db::trust::EntityKind::Experience
+                .as_str()
+                .to_string(),
             id: experience.id,
             title: format!("{} — {}", experience.organization, experience.role)
                 .trim_end_matches(" —")
@@ -332,7 +337,12 @@ fn assemble(
             evidence_count: experience.evidence_count,
             bullets,
             relevance: relevance
-                .get(&("experience".to_string(), experience.id))
+                .get(&(
+                    crate::db::trust::EntityKind::Experience
+                        .as_str()
+                        .to_string(),
+                    experience.id,
+                ))
                 .copied()
                 .unwrap_or(0.0),
         });

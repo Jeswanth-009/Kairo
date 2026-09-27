@@ -209,14 +209,7 @@ const STOPWORDS: &[&str] = &[
     "such",
 ];
 
-fn stem(token: &str) -> String {
-    // Light plural strip; keeps sql/apis→api sensible without a real stemmer.
-    if token.len() > 3 && token.ends_with('s') && !token.ends_with("ss") {
-        token[..token.len() - 1].to_string()
-    } else {
-        token.to_string()
-    }
-}
+use crate::text::stem;
 
 fn tokens(text: &str) -> Vec<String> {
     text.to_lowercase()
