@@ -28,9 +28,11 @@ import { Skeleton, Spinner } from "../../components/ui/Feedback";
 import { ProfileDialog } from "../vault/ProfileDialog";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
+import { enqueuePlanSave, flushPlanSave } from "../../lib/planAutosave";
 import { usePdfProgress } from "../../lib/pdfProgress";
 import { fmtAgo, fmtRange } from "../../lib/dateFmt";
 import { PdfViewer } from "./PdfViewer";
+import { SaveStatusChip } from "./SaveStatusChip";
 import type {
   Job,
   PdfArtifact,
@@ -364,13 +366,19 @@ export default function ResumeStudioPage() {
   // Stale-response guard: rapidly switching jobs must never interleave
   // plan/artifact/version state from two different workspaces.
   const loadSeq = useRef(0);
+  // Mirror of the loaded plan for the autosave queue: null between job
+  // switches so a mutation can never write the old job's plan into the new
+  // job while its own plan is still loading.
+  const planRef = useRef<ResumePlan | null>(null);
   useEffect(() => {
     if (jobId === null) return;
     const seq = ++loadSeq.current;
+    planRef.current = null;
     void (async () => {
       try {
         const stored = await ipc.getPlan(jobId);
         if (seq !== loadSeq.current) return;
+        planRef.current = stored?.plan ?? null;
         setPlan(stored?.plan ?? null);
         const suggestions = await ipc.tailorList(jobId);
         if (seq !== loadSeq.current) return;
@@ -390,26 +398,28 @@ export default function ResumeStudioPage() {
   }, [jobId]);
 
   // ---------------------------------------------------------------------------
-  // Plan mutations — auto-save on every change; plan.config now round-trips,
-  // so template/paper choices persist through the same path.
+  // Plan mutations — auto-save on every change through the shared serialized
+  // queue (one writer per job, latest snapshot always wins). plan.config now
+  // round-trips, so template/paper choices persist through the same path.
   // ---------------------------------------------------------------------------
 
   const saveSeq = useRef(0);
   const mutatePlan = (mutator: (p: ResumePlan) => void) => {
-    if (!plan || jobId === null) return;
-    const copy: ResumePlan = structuredClone(plan);
+    if (jobId === null) return;
+    const current = planRef.current;
+    if (!current) return;
+    const copy: ResumePlan = structuredClone(current);
     mutator(copy);
+    planRef.current = copy;
     setPlan(copy);
     const seq = ++saveSeq.current;
-    void (async () => {
-      try {
-        await ipc.savePlan(jobId, copy);
-        const lines = await ipc.estimatePlanLines(copy);
+    enqueuePlanSave(jobId, copy);
+    void ipc
+      .estimatePlanLines(copy)
+      .then((lines) => {
         if (seq === saveSeq.current) setEstimatedLines(lines);
-      } catch (e) {
-        toast.error(String(e));
-      }
-    })();
+      })
+      .catch(() => {/* real save failures surface via the save status chip */});
   };
 
   /**
@@ -422,8 +432,7 @@ export default function ResumeStudioPage() {
     setSyncing(true);
     try {
       const fresh = await ipc.runComposer(jobId, plan.config);
-      const prev = plan;
-      const mergeItem = (item: PlanItem): PlanItem => {
+      const prev = plan;      const mergeItem = (item: PlanItem): PlanItem => {
         const old = [...prev.experience, ...prev.projects].find(
           (i) => i.entityType === item.entityType && i.id === item.id,
         );
@@ -457,8 +466,11 @@ export default function ResumeStudioPage() {
       merged.excludedSkills = (merged.excludedSkills ?? []).filter((sk) =>
         merged.skills.some((x) => x.toLowerCase() === sk.toLowerCase()),
       );
+      planRef.current = merged;
       setPlan(merged);
-      await ipc.savePlan(jobId, merged);
+      enqueuePlanSave(jobId, merged);
+      // The toast should only promise a synced Vault once the plan is on disk.
+      await flushPlanSave(jobId);
       setEstimatedLines(await ipc.estimatePlanLines(merged));
       toast.ok(
         `Synced from Vault — ${merged.skills.length} skills, ${merged.achievements?.length ?? 0} achievements, ${merged.experience.length + merged.projects.length} records`,
@@ -667,6 +679,7 @@ export default function ResumeStudioPage() {
         description="Curate what goes in, pick a template, and export a polished PDF."
         actions={
           <>
+            <SaveStatusChip jobId={jobId} />
             <Select
               value={jobId ?? undefined}
               onChange={(e) => setJobId(Number(e.target.value))}
@@ -1296,8 +1309,14 @@ export default function ResumeStudioPage() {
                 size="sm"
                 variant="secondary"
                 onClick={() => void saveVersion()}
-                disabled={savingVersion || !artifact}
-                title={!artifact ? "Export the PDF first" : "Freeze this plan + PDF as a version"}
+                disabled={savingVersion || !artifact || artifactStale}
+                title={
+                  !artifact
+                    ? "Export the PDF first"
+                    : artifactStale
+                      ? "Your template/paper picks changed — recompile, then save the version"
+                      : "Freeze this plan + PDF as a version"
+                }
               >
                 {savingVersion ? "Saving…" : "Save version"}
               </Button>

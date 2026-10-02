@@ -5,6 +5,7 @@ import { Card } from "../../components/ui/Card";
 import { Skeleton, Spinner } from "../../components/ui/Feedback";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
+import { enqueuePlanSave } from "../../lib/planAutosave";
 import { usePdfProgress } from "../../lib/pdfProgress";
 import { fmtAgo } from "../../lib/dateFmt";
 import { toast } from "../../stores/toastStore";
@@ -52,7 +53,9 @@ export function ResumeTab({ jobId }: { jobId: number }) {
           if (!stored) return;
           const next = structuredClone(stored.plan);
           next.config.templateId = id;
-          return ipc.savePlan(jobId, next);
+          // Through the shared serialized queue — the Studio may be saving
+          // the same job's plan concurrently, and the newest snapshot wins.
+          enqueuePlanSave(jobId, next);
         })
         .catch((e) => toast.error(String(e)));
     }
