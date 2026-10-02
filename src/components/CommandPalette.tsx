@@ -35,7 +35,7 @@ interface PaletteItem {
 
 const NAV_ACTIONS: { to: string; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/vault", label: "Career Vault", icon: Archive },
+  { to: "/story", label: "My story", icon: Archive },
   { to: "/jobs", label: "Jobs", icon: Briefcase },
   { to: "/resume-studio", label: "Resume Studio", icon: FileText },
   { to: "/applications", label: "Applications", icon: ClipboardCheck },
@@ -92,7 +92,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       icon: Upload,
       keywords: "import resume paste analyze cv",
       run: () => {
-        navigate("/vault");
+        navigate("/story");
         requestVaultAction({ type: "import" });
       },
     });
@@ -115,7 +115,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         icon,
         keywords,
         run: () => {
-          navigate("/vault");
+          navigate("/story");
           focusVaultRecord(key, Number(id.split(":")[1]));
         },
       });
@@ -184,7 +184,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         icon: Wrench,
         keywords: `skill ${s.canonicalName} ${s.aliases.map((a) => a.alias).join(" ")} ${s.category}`,
         run: () => {
-          navigate("/vault");
+          navigate("/story");
           focusVaultRecord("skills", s.id);
         },
       });

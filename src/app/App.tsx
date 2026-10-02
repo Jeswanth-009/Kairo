@@ -15,17 +15,15 @@ import JobsPage from "../features/jobs/JobsPage";
 import JobWorkspacePage from "../features/jobs/JobWorkspacePage";
 import ResumeStudioPage from "../features/resume-studio/ResumeStudioPage";
 import ApplicationsPage from "../features/applications/ApplicationsPage";
-import InterviewPrepPage from "../features/interview/InterviewPrepPage";
 import SettingsPage from "../features/settings/SettingsPage";
 
 const TITLES: Record<string, string> = {
-  "/": "Dashboard",
+  "/": "Home",
   "/onboarding": "Get started",
-  "/vault": "Career Vault",
+  "/story": "My story",
   "/jobs": "Jobs",
   "/resume-studio": "Resume Studio",
   "/applications": "Applications",
-  "/interview": "Interview Prep",
   "/settings": "Settings",
 };
 
@@ -63,12 +61,15 @@ export default function App() {
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
-              <Route path="/vault" element={<VaultPage />} />
+              <Route path="/story" element={<VaultPage />} />
+              {/* Old routes keep working: the story moved, interview moved
+                  into each job workspace. */}
+              <Route path="/vault" element={<Navigate to="/story" replace />} />
+              <Route path="/interview" element={<Navigate to="/jobs" replace />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/:jobId" element={<JobWorkspacePage />} />
               <Route path="/resume-studio" element={<ResumeStudioPage />} />
               <Route path="/applications" element={<ApplicationsPage />} />
-              <Route path="/interview" element={<InterviewPrepPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               {needsOnboarding ? (
                 <Route path="*" element={<Navigate to="/onboarding" replace />} />

@@ -8,17 +8,16 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANTS: Record<NonNullable<ButtonProps["variant"]>, string> = {
   primary: [
-    "text-white bg-gradient-to-br from-kairo-blue to-kairo-violet",
-    "shadow-sm shadow-kairo-blue/30 ring-1 ring-kairo-blue/40",
-    "hover:brightness-110 hover:shadow-md hover:shadow-kairo-blue/30 hover:-translate-y-px",
-    "active:translate-y-0 active:brightness-95",
+    "text-white bg-kairo-blue",
+    "shadow-sm ring-1 ring-kairo-blue/40",
+    "hover:bg-kairo-blue/90 active:bg-kairo-blue active:brightness-95",
     "focus-visible:ring-kairo-blue",
   ].join(" "),
   secondary:
-    "border border-line bg-card text-ink shadow-sm hover:border-line-strong hover:bg-accent-soft hover:-translate-y-px active:translate-y-0 focus-visible:ring-kairo-blue/50",
+    "border border-line bg-card text-ink shadow-sm hover:border-line-strong hover:bg-accent-soft active:bg-accent-soft focus-visible:ring-kairo-blue/50",
   ghost: "text-muted hover:bg-accent-soft hover:text-ink focus-visible:ring-kairo-blue/50",
   danger:
-    "text-white bg-bad shadow-sm ring-1 ring-bad/40 hover:bg-bad hover:-translate-y-px active:translate-y-0 focus-visible:ring-bad",
+    "text-white bg-bad shadow-sm ring-1 ring-bad/40 hover:bg-bad/90 active:bg-bad focus-visible:ring-bad",
   "danger-outline":
     "border border-bad/25 bg-card text-bad shadow-sm hover:bg-bad/5 hover:border-bad/40 dark:border-bad/30 dark:text-red-400 dark:hover:bg-bad/10 focus-visible:ring-bad",
 };
