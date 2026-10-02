@@ -13,8 +13,12 @@ import {
   FolderOpen,
   Pencil,
   Plus,
+  CircleCheck,
+  FileText,
   RefreshCw,
   Sparkles,
+  TriangleAlert,
+  Undo2,
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
@@ -29,6 +33,7 @@ import { ProfileDialog } from "../vault/ProfileDialog";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
 import { enqueuePlanSave, flushPlanSave } from "../../lib/planAutosave";
+import { usePlanSaveStatus } from "../../lib/usePlanSaveStatus";
 import { usePdfProgress } from "../../lib/pdfProgress";
 import { fmtAgo, fmtRange } from "../../lib/dateFmt";
 import { PdfViewer } from "./PdfViewer";
@@ -325,6 +330,15 @@ export default function ResumeStudioPage() {
   const [previewMode, setPreviewMode] = useState<"pdf" | "plan">("pdf");
   // First version gate: the user confirms the final PDF before it's frozen.
   const [finalReviewed, setFinalReviewed] = useState(false);
+  // Strong status inputs: failed export (in-session), content edited after
+  // the last compile, and the autosave state.
+  const [exportFailed, setExportFailed] = useState(false);
+  const [editedSinceExport, setEditedSinceExport] = useState(false);
+  const [planUpdatedAt, setPlanUpdatedAt] = useState<string | null>(null);
+
+  const historyRef = useRef<ResumePlan[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+  const saveStatus = usePlanSaveStatus(jobId);
 
   const templateId = (plan?.config.templateId ?? "jake") as ResumeTemplateId;
   const paper = plan?.config.paper ?? "letter";
@@ -341,6 +355,8 @@ export default function ResumeStudioPage() {
       .then(setProfile)
       .catch(() => setProfile(null));
   }, []);
+
+
 
   useEffect(() => {
     if (showVaultSkills && vaultSkills.length === 0) {
@@ -382,6 +398,7 @@ export default function ResumeStudioPage() {
         if (seq !== loadSeq.current) return;
         planRef.current = stored?.plan ?? null;
         setPlan(stored?.plan ?? null);
+        setPlanUpdatedAt(stored?.updatedAt ?? null);
         const suggestions = await ipc.tailorList(jobId);
         if (seq !== loadSeq.current) return;
         setSuggestions(suggestions);
@@ -410,6 +427,10 @@ export default function ResumeStudioPage() {
     if (jobId === null) return;
     const current = planRef.current;
     if (!current) return;
+    historyRef.current.push(current);
+    if (historyRef.current.length > 10) historyRef.current.shift();
+    setCanUndo(true);
+    setEditedSinceExport(true);
     const copy: ResumePlan = structuredClone(current);
     mutator(copy);
     planRef.current = copy;
@@ -549,6 +570,16 @@ export default function ResumeStudioPage() {
       }
     });
 
+  /** Restore the last plan state; the restored state persists too. */
+  const undoPlan = () => {
+    const previous = historyRef.current.pop();
+    if (!previous || jobId === null) return;
+    planRef.current = previous;
+    setPlan(previous);
+    setCanUndo(historyRef.current.length > 0);
+    enqueuePlanSave(jobId, previous);
+  };
+
   // ---------------------------------------------------------------------------
   // Export / versions
   // ---------------------------------------------------------------------------
@@ -560,8 +591,12 @@ export default function ResumeStudioPage() {
       const result = await ipc.exportPdf(jobId, templateId);
       setArtifact(result.artifact);
       setPreviewMode("pdf");
+      setExportFailed(false);
+      setEditedSinceExport(false);
       toast.ok(`PDF compiled — ${result.artifact.pageCount ?? "?"} page(s)`);
     } catch (e) {
+      // The staging export never touched the previous good PDF — say so.
+      setExportFailed(true);
       toast.error(String(e));
     } finally {
       setExporting(false);
@@ -595,6 +630,24 @@ export default function ResumeStudioPage() {
     artifact != null &&
     ((artifact.templateId != null && artifact.templateId !== "" && artifact.templateId !== templateId) ||
       (artifact.paper != null && artifact.paper !== "" && artifact.paper !== paper));
+
+  // The one status the whole page agrees on. Order matters: a failed export
+  // (previous PDF still shown) outranks a draft, which outranks saving.
+  const contentStale = editedSinceExport ||
+    (planUpdatedAt !== null &&
+      artifact?.compiledAt != null &&
+      planUpdatedAt > artifact.compiledAt);
+  const studioStatus: { label: string; tone: string } = exportFailed
+    ? { label: "Export failed — showing the previous good PDF", tone: "bad" }
+    : artifact === null
+      ? { label: "Draft — no PDF yet", tone: "neutral" }
+      : saveStatus === "saving"
+        ? { label: "Saving…", tone: "muted" }
+        : saveStatus === "error"
+          ? { label: "Couldn't save — retry from the chip", tone: "bad" }
+          : contentStale || artifactStale
+            ? { label: "PDF needs update — your changes came after the export", tone: "warn" }
+            : { label: "Current PDF", tone: "ok" };
 
   const excludedCount = useMemo(
     () =>
@@ -702,6 +755,48 @@ export default function ResumeStudioPage() {
         }
       />
 
+      <div
+        data-testid="studio-status"
+        role="status"
+        className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-xs font-medium shadow-card ${
+          studioStatus.tone === "bad"
+            ? "border-bad/30 bg-bad-soft text-bad dark:border-red-500/30 dark:bg-bad/10 dark:text-red-300"
+            : studioStatus.tone === "warn"
+              ? "border-warn/30 bg-warn-soft text-warn dark:border-warn/25 dark:bg-warn/10 dark:text-kairo-dawn"
+              : studioStatus.tone === "ok"
+                ? "border-ok/30 bg-ok-soft text-ok dark:border-ok/25 dark:bg-ok/10 dark:text-emerald-300"
+                : "border-line bg-card text-muted"
+        }`}
+      >
+        <span className="flex items-center gap-2">
+          {studioStatus.tone === "ok" ? (
+            <CircleCheck className="size-3.5" aria-hidden />
+          ) : studioStatus.tone === "bad" ? (
+            <TriangleAlert className="size-3.5" aria-hidden />
+          ) : (
+            <FileText className="size-3.5" aria-hidden />
+          )}
+          {studioStatus.label}
+        </span>
+        <span className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            data-testid="studio-undo"
+            onClick={undoPlan}
+            disabled={!canUndo}
+            title="Restore the previous plan state"
+          >
+            <Undo2 className="size-3.5" /> Undo
+          </Button>
+          {artifact === null || exportFailed || studioStatus.tone === "warn" ? (
+            <Button size="sm" onClick={() => void exportPdf()} disabled={exporting}>
+              {exporting ? "Compiling…" : "Export PDF"}
+            </Button>
+          ) : null}
+        </span>
+      </div>
+
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-[minmax(0,1fr)_minmax(0,auto)] xl:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,3fr)] xl:grid-rows-[minmax(0,1fr)]">
         {/* ------------------------------------------------------------- */}
         {/* LEFT — Content curation                                        */}
@@ -807,7 +902,8 @@ export default function ResumeStudioPage() {
                               <ChevronDown />
                             </IconButton>
                             <IconButton
-                              label={item.excluded ? "Include in resume" : "Exclude from resume"}
+                              label={item.excluded ? "Include" : "Exclude"}
+                              title={item.excluded ? "Include this record in the resume" : "Exclude this record from the resume"}
                               size="sm"
                               tone={item.excluded ? "neutral" : "danger"}
                               onClick={() => toggleItem(item.entityType, item.id)}
@@ -834,16 +930,27 @@ export default function ResumeStudioPage() {
                                 );
                                 return (
                                   <li key={bullet.id} className="flex items-start gap-1.5">
-                                    <span
-                                      className={cn(
-                                        "min-w-0 flex-1 text-[11px] leading-relaxed",
-                                        bullet.excluded ? "text-muted/60 line-through" : "text-muted",
-                                      )}
-                                    >
-                                      {accepted ? accepted.suggestedText : bullet.text}
-                                      {accepted ? (
-                                        <Sparkles className="ml-1 inline size-3 text-kairo-violet" aria-label="tailored" />
-                                      ) : null}
+                                    <span className="min-w-0 flex-1">
+                                      <span
+                                        className={cn(
+                                          "block text-[11px] leading-relaxed",
+                                          bullet.excluded ? "text-muted/60 line-through" : "text-muted",
+                                        )}
+                                      >
+                                        {accepted ? accepted.suggestedText : bullet.text}
+                                        {accepted ? (
+                                          <Sparkles className="ml-1 inline size-3 text-kairo-violet" aria-label="tailored" />
+                                        ) : null}
+                                      </span>
+                                      <span
+                                        data-testid="bullet-source"
+                                        className="mt-0.5 block text-[10px] text-muted/70"
+                                      >
+                                        from {item.title}
+                                        {bullet.supports.length > 0
+                                          ? ` · evidence: ${bullet.supports.join(", ")}`
+                                          : " · no evidence linked yet"}
+                                      </span>
                                     </span>
                                     <IconButton
                                       label={bullet.excluded ? "Include bullet" : "Exclude bullet"}
@@ -1141,10 +1248,19 @@ export default function ResumeStudioPage() {
         {/* RIGHT — Template & export rail                                 */}
         {/* ------------------------------------------------------------- */}
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pl-0 lg:col-start-2 xl:col-start-3 xl:row-start-1 lg:pr-1">
-          {/* Template picker */}
+          {/* Template picker — collapsed so content and preview lead. */}
           <Card className="p-4">
-            <CardTitle>Template</CardTitle>
-            <div className="mt-3 flex flex-col gap-2">
+            <details>
+              <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold text-ink">
+                <span>
+                  Template{" "}
+                  <span className="ml-1 text-[11px] font-normal text-muted">
+                    {TEMPLATES.find((t) => t.id === templateId)?.name ?? "jake"} ·{" "}
+                    {paper === "a4" ? "A4" : "Letter"} · {pages} page{pages === 1 ? "" : "s"}
+                  </span>
+                </span>
+              </summary>
+              <div className="mt-3 flex flex-col gap-2">
               {TEMPLATES.map((t) => {
                 const active = templateId === t.id;
                 return (
@@ -1197,6 +1313,7 @@ export default function ResumeStudioPage() {
                 </Select>
               </div>
             </div>
+            </details>
           </Card>
 
           {/* Export */}

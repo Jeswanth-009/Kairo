@@ -291,11 +291,36 @@ export function TailorTab({
                           </span>
                         </div>
 
-                        {suggestion.status === "rejected" && suggestion.validation.violations.length > 0 ? (
-                          <p className="mt-1.5 text-xs text-bad">{suggestion.suggestedText}</p>
-                        ) : (
-                          <p className="mt-1.5 text-sm text-ink">{suggestion.suggestedText}</p>
-                        )}
+                        {/* Before / after — the canonical wording is never
+                            edited in place; acceptance is explicit. */}
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          <div className="rounded-lg border border-line bg-card p-2.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                              Before
+                            </p>
+                            <p className="mt-1 text-xs leading-relaxed text-muted">
+                              {bullet.text}
+                            </p>
+                          </div>
+                          <div
+                            className={`rounded-lg border p-2.5 ${
+                              suggestion.validation.ok
+                                ? "border-kairo-blue/30 bg-kairo-blue/[0.04]"
+                                : "border-bad/30 bg-bad-soft/60 dark:bg-bad/10"
+                            }`}
+                          >
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                              After
+                            </p>
+                            <p
+                              className={`mt-1 text-xs leading-relaxed ${
+                                suggestion.validation.ok ? "text-ink" : "text-bad"
+                              }`}
+                            >
+                              {suggestion.suggestedText}
+                            </p>
+                          </div>
+                        </div>
 
                         {suggestion.validation.violations.length > 0 ? (
                           <ul className="mt-2 space-y-0.5">
