@@ -537,6 +537,10 @@ export interface PdfArtifact {
   /** Template the PDF was compiled with (empty for pre-3.0 artifacts). */
   templateId?: string;
   paper?: string;
+  /** Render-input fingerprint recorded at export (null for pre-13 rows). */
+  fingerprint?: string | null;
+  /** SHA-256 of the generated PDF file at export time. */
+  pdfHash?: string | null;
 }
 
 // --- Versions (Phase 10) -------------------------------------------------------

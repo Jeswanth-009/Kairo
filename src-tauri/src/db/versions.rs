@@ -142,9 +142,8 @@ pub fn create_version(
     let stored_plan = super::composer::get_plan(conn, job_id)?.ok_or_else(|| {
         "No plan for this workspace — compose one before saving a version".to_string()
     })?;
-    let artifact = super::pdf::get_artifact(conn, job_id)?.ok_or_else(|| {
-        "No compiled PDF for this workspace — export the PDF first".to_string()
-    })?;
+    let artifact = super::pdf::get_artifact(conn, job_id)?
+        .ok_or_else(|| "No compiled PDF for this workspace — export the PDF first".to_string())?;
     let all_tailorings = list_tailorings(conn, job_id)?;
     let accepted_tailorings: Vec<super::tailor::TailorSuggestion> = all_tailorings
         .into_iter()
@@ -160,11 +159,8 @@ pub fn create_version(
     })?;
     let mut rendered = stored_plan.plan.clone();
     let _ = super::tailor::apply_accepted_suggestions(conn, job_id, &mut rendered)?;
-    let current_fingerprint = super::fingerprint::render_fingerprint(
-        &rendered,
-        &artifact.template_id,
-        &artifact.paper,
-    );
+    let current_fingerprint =
+        super::fingerprint::render_fingerprint(&rendered, &artifact.template_id, &artifact.paper);
     if current_fingerprint != exported_fingerprint {
         return Err(
             "The plan changed since the PDF was exported — recompile, then save the version"

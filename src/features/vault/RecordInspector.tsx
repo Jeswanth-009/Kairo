@@ -86,9 +86,10 @@ export function RecordInspector({
   // Explicit record-level verification — the top of the honest provenance
   // ladder. Only the user's deliberate action sets it.
   const [verifying, setVerifying] = useState(false);
-  const badge = originBadge(record);
-  const isVerified = originState(record) === "verified";
   const canVerify = ORIGIN_KINDS.includes(entityType as (typeof ORIGIN_KINDS)[number]);
+  const provenanceRecord = record as unknown as Parameters<typeof originBadge>[0];
+  const badge = canVerify ? originBadge(provenanceRecord) : null;
+  const isVerified = canVerify && originState(provenanceRecord) === "verified";
 
   const toggleVerified = async () => {
     setVerifying(true);

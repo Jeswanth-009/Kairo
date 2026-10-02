@@ -10,7 +10,6 @@ import { enqueuePlanSave } from "../../lib/planAutosave";
 import { extractTextFromFile } from "../imports/extractFile";
 import { originBadge, utcNow } from "../../lib/origin";
 import type {
-  Achievement,
   Education,
   Experience,
   Job,
@@ -317,7 +316,6 @@ function ReviewGroups({
 }) {
   const saveRecord = useVaultStore((s) => s.saveRecord);
   const saveProfile = useVaultStore((s) => s.saveProfile);
-  const profile = useVaultStore((s) => s.profile);
   const vaultSkills = useVaultStore((s) => s.skills);
 
   const [contact, setContact] = useState(() => editable(parsed.profile ?? emptyProfile()));
@@ -392,6 +390,7 @@ function ReviewGroups({
           headline: contact.headline,
           email: contact.email,
           phone: contact.phone,
+          location: "",
           github: contact.github,
           website: contact.website,
           linkedin: contact.linkedin,

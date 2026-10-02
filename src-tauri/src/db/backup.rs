@@ -93,11 +93,7 @@ pub fn backups_dir(app_data_dir: &Path) -> PathBuf {
 
 /// Create a portable backup archive of `conn` plus the `pdf/` tree, then
 /// prune old ones.
-pub fn create_backup(
-    conn: &Connection,
-    dir: &Path,
-    pdf_root: &Path,
-) -> Result<BackupInfo, String> {
+pub fn create_backup(conn: &Connection, dir: &Path, pdf_root: &Path) -> Result<BackupInfo, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("cannot create backups dir: {e}"))?;
     let stamp: String =
         sql_err(conn.query_row("SELECT strftime('%Y%m%d-%H%M%S', 'now')", [], |r| r.get(0)))?;
@@ -231,7 +227,11 @@ fn write_db_snapshot(conn: &Connection, dest: &Path) -> Result<(), String> {
 
 fn table_counts(conn: &Connection) -> (i64, i64) {
     let jobs: i64 = conn
-        .query_row("SELECT COUNT(*) FROM jobs WHERE deleted_at IS NULL", [], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM jobs WHERE deleted_at IS NULL",
+            [],
+            |r| r.get(0),
+        )
         .unwrap_or(0);
     let versions: i64 = conn
         .query_row("SELECT COUNT(*) FROM resume_versions", [], |r| r.get(0))
@@ -297,7 +297,8 @@ fn write_archive(
         let on_disk = pdf_root.join(file.path.strip_prefix("pdf/").unwrap_or(&file.path));
         add_file_to_zip(&mut zip, options, &file.path, &on_disk)?;
     }
-    zip.finish().map_err(|e| format!("cannot finish zip: {e}"))?;
+    zip.finish()
+        .map_err(|e| format!("cannot finish zip: {e}"))?;
     Ok(())
 }
 
@@ -319,7 +320,8 @@ fn add_file_to_zip(
 /// only counts as created once its own bytes round-trip.
 fn verify_archive(path: &Path, manifest: &BackupManifest) -> Result<(), String> {
     let file = std::fs::File::open(path).map_err(|e| format!("cannot reopen archive: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("cannot read archive: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("cannot read archive: {e}"))?;
     for expected in &manifest.files {
         let mut entry = archive
             .by_name(&expected.path)
@@ -347,7 +349,9 @@ pub fn list_backups(dir: &Path) -> Result<Vec<BackupInfo>, String> {
         if !is_backup_name(&name) {
             continue;
         }
-        let stem = name.trim_end_matches(ARCHIVE_EXT).trim_end_matches(LEGACY_DB_EXT);
+        let stem = name
+            .trim_end_matches(ARCHIVE_EXT)
+            .trim_end_matches(LEGACY_DB_EXT);
         let mut info = BackupInfo {
             bytes: file_size(&entry.path())?,
             path: entry.path().to_string_lossy().to_string(),
@@ -386,7 +390,8 @@ fn read_manifest_counts(path: &Path) -> Result<(i64, i64), String> {
 
 fn read_archive_manifest(path: &Path) -> Result<BackupManifest, String> {
     let file = std::fs::File::open(path).map_err(|e| format!("cannot open archive: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("cannot read archive: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("cannot read archive: {e}"))?;
     let mut entry = archive
         .by_name(MANIFEST_ENTRY)
         .map_err(|e| format!("archive has no manifest: {e}"))?;
@@ -463,7 +468,8 @@ fn restore_archive(
         ));
     }
     let file = std::fs::File::open(path).map_err(|e| format!("cannot open archive: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("cannot read archive: {e}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("cannot read archive: {e}"))?;
     for expected in &manifest.files {
         let mut entry = archive
             .by_name(&expected.path)
@@ -494,8 +500,8 @@ fn restore_archive(
             .map_err(|e| format!("cannot stage database: {e}"))?;
         std::io::copy(&mut entry, &mut out).map_err(|e| format!("cannot stage database: {e}"))?;
     }
-    let staging_conn = Connection::open(&staging_db)
-        .map_err(|e| format!("staged database will not open: {e}"));
+    let staging_conn =
+        Connection::open(&staging_db).map_err(|e| format!("staged database will not open: {e}"));
     if let Ok(ref conn) = staging_conn {
         if let Err(e) = validate_kairo_db(conn) {
             let _ = std::fs::remove_file(&staging_db);
@@ -535,9 +541,11 @@ fn restore_db_into_live(src: &Connection, live: &mut Connection) -> Result<(), S
 }
 
 fn count_migrations(live: &Connection) -> usize {
-    sql_err(live.query_row("SELECT COUNT(*) FROM _migrations", [], |r| r.get::<_, i64>(0)))
-        .map(|n| n as usize)
-        .unwrap_or(0)
+    sql_err(live.query_row("SELECT COUNT(*) FROM _migrations", [], |r| {
+        r.get::<_, i64>(0)
+    }))
+    .map(|n| n as usize)
+    .unwrap_or(0)
 }
 
 /// Extract the archived `pdf/` entries into a staging dir, then swap it in as
@@ -577,13 +585,13 @@ fn swap_pdf_tree(
                 .map_err(|e| format!("archive changed while restoring: {e}"))?;
             let mut out = std::fs::File::create(&target)
                 .map_err(|e| format!("cannot stage {}: {e}", name))?;
-            std::io::copy(&mut entry, &mut out)
-                .map_err(|e| format!("cannot stage {name}: {e}"))?;
+            std::io::copy(&mut entry, &mut out).map_err(|e| format!("cannot stage {name}: {e}"))?;
         }
         // Staged tree replaces the live one: old aside, new in, old gone.
         let old = parent.join(format!(".pdf-old-{stamp}"));
         if pdf_root.exists() {
-            std::fs::rename(pdf_root, &old).map_err(|e| format!("cannot set aside old pdf dir: {e}"))?;
+            std::fs::rename(pdf_root, &old)
+                .map_err(|e| format!("cannot set aside old pdf dir: {e}"))?;
         }
         if let Err(e) = std::fs::rename(staging.join("pdf"), pdf_root) {
             // Roll the old tree back — the user keeps their current files.
@@ -671,10 +679,11 @@ fn is_backup_name(name: &str) -> bool {
         .chars()
         .enumerate()
         .all(|(i, c)| i == 8 || c.is_ascii_digit());
-    let extra_ok = extra.is_empty() || (is_archive && {
-        let n = extra.strip_prefix('-').unwrap_or("");
-        !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())
-    });
+    let extra_ok = extra.is_empty()
+        || (is_archive && {
+            let n = extra.strip_prefix('-').unwrap_or("");
+            !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())
+        });
     digits_ok && extra_ok
 }
 
@@ -760,7 +769,8 @@ mod tests {
 
     /// Fake app data root with a `pdf/job_<id>/` tree of fake PDFs.
     fn pdf_root(tag: &str, job_ids: &[i64]) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("kairo-backup-pdf-{tag}-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("kairo-backup-pdf-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         for id in job_ids {
             let job_dir = root.join(format!("job_{id}"));
@@ -884,8 +894,8 @@ mod tests {
 
         // Live install has its own pdf tree with a file the backup lacks.
         let mut live = db();
-        let live_pdfs = std::env::temp_dir()
-            .join(format!("kairo-backup-swap-target-{}", std::process::id()));
+        let live_pdfs =
+            std::env::temp_dir().join(format!("kairo-backup-swap-target-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&live_pdfs);
         let stale_dir = live_pdfs.join(format!("job_{job_id}"));
         std::fs::create_dir_all(&stale_dir).unwrap();
@@ -989,10 +999,13 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(&fake, b"this is definitely not sqlite").unwrap();
         let mut live = conn;
-        assert!(
-            restore_backup(&mut live, &dir, fake.file_name().unwrap().to_str().unwrap(), &pdfs)
-                .is_err()
-        );
+        assert!(restore_backup(
+            &mut live,
+            &dir,
+            fake.file_name().unwrap().to_str().unwrap(),
+            &pdfs
+        )
+        .is_err());
         assert_eq!(project_count(&live), 1);
 
         // 2. A valid SQLite file that is not a Kairo database.
@@ -1007,10 +1020,13 @@ mod tests {
 
         // 3. Path traversal via the file name is rejected by the pattern.
         assert!(restore_backup(&mut live, &dir, "..\\secrets.db", &pdfs).is_err());
-        assert!(
-            restore_backup(&mut live, &dir, "sub/dir/kairo-backup-20990101-000000.zip", &pdfs)
-                .is_err()
-        );
+        assert!(restore_backup(
+            &mut live,
+            &dir,
+            "sub/dir/kairo-backup-20990101-000000.zip",
+            &pdfs
+        )
+        .is_err());
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&pdfs);
     }
@@ -1036,7 +1052,10 @@ mod tests {
         assert_eq!(remaining.len(), KEEP_BACKUPS);
         assert_eq!(
             remaining[0].file_name,
-            format!("{NAME_PATTERN}20260913-{:06}{LEGACY_DB_EXT}", KEEP_BACKUPS + 2)
+            format!(
+                "{NAME_PATTERN}20260913-{:06}{LEGACY_DB_EXT}",
+                KEEP_BACKUPS + 2
+            )
         );
         assert!(dir.join("unrelated.db").is_file());
         let _ = std::fs::remove_dir_all(&dir);
@@ -1046,7 +1065,9 @@ mod tests {
     fn backup_names_must_match_pattern() {
         assert!(is_backup_name("kairo-backup-20260913-101500.zip"));
         assert!(is_backup_name("kairo-backup-20260913-101500.db"));
-        assert!(is_backup_name("kairo-backup-20260913-101500-pre-restore.db"));
+        assert!(is_backup_name(
+            "kairo-backup-20260913-101500-pre-restore.db"
+        ));
         assert!(is_backup_name("kairo-backup-20260913-101500-2.zip"));
         assert!(!is_backup_name("kairo-backup-20260913-101500.txt"));
         assert!(!is_backup_name("kairo-backup-notastamp.zip"));

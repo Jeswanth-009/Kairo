@@ -32,11 +32,16 @@ export function VaultCard({
   const evidenceCount =
     "evidenceCount" in record ? (record.evidenceCount as number) : null;
   // Honest provenance: imported records show where they are on the review
-  // ladder; manual records carry no badge by design.
-  const badge =
-    evidenceCount !== null
-      ? originBadge({ ...record, evidenceCount })
-      : originBadge(record);
+  // ladder; manual records carry no badge by design. Only the five record
+  // kinds carry provenance (skills do not).
+  const carriesProvenance = "origin" in record || "verifiedAt" in record;
+  const badge = carriesProvenance
+    ? originBadge(
+        evidenceCount !== null
+          ? { ...record, evidenceCount }
+          : (record as Parameters<typeof originBadge>[0]),
+      )
+    : null;
 
   return (
     <Card className={`flex flex-col p-5 transition-all ${selected ? "ring-2 ring-kairo-blue/70 bg-kairo-blue/[0.02]" : ""}`}>

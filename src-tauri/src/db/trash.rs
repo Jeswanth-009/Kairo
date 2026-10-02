@@ -106,7 +106,11 @@ pub fn purge_expired(conn: &Connection, pdf_root: &Path) -> Result<usize, String
             let mut stmt = sql_err(conn.prepare(
                 &format!("SELECT id FROM {table} WHERE deleted_at IS NOT NULL AND deleted_at <= datetime('now', ?1)"),
             ))?;
-            let rows = sql_err(stmt.query_map(params![format!("-{TRASH_RETENTION_DAYS} days")], |r| r.get(0)))?;
+            let rows = sql_err(
+                stmt.query_map(params![format!("-{TRASH_RETENTION_DAYS} days")], |r| {
+                    r.get(0)
+                }),
+            )?;
             sql_err(rows.collect::<rusqlite::Result<Vec<i64>>>())?
         } else {
             vec![]
@@ -143,12 +147,13 @@ pub fn gc_orphan_job_dirs(conn: &Connection, pdf_root: &Path) -> usize {
         else {
             continue;
         };
-        let exists: i64 = match conn.query_row("SELECT COUNT(*) FROM jobs WHERE id = ?1", [id], |r| {
-            r.get(0)
-        }) {
-            Ok(n) => n,
-            Err(_) => continue,
-        };
+        let exists: i64 =
+            match conn.query_row("SELECT COUNT(*) FROM jobs WHERE id = ?1", [id], |r| {
+                r.get(0)
+            }) {
+                Ok(n) => n,
+                Err(_) => continue,
+            };
         if exists == 0 && std::fs::remove_dir_all(entry.path()).is_ok() {
             removed += 1;
         }
@@ -189,8 +194,7 @@ mod tests {
     }
 
     fn pdf_root(tag: &str) -> PathBuf {
-        let d =
-            std::env::temp_dir().join(format!("kairo-trash-test-{tag}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("kairo-trash-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d

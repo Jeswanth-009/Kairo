@@ -17,10 +17,8 @@ import type {
 } from "../../lib/types";
 import { useJobsStore } from "../../stores/jobsStore";
 import { toast } from "../../stores/toastStore";
+import { ApplicationTab, InterviewTab, ResumeStep } from "./workspaceSteps";
 import { MatchTab } from "./MatchTab";
-import { PlanTab } from "./PlanTab";
-import { TailorTab } from "./TailorTab";
-import { ResumeTab } from "./ResumeTab";
 
 const KIND_LABELS: Record<JobRequirementKind, string> = {
   required_skill: "Required skills",

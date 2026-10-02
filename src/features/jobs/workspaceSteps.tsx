@@ -277,7 +277,7 @@ export function ApplicationTab({ job }: { job: Job }) {
                     {a.role || job.roleTitle}
                     {a.company ? <span className="text-muted"> · {a.company}</span> : null}
                   </span>
-                  <Badge tone={a.status === "applied" || a.status === "interviewing" ? "blue" : "neutral"}>
+                  <Badge tone={a.status === "applied" || a.status === "interview" ? "blue" : "neutral"}>
                     {a.status}
                   </Badge>
                 </div>

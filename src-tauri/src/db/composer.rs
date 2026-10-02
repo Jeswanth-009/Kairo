@@ -422,9 +422,10 @@ pub struct StoredPlan {
 }
 
 pub fn get_plan(conn: &Connection, job_id: i64) -> Result<Option<StoredPlan>, String> {
-    let mut stmt = sql_err(conn.prepare(
-        "SELECT config_json, plan_json, updated_at FROM resume_plans WHERE job_id = ?1",
-    ))?;
+    let mut stmt =
+        sql_err(conn.prepare(
+            "SELECT config_json, plan_json, updated_at FROM resume_plans WHERE job_id = ?1",
+        ))?;
     match stmt.query_row([job_id], |row| {
         Ok((
             row.get::<_, String>(0)?,
@@ -436,7 +437,11 @@ pub fn get_plan(conn: &Connection, job_id: i64) -> Result<Option<StoredPlan>, St
             let config: ComposerConfig =
                 serde_json::from_str(&config_json).map_err(|e| e.to_string())?;
             let plan: ResumePlan = serde_json::from_str(&plan_json).map_err(|e| e.to_string())?;
-            Ok(Some(StoredPlan { config, plan, updated_at }))
+            Ok(Some(StoredPlan {
+                config,
+                plan,
+                updated_at,
+            }))
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),

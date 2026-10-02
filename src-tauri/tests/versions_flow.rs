@@ -5,9 +5,9 @@
 //! a version may only freeze a PDF whose fingerprint still matches the plan.
 
 use kairo_lib::composer::ComposerConfig;
+use kairo_lib::db::vault as vault_db;
 use kairo_lib::db::versions;
 use kairo_lib::db::{composer as composer_db, fingerprint, jobs as jobs_db, tailor as tailor_db};
-use kairo_lib::db::vault as vault_db;
 use rusqlite::Connection;
 
 fn fixture_db() -> Connection {
@@ -75,11 +75,7 @@ fn seed_job_with_requirements(conn: &Connection) -> i64 {
 /// A minimal but real PDF file — `create_version` must copy it verbatim.
 /// Also records the fingerprint + hash exactly the way `export_pdf` does, so
 /// the fixture looks like a genuine export to the exactness gate.
-fn seed_compiled_pdf(
-    conn: &Connection,
-    job_id: i64,
-    tag: &str,
-) -> std::path::PathBuf {
+fn seed_compiled_pdf(conn: &Connection, job_id: i64, tag: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "kairo-versions-fixture-{tag}-{}-{job_id}",
         std::process::id()
@@ -88,8 +84,11 @@ fn seed_compiled_pdf(
     let pdf = dir.join("resume.pdf");
     std::fs::write(&pdf, b"%PDF-1.4\n%fixture artifact\n%%EOF\n").expect("artifact pdf");
     let tex = dir.join("resume.tex");
-    std::fs::write(&tex, b"\\documentclass{article}\\begin{document}x\\end{document}")
-        .expect("artifact tex");
+    std::fs::write(
+        &tex,
+        b"\\documentclass{article}\\begin{document}x\\end{document}",
+    )
+    .expect("artifact tex");
 
     let stored = composer_db::get_plan(conn, job_id)
         .expect("plan readable")
@@ -135,7 +134,10 @@ fn version_snapshot_flow_roundtrips_every_input() {
     assert!(v1.snapshot.job.raw_jd.contains("data pipelines"));
     assert_eq!(v1.snapshot.requirements.len(), 2);
     assert_eq!(v1.snapshot.plan.header.full_name, "Test User");
-    assert!(v1.fingerprint.is_some(), "version records the export fingerprint");
+    assert!(
+        v1.fingerprint.is_some(),
+        "version records the export fingerprint"
+    );
     assert!(v1.pdf_hash.is_some(), "version records the PDF hash");
     assert!(std::path::Path::new(&v1.pdf_path).exists());
     assert_ne!(
@@ -174,8 +176,8 @@ fn editing_the_plan_after_export_requires_a_new_export() {
     composer_db::run_composer(&conn, job_id, &ComposerConfig::default()).expect("plan composes");
     let artifact = seed_compiled_pdf(&conn, job_id, "stale-plan");
 
-    let data_dir = std::env::temp_dir()
-        .join(format!("kairo-versions-test-stale-{}", std::process::id()));
+    let data_dir =
+        std::env::temp_dir().join(format!("kairo-versions-test-stale-{}", std::process::id()));
     std::fs::create_dir_all(&data_dir).unwrap();
 
     // The plan drifts after the export: target_pages lives inside the plan
@@ -230,8 +232,8 @@ fn a_modified_pdf_on_disk_refuses_version_save() {
     composer_db::run_composer(&conn, job_id, &ComposerConfig::default()).expect("plan composes");
     let artifact = seed_compiled_pdf(&conn, job_id, "tampered-pdf");
 
-    let data_dir = std::env::temp_dir()
-        .join(format!("kairo-versions-test-tamper-{}", std::process::id()));
+    let data_dir =
+        std::env::temp_dir().join(format!("kairo-versions-test-tamper-{}", std::process::id()));
     std::fs::create_dir_all(&data_dir).unwrap();
 
     std::fs::write(&artifact, b"%PDF-1.4\n%tampered after export\n%%EOF\n").unwrap();

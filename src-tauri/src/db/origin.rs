@@ -163,16 +163,24 @@ pub fn home_overview(conn: &Connection) -> Result<Vec<JobHomeRow>, String> {
 
     let mut out = Vec::new();
     for row in rows {
-        let (job_id, role_title, company, plan_json, updated_at, compiled_at, artifact_template, artifact_paper, config_json, last_activity) = sql_err(row)?;
+        let (
+            job_id,
+            role_title,
+            company,
+            plan_json,
+            updated_at,
+            compiled_at,
+            artifact_template,
+            artifact_paper,
+            config_json,
+            last_activity,
+        ) = sql_err(row)?;
         let has_plan = plan_json.is_some();
         let pdf_state = match compiled_at.as_deref() {
             None => "missing".to_string(),
             Some(compiled) => {
                 // Content edited after the compile…
-                let content_stale = updated_at
-                    .as_deref()
-                    .map(|u| u > compiled)
-                    .unwrap_or(false);
+                let content_stale = updated_at.as_deref().map(|u| u > compiled).unwrap_or(false);
                 // …or the template/paper picks moved on from the artifact.
                 let design = config_json
                     .as_deref()
@@ -453,8 +461,11 @@ mod tests {
             [],
         )
         .unwrap();
-        conn.execute("INSERT INTO projects (title, description) VALUES ('D', 'x')", [])
-            .unwrap();
+        conn.execute(
+            "INSERT INTO projects (title, description) VALUES ('D', 'x')",
+            [],
+        )
+        .unwrap();
         let status = onboarding_status(&conn).unwrap();
         // A and C count; B is verified; D is manual.
         assert_eq!(status.imported_unreviewed, 2);

@@ -76,13 +76,13 @@ describe("OnboardingPage — guided first run", () => {
     markVerified.mockResolvedValue(undefined);
     useJobsStore.setState({
       createWorkspace: vi.fn(async (job) => ({ job, requirements: [] })),
-    } as Partial<typeof useJobsStore.state>);
+    });
     useVaultStore.setState({
       skills: [],
       profile: null,
       saveProfile: vi.fn(async () => undefined),
       saveRecord: vi.fn(async (_key, data) => ({ ...data, id: 42 })) as never,
-    } as Partial<typeof useVaultStore.state>);
+    });
   });
 
   afterEach(cleanup);

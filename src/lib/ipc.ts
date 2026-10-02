@@ -159,8 +159,13 @@ export const ipc = {
     jobId: number,
     config?: Partial<ComposerConfig>,
   ): Promise<ResumePlan> => invoke<ResumePlan>("run_composer", { jobId, config }),
-  getPlan: (jobId: number): Promise<{ config: ComposerConfig; plan: ResumePlan } | null> =>
-    invoke<{ config: ComposerConfig; plan: ResumePlan } | null>("get_plan", { jobId }),
+  getPlan: (
+    jobId: number,
+  ): Promise<{ config: ComposerConfig; plan: ResumePlan; updatedAt?: string | null } | null> =>
+    invoke<{ config: ComposerConfig; plan: ResumePlan; updatedAt?: string | null } | null>(
+      "get_plan",
+      { jobId },
+    ),
   savePlan: (jobId: number, plan: ResumePlan): Promise<void> =>
     invoke("save_plan", { jobId, plan }),
   estimatePlanLines: (plan: ResumePlan): Promise<number> =>

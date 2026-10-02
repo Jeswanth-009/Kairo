@@ -347,8 +347,7 @@ fn copy_to_downloads(src: &std::path::Path, custom_name: Option<String>) -> Resu
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| "resume.pdf".to_string())
     ));
-    std::fs::copy(src, &part)
-        .map_err(|e| format!("Failed to copy to {}: {e}", dest.display()))?;
+    std::fs::copy(src, &part).map_err(|e| format!("Failed to copy to {}: {e}", dest.display()))?;
     if let Err(e) = std::fs::rename(&part, &dest) {
         let _ = std::fs::remove_file(&part);
         return Err(format!("Failed to save to {}: {e}", dest.display()));

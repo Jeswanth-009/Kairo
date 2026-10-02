@@ -25,8 +25,7 @@ pub fn create_backup(
 ) -> Result<backup::BackupInfo, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     let data = &app_data_dir.0;
-    let info =
-        backup::create_backup(&conn, &backup::backups_dir(data), &data.join("pdf"))?;
+    let info = backup::create_backup(&conn, &backup::backups_dir(data), &data.join("pdf"))?;
     crate::logging::log_event(
         "info",
         "backup_created",

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { Skeleton } from "../../components/ui/Feedback";
 import { fmtAgo } from "../../lib/dateFmt";
@@ -329,6 +330,7 @@ function AttentionRow({
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [homeRows, setHomeRows] = useState<JobHomeRow[]>([]);
   const [status, setStatus] = useState<OnboardingStatus | null>(null);

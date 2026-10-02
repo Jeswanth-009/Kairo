@@ -4,8 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OnboardingPage from "../features/onboarding/OnboardingPage";
 import { NewJobDialog } from "../features/jobs/NewJobDialog";
 import ResumeStudioPage from "../features/resume-studio/ResumeStudioPage";
-import { ipc } from "../lib/ipc";
-import { resetPlanSaves, subscribePlanSaveStatus } from "../lib/planAutosave";
+import { resetPlanSaves } from "../lib/planAutosave";
 import { useJobsStore } from "../stores/jobsStore";
 import { useVaultStore } from "../stores/vaultStore";
 import type { JobExtraction, PdfArtifact, ResumePlan } from "../lib/types";
@@ -37,13 +36,13 @@ beforeEach(() => {
   resetPlanSaves();
   useJobsStore.setState({
     createWorkspace: vi.fn(async (job) => ({ job, requirements: [] })),
-  } as Partial<typeof useJobsStore.state>);
+  });
   useVaultStore.setState({
     skills: [],
     profile: null,
     saveProfile: vi.fn(async () => undefined),
     saveRecord: vi.fn(async (_k, d) => ({ ...d, id: 7 })) as never,
-  } as Partial<typeof useVaultStore.state>);
+  });
 });
 afterEach(cleanup);
 
@@ -131,13 +130,6 @@ describe("journey · creating a job", () => {
     expect(requirements.map((r: { rawText: string }) => r.rawText).sort()).toEqual(["Rust", "SQL"]);
   });
 });
-
-function within(el: HTMLElement) {
-  // Local helper so the journey file reads as a design doc; mirrors
-  // @testing-library/react's within.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("@testing-library/react").within(el) as typeof import("@testing-library/react").within;
-}
 
 // ---------------------------------------------------------------------------
 // Fixtures for Studio journeys
@@ -294,5 +286,3 @@ describe("journey · exporting a PDF", () => {
   });
 });
 
-// Keep the subscription import referenced for future status-chip journeys.
-void subscribePlanSaveStatus;
