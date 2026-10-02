@@ -123,6 +123,8 @@ fn compile_locked_produces_valid_pdf() {
                     compiled_at: None,
                     template_id: String::new(),
                     paper: String::new(),
+                    fingerprint: None,
+                    pdf_hash: None,
                 },
                 log_tail: String::new(),
             };

@@ -23,11 +23,20 @@ pub struct PdfArtifact {
     pub template_id: String,
     #[serde(default)]
     pub paper: String,
+    /// Fingerprint of the exact render inputs (post-overlay plan + template +
+    /// paper) that produced this PDF. None for pre-fingerprint artifacts;
+    /// version saves then demand a recompile.
+    #[serde(default)]
+    pub fingerprint: Option<String>,
+    /// SHA-256 of the generated PDF file at export time.
+    #[serde(default)]
+    pub pdf_hash: Option<String>,
 }
 
 pub fn get_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfArtifact>, String> {
     let mut stmt = sql_err(conn.prepare(
-        "SELECT job_id, tex_path, pdf_path, page_count, compiled_at, artifact_template_id, artifact_paper \
+        "SELECT job_id, tex_path, pdf_path, page_count, compiled_at, artifact_template_id, artifact_paper, \
+         compiled_fingerprint, pdf_hash \
          FROM resume_plans WHERE job_id = ?1 AND pdf_path IS NOT NULL",
     ))?;
     match stmt.query_row([job_id], |row| {
@@ -39,6 +48,8 @@ pub fn get_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfArtifact
             compiled_at: row.get(4)?,
             template_id: row.get(5)?,
             paper: row.get(6)?,
+            fingerprint: row.get(7)?,
+            pdf_hash: row.get(8)?,
         })
     }) {
         Ok(a) => Ok(Some(a)),
@@ -51,13 +62,16 @@ pub fn save_artifact(conn: &Connection, artifact: &PdfArtifact) -> Result<(), St
     sql_err(conn.execute(
         "UPDATE resume_plans SET pdf_path = ?1, tex_path = ?2, page_count = ?3, \
            artifact_template_id = ?4, artifact_paper = ?5, \
-           compiled_at = datetime('now') WHERE job_id = ?6",
+           compiled_fingerprint = ?6, pdf_hash = ?7, \
+           compiled_at = datetime('now') WHERE job_id = ?8",
         params![
             artifact.pdf_path,
             artifact.tex_path,
             artifact.page_count,
             artifact.template_id,
             artifact.paper,
+            artifact.fingerprint,
+            artifact.pdf_hash,
             artifact.job_id
         ],
     ))?;
@@ -183,10 +197,54 @@ pub struct CompileOutput {
     pub log_tail: String,
 }
 
-/// Writes the .tex, runs Tectonic, validates the PDF, and returns the artifact.
-/// Caller must NOT hold the DB lock (first run downloads the TeX bundle).
-/// `on_line` receives each compiler output line as it arrives so the UI can
-/// show live progress instead of a frozen spinner during long first compiles.
+/// Outputs a compile closure produces inside its staging dir, relative to it.
+/// Everything else the caller needs (log tail, page count) travels through
+/// `stage_and_promote`'s payload.
+pub struct StagedOutput {
+    pub pdf_name: String,
+    pub tex_name: String,
+}
+
+/// Runs `compile` inside a fresh `.staging` directory under `out_dir` and
+/// only on success promotes its outputs into `out_dir` via atomic renames.
+/// The previous PDF in `out_dir` is never touched until the new one is
+/// complete and validated — an interrupted export leaves the last good
+/// artifact in place. The staging dir is removed on every path.
+///
+/// The pdf file is hashed while promoting, so the caller can persist the
+/// fingerprint of what was actually written. `compile` may hand any extra
+/// payload through (`T`), e.g. the page count parsed from the compile log.
+pub fn stage_and_promote<T>(
+    out_dir: &Path,
+    compile: impl FnOnce(&Path) -> Result<(StagedOutput, T), String>,
+) -> Result<(PathBuf, PathBuf, String, T), String> {
+    let staging = out_dir.join(".staging");
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(&staging).map_err(|e| format!("could not create build dir: {e}"))?;
+
+    let result = compile(&staging).and_then(|(out, payload)| {
+        let staged_pdf = staging.join(&out.pdf_name);
+        let staged_tex = staging.join(&out.tex_name);
+        // The hash is taken before the renames: it must describe the bytes
+        // that land in the artifact, not whatever a later run would produce.
+        let pdf_hash = super::fingerprint::file_sha256(&staged_pdf)?;
+        let final_pdf = out_dir.join(&out.pdf_name);
+        let final_tex = out_dir.join(&out.tex_name);
+        std::fs::rename(&staged_pdf, &final_pdf)
+            .map_err(|e| format!("could not promote the compiled PDF: {e}"))?;
+        std::fs::rename(&staged_tex, &final_tex)
+            .map_err(|e| format!("could not promote the .tex: {e}"))?;
+        Ok((final_pdf, final_tex, pdf_hash, payload))
+    });
+    let _ = std::fs::remove_dir_all(&staging);
+    result
+}
+
+/// Writes the .tex, runs Tectonic in a staging dir, validates the PDF, and
+/// atomically promotes it into the artifact location. Caller must NOT hold
+/// the DB lock (first run downloads the TeX bundle). `on_line` receives each
+/// compiler output line as it arrives so the UI can show live progress
+/// instead of a frozen spinner during long first compiles.
 pub fn compile_locked(
     plan: ResumePlan,
     job_id: i64,
@@ -196,18 +254,56 @@ pub fn compile_locked(
     on_line: &dyn Fn(&str),
 ) -> Result<CompileOutput, String> {
     let tex = crate::latex::render_plan(&plan, template_id);
+    let paper = plan.config.paper.clone();
 
     let out_dir = app_data_dir.join("pdf").join(format!("job_{job_id}"));
     std::fs::create_dir_all(&out_dir).map_err(|e| format!("could not create build dir: {e}"))?;
-    let tex_path = out_dir.join("resume.tex");
-    std::fs::write(&tex_path, &tex).map_err(|e| format!("could not write .tex: {e}"))?;
 
+    let (pdf_path, tex_path, pdf_hash, (log_tail, page_count)) =
+        stage_and_promote(&out_dir, |staging| {
+            let tex_path = staging.join("resume.tex");
+            std::fs::write(&tex_path, &tex).map_err(|e| format!("could not write .tex: {e}"))?;
+            let (log_tail, page_count) = run_tectonic(tectonic, staging, on_line)?;
+            Ok((
+                StagedOutput {
+                    pdf_name: "resume.pdf".to_string(),
+                    tex_name: "resume.tex".to_string(),
+                },
+                (log_tail, page_count),
+            ))
+        })?;
+
+    Ok(CompileOutput {
+        artifact: PdfArtifact {
+            job_id,
+            tex_path: tex_path.display().to_string(),
+            pdf_path: pdf_path.display().to_string(),
+            page_count,
+            compiled_at: None,
+            template_id: template_id.to_string(),
+            paper,
+            fingerprint: None,
+            pdf_hash: Some(pdf_hash),
+        },
+        log_tail,
+    })
+}
+
+/// Runs Tectonic inside `dir` (which must already hold `resume.tex`), drains
+/// its output, and validates the produced `resume.pdf`. Returns the log tail
+/// and the page count. Everything happens inside the caller's staging dir —
+/// the live artifact location is not touched.
+fn run_tectonic(
+    tectonic: &Path,
+    dir: &Path,
+    on_line: &dyn Fn(&str),
+) -> Result<(String, Option<i64>), String> {
     let mut child = std::process::Command::new(tectonic)
         .arg("--outdir")
-        .arg(&out_dir)
+        .arg(dir)
         .arg("--keep-logs")
         .arg("resume.tex")
-        .current_dir(&out_dir)
+        .current_dir(dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -267,7 +363,7 @@ pub fn compile_locked(
         ));
     }
 
-    let pdf_path = out_dir.join("resume.pdf");
+    let pdf_path = dir.join("resume.pdf");
     if !pdf_path.exists() {
         return Err(format!(
             "Tectonic reported success but resume.pdf is missing.\n{log_tail}"
@@ -282,7 +378,7 @@ pub fn compile_locked(
     // Page count: the TeX log states "Output written on resume.xdv (N page".
     // Raw-byte /Count scanning fails here because xdvipdfmx compresses objects.
     let page_count = {
-        let log_path = out_dir.join("resume.log");
+        let log_path = dir.join("resume.log");
         let log = std::fs::read_to_string(&log_path).unwrap_or_default();
         let from_log = log
             .split("Output written on ")
@@ -297,18 +393,7 @@ pub fn compile_locked(
         from_log.or_else(|| count_pages(&pdf_path))
     };
 
-    Ok(CompileOutput {
-        artifact: PdfArtifact {
-            job_id,
-            tex_path: tex_path.display().to_string(),
-            pdf_path: pdf_path.display().to_string(),
-            page_count,
-            compiled_at: None,
-            template_id: template_id.to_string(),
-            paper: plan.config.paper.clone(),
-        },
-        log_tail,
-    })
+    Ok((log_tail, page_count))
 }
 
 /// Convenience used by tests: plan line estimate stays consistent with the composer.

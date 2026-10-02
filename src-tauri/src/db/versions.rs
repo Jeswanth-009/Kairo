@@ -35,10 +35,18 @@ pub struct ResumeVersion {
     pub version_number: u32,
     pub created_at: String,
     pub pdf_path: String,
+    /// Fingerprint of the render inputs recorded at export — proves this
+    /// snapshot froze exactly what produced the PDF.
+    #[serde(default)]
+    pub fingerprint: Option<String>,
+    /// SHA-256 of the version's own PDF copy.
+    #[serde(default)]
+    pub pdf_hash: Option<String>,
     pub snapshot: VersionSnapshot,
 }
 
-const VERSION_COLS: &str = "id, job_id, version_number, snapshot_json, pdf_path, created_at";
+const VERSION_COLS: &str =
+    "id, job_id, version_number, snapshot_json, pdf_path, created_at, fingerprint, pdf_hash";
 
 fn hydrate(row: &rusqlite::Row) -> rusqlite::Result<ResumeVersion> {
     let id: i64 = row.get(0)?;
@@ -47,6 +55,8 @@ fn hydrate(row: &rusqlite::Row) -> rusqlite::Result<ResumeVersion> {
     let snapshot_json: String = row.get(3)?;
     let pdf_path: String = row.get(4)?;
     let created_at: String = row.get(5)?;
+    let fingerprint: Option<String> = row.get(6)?;
+    let pdf_hash: Option<String> = row.get(7)?;
     let snapshot: VersionSnapshot = serde_json::from_str(&snapshot_json).unwrap_or_else(|_| {
         // Corrupt snapshot: keep the metadata, expose an empty body rather
         // than failing the whole list. Constructed directly — a JSON
@@ -105,12 +115,21 @@ fn hydrate(row: &rusqlite::Row) -> rusqlite::Result<ResumeVersion> {
         version_number,
         created_at,
         pdf_path,
+        fingerprint,
+        pdf_hash,
         snapshot,
     })
 }
 
 /// Creates the next immutable version for a job: snapshots every input and
 /// copies the current PDF into a version-owned directory.
+///
+/// Refuses to save when the current plan has drifted from the exported PDF:
+/// the artifact's `compiled_fingerprint` (recorded at export over the
+/// post-overlay plan + template + paper) is recomputed from live state and
+/// must match, and the PDF on disk must match the export's hash. "Reopen
+/// what I sent" stays exact — a version is only ever the PDF you exported
+/// with the plan that produced it.
 pub fn create_version(
     conn: &Connection,
     job_id: i64,
@@ -123,22 +142,62 @@ pub fn create_version(
     let stored_plan = super::composer::get_plan(conn, job_id)?.ok_or_else(|| {
         "No plan for this workspace — compose one before saving a version".to_string()
     })?;
-    let artifact = get_current_artifact(conn, job_id)?
-        .ok_or_else(|| "No compiled PDF for this workspace — export the PDF first".to_string())?;
+    let artifact = super::pdf::get_artifact(conn, job_id)?.ok_or_else(|| {
+        "No compiled PDF for this workspace — export the PDF first".to_string()
+    })?;
     let all_tailorings = list_tailorings(conn, job_id)?;
     let accepted_tailorings: Vec<super::tailor::TailorSuggestion> = all_tailorings
         .into_iter()
         .filter(|s| s.status == "accepted")
         .collect();
 
-    // 2. Numbering: next per-job version.
+    // 2. Exactness gate: the artifact must carry a fingerprint (pre-0013
+    //    exports predate it) and the live render inputs must still hash to
+    //    it — otherwise the PDF on disk is not what the plan would produce.
+    let exported_fingerprint = artifact.fingerprint.as_deref().ok_or_else(|| {
+        "This PDF was exported by an older Kairo — recompile once, then save the version"
+            .to_string()
+    })?;
+    let mut rendered = stored_plan.plan.clone();
+    let _ = super::tailor::apply_accepted_suggestions(conn, job_id, &mut rendered)?;
+    let current_fingerprint = super::fingerprint::render_fingerprint(
+        &rendered,
+        &artifact.template_id,
+        &artifact.paper,
+    );
+    if current_fingerprint != exported_fingerprint {
+        return Err(
+            "The plan changed since the PDF was exported — recompile, then save the version"
+                .to_string(),
+        );
+    }
+    let pdf_src = std::path::PathBuf::from(&artifact.pdf_path);
+    if !pdf_src.is_file() {
+        return Err(
+            "The compiled PDF is missing on disk — recompile before saving a version".to_string(),
+        );
+    }
+    let pdf_hash = super::fingerprint::file_sha256(&pdf_src)?;
+    if let Some(recorded) = artifact.pdf_hash.as_deref() {
+        if recorded != pdf_hash {
+            return Err(
+                "The compiled PDF on disk no longer matches its export record — recompile before saving a version"
+                    .to_string(),
+            );
+        }
+    }
+
+    // 3. Numbering: next per-job version.
     let next: u32 = sql_err(conn.query_row(
         "SELECT COALESCE(MAX(version_number), 0) + 1 FROM resume_versions WHERE job_id = ?1",
         [job_id],
         |r| r.get(0),
     ))?;
 
-    // 3. Copy the PDF into a version-owned directory (immutability).
+    // 4. Copy the PDF into a version-owned directory (immutability). The
+    //    copy lands via a `.part` rename so a half-written file can never
+    //    occupy the version's permanent name, and the row is only inserted
+    //    once the copy is complete.
     let version_dir = app_data_dir
         .join("pdf")
         .join(format!("job_{job_id}"))
@@ -147,14 +206,23 @@ pub fn create_version(
     std::fs::create_dir_all(&version_dir)
         .map_err(|e| format!("could not create version dir: {e}"))?;
     let version_pdf = version_dir.join("resume.pdf");
-    std::fs::copy(&artifact.pdf_path, &version_pdf).map_err(|e| {
-        format!(
-            "could not copy the compiled PDF ({}): {e}",
-            artifact.pdf_path
-        )
-    })?;
+    let copy = (|| -> Result<(), String> {
+        let part = version_dir.join("resume.pdf.part");
+        std::fs::copy(&pdf_src, &part).map_err(|e| {
+            format!(
+                "could not copy the compiled PDF ({}): {e}",
+                pdf_src.display()
+            )
+        })?;
+        std::fs::rename(&part, &version_pdf)
+            .map_err(|e| format!("could not finalize the version PDF: {e}"))
+    })();
+    if let Err(e) = copy {
+        let _ = std::fs::remove_dir_all(&version_dir);
+        return Err(e);
+    }
 
-    // 4. Insert the snapshot.
+    // 5. Insert the snapshot.
     let snapshot = VersionSnapshot {
         version_number: next,
         job: job.clone(),
@@ -173,13 +241,15 @@ pub fn create_version(
     let snapshot_json = serde_json::to_string(&snapshot).map_err(|e| e.to_string())?;
 
     sql_err(conn.execute(
-        "INSERT INTO resume_versions (job_id, version_number, snapshot_json, pdf_path) \
-         VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO resume_versions (job_id, version_number, snapshot_json, pdf_path, fingerprint, pdf_hash) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             job_id,
             next as i64,
             snapshot_json,
-            version_pdf.display().to_string()
+            version_pdf.display().to_string(),
+            exported_fingerprint,
+            pdf_hash
         ],
     ))?;
     let id = conn.last_insert_rowid();
@@ -189,22 +259,6 @@ pub fn create_version(
         VERSION_COLS
     )))?;
     sql_err(stmt.query_row([id], hydrate))
-}
-
-fn get_current_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfRef>, String> {
-    let mut stmt =
-        sql_err(conn.prepare(
-            "SELECT pdf_path FROM resume_plans WHERE job_id = ?1 AND pdf_path IS NOT NULL",
-        ))?;
-    match stmt.query_row([job_id], |row| row.get::<_, String>(0)) {
-        Ok(p) => Ok(Some(PdfRef { pdf_path: p })),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e.to_string()),
-    }
-}
-
-struct PdfRef {
-    pdf_path: String,
 }
 
 fn list_tailorings(

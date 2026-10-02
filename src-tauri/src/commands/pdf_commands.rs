@@ -1,6 +1,6 @@
 //! PDF command boundary (Phase 9).
 
-use crate::db::{pdf, DbState};
+use crate::db::{fingerprint, pdf, DbState};
 use serde::Serialize;
 use tauri::{Emitter, State};
 
@@ -60,8 +60,15 @@ pub async fn export_pdf(
         template_id = "jake".to_string();
     }
 
+    // Fingerprint of the exact render inputs. `create_version` recomputes
+    // this the same way and refuses to save a version when it no longer
+    // matches — the plan must not drift from the exported PDF unnoticed.
+    let fingerprint = fingerprint::render_fingerprint(&plan, &template_id, &plan.config.paper);
+
     // 2. Write .tex + run Tectonic (no lock held), streaming each compiler
-    //    line to the webview so long first compiles visibly progress.
+    //    line to the webview so long first compiles visibly progress. The
+    //    compile happens in a staging dir; the previous good PDF in
+    //    `pdf/job_{id}/` is only replaced once the new one is complete.
     let on_line = |line: &str| {
         let _ = app.emit(
             PDF_PROGRESS_EVENT,
@@ -71,7 +78,7 @@ pub async fn export_pdf(
             },
         );
     };
-    let out = match pdf::compile_locked(
+    let mut out = match pdf::compile_locked(
         plan,
         job_id,
         &template_id,
@@ -93,8 +100,9 @@ pub async fn export_pdf(
             return Err(e);
         }
     };
+    out.artifact.fingerprint = Some(fingerprint);
 
-    // 3. Re-lock: persist the artifact.
+    // 3. Re-lock: persist the artifact (now pointing at the promoted file).
     {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
         pdf::save_artifact(&conn, &out.artifact)?;
