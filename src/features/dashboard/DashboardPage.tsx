@@ -19,7 +19,6 @@ import { Card, CardTitle } from "../../components/ui/Card";
 import { Skeleton } from "../../components/ui/Feedback";
 import { fmtAgo } from "../../lib/dateFmt";
 import { ipc } from "../../lib/ipc";
-import { useUiStore } from "../../stores/uiStore";
 import type { ActivityItem, DashboardOverview, EvidenceReviewItem } from "../../lib/types";
 
 const KIND_COLORS: Record<string, string> = {
@@ -131,16 +130,14 @@ function CountPill({ value, tone = "neutral" }: { value: string; tone?: "neutral
 
 function GettingStarted() {
   const navigate = useNavigate();
-  const requestVaultAction = useUiStore((s) => s.requestVaultAction);
 
   const steps: { title: string; body: string; cta: string; action: () => void }[] = [
     {
       title: "Import your resume",
-      body: "Paste the text or load a PDF / DOCX — Kairo turns it into Vault records you can review, correct and back with proof.",
-      cta: "Import now",
+      body: "One guided flow: bring a PDF / DOCX or paste text, review the facts it extracts, add a role, and get a first draft with a real PDF.",
+      cta: "Start the guided flow",
       action: () => {
-        navigate("/vault");
-        requestVaultAction({ type: "import" });
+        navigate("/onboarding");
       },
     },
     {
