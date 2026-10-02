@@ -181,7 +181,11 @@ function BackupsCard() {
     setBusy(true);
     try {
       const report = await ipc.restoreBackup(backup.fileName);
-      toast.ok(`Restored from ${backup.fileName} (schema at ${report.appliedMigrations} migrations). Reloading…`);
+      const files =
+        report.filesRestored > 0 ? `, ${report.filesRestored} PDF file(s)` : "";
+      toast.ok(
+        `Restored from ${backup.fileName} (schema at ${report.appliedMigrations} migrations${files}). Reloading…`,
+      );
       setTimeout(() => window.location.reload(), 1200);
     } catch (e) {
       toast.error(String(e));
@@ -193,15 +197,27 @@ function BackupsCard() {
     <Card className="p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <CardTitle>Backup &amp; restore</CardTitle>
-        <Button size="sm" onClick={() => void create()} disabled={creating}>
-          {creating ? "Backing up…" : "Create backup"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void ipc.openBackupsDir().catch((e) => toast.error(String(e)))}
+            title="Open the backups folder — copy an archive out, or drop one in to restore it here on a fresh install"
+          >
+            Open backups folder
+          </Button>
+          <Button size="sm" onClick={() => void create()} disabled={creating}>
+            {creating ? "Backing up…" : "Create backup"}
+          </Button>
+        </div>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-muted">
-        Backups are consistent snapshots of the whole database, saved under the app&apos;s
-        data directory (<span className="font-mono">backups/</span>). The ten most recent are kept.
-        Restoring replaces all current data with the backup — older backups are upgraded to the
-        current schema automatically.
+        A backup is one portable archive holding the database, every compiled and version PDF, and
+        a hash-verified manifest — saved under the app&apos;s data directory (
+        <span className="font-mono">backups/</span>). The ten most recent are kept. Restoring
+        replaces all current data with the backup; drop an archive into the backups folder (even on
+        a new machine) and it appears here. Older backups are upgraded to the current schema
+        automatically.
       </p>
       {loaded && backups.length === 0 ? (
         <p className="mt-3 rounded-lg bg-accent-soft px-3 py-2 text-xs text-muted">
@@ -215,6 +231,9 @@ function BackupsCard() {
                 <p className="truncate font-mono text-xs text-ink">{backup.fileName}</p>
                 <p className="text-[11px] text-muted">
                   {fmtStamp(backup.createdAt)} · {fmtBytes(backup.bytes)}
+                  {backup.kind === "archive"
+                    ? ` · ${backup.jobCount ?? "?"} job(s), ${backup.versionCount ?? "?"} version(s)`
+                    : " · database only (legacy)"}
                 </p>
               </div>
               <Button

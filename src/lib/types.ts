@@ -732,9 +732,14 @@ export interface BackupInfo {
   path: string;
   bytes: number;
   createdAt: string;
+  /** "archive" = portable zip (db + PDFs + manifest); "database" = legacy .db. */
+  kind: "archive" | "database";
+  jobCount?: number | null;
+  versionCount?: number | null;
 }
 
 export interface RestoreOk {
   ok: boolean;
   appliedMigrations: number;
+  filesRestored: number;
 }

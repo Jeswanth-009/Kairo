@@ -361,8 +361,17 @@ const handlers: Record<string, Handler> = {
   ai_list_models: () => ["qwen3.5:9b", "llama3.1:8b", "mistral:7b"],
   ai_test_connection: () => "ok (mock)",
   list_backups: () => [],
-  create_backup: () => ({ fileName: "kairo-backup-mock.db", path: "mock://backups", bytes: 10240, createdAt: new Date().toISOString() }),
-  restore_backup: () => ({ ok: true, appliedMigrations: 11 }),
+  create_backup: () => ({
+    fileName: `kairo-backup-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "")}.zip`,
+    path: "mock://backups",
+    bytes: 102400,
+    createdAt: new Date().toISOString().slice(0, 19).replace(/[-:T]/g, ""),
+    kind: "archive",
+    jobCount: 3,
+    versionCount: 2,
+  }),
+  restore_backup: () => ({ ok: true, appliedMigrations: 13, filesRestored: 12 }),
+  open_backups_dir: () => undefined,
 
   // Recently deleted — the mock keeps everything live (nothing trashed).
   trash_list: () => [],
