@@ -203,6 +203,15 @@ pub fn vault_purge<E: VaultEntity>(conn: &Connection, id: i64) -> Result<(), Str
 }
 
 // ---------------------------------------------------------------------------
+// Record provenance (Phase "first-use"): origin + edited/verified marks
+// ---------------------------------------------------------------------------
+
+/// Serde default for the five record entities' `origin` field.
+pub(crate) fn default_origin() -> String {
+    "manual".to_string()
+}
+
+// ---------------------------------------------------------------------------
 // Validation helpers
 // ---------------------------------------------------------------------------
 
@@ -381,6 +390,15 @@ pub struct Project {
     /// Enriched on read: how many evidence records back this project.
     #[serde(default)]
     pub evidence_count: i64,
+    /// Provenance: 'manual' (authored in Kairo) or 'imported' (from a resume).
+    #[serde(default = "default_origin")]
+    pub origin: String,
+    /// First content edit after an import — the honest "Edited by you" mark.
+    #[serde(default)]
+    pub edited_at: Option<String>,
+    /// Set only by an explicit "verified by you" action.
+    #[serde(default)]
+    pub verified_at: Option<String>,
 }
 
 impl HasSkillLinks for Project {
@@ -404,6 +422,9 @@ impl VaultEntity for Project {
         "is_current",
         "url",
         "repo_url",
+        "origin",
+        "edited_at",
+        "verified_at",
     ];
 
     fn id(&self) -> i64 {
@@ -422,6 +443,9 @@ impl VaultEntity for Project {
             repo_url: row.get(7)?,
             skills: Vec::new(),
             evidence_count: 0,
+            origin: row.get(8)?,
+            edited_at: row.get(9)?,
+            verified_at: row.get(10)?,
         })
     }
 
@@ -434,6 +458,9 @@ impl VaultEntity for Project {
             FieldVal::Bool(self.is_current),
             FieldVal::Text(self.url.clone()),
             FieldVal::Text(self.repo_url.clone()),
+            FieldVal::Text(self.origin.clone()),
+            FieldVal::OptText(self.edited_at.clone()),
+            FieldVal::OptText(self.verified_at.clone()),
         ]
     }
 
@@ -489,6 +516,15 @@ pub struct Experience {
     /// Enriched on read: how many evidence records back this experience.
     #[serde(default)]
     pub evidence_count: i64,
+    /// Provenance: 'manual' (authored in Kairo) or 'imported' (from a resume).
+    #[serde(default = "default_origin")]
+    pub origin: String,
+    /// First content edit after an import — the honest "Edited by you" mark.
+    #[serde(default)]
+    pub edited_at: Option<String>,
+    /// Set only by an explicit "verified by you" action.
+    #[serde(default)]
+    pub verified_at: Option<String>,
 }
 
 impl HasSkillLinks for Experience {
@@ -512,6 +548,9 @@ impl VaultEntity for Experience {
         "end_date",
         "is_current",
         "location",
+        "origin",
+        "edited_at",
+        "verified_at",
     ];
 
     fn id(&self) -> i64 {
@@ -530,6 +569,9 @@ impl VaultEntity for Experience {
             location: row.get(7)?,
             skills: Vec::new(),
             evidence_count: 0,
+            origin: row.get(8)?,
+            edited_at: row.get(9)?,
+            verified_at: row.get(10)?,
         })
     }
 
@@ -542,6 +584,9 @@ impl VaultEntity for Experience {
             FieldVal::OptText(self.end_date.clone()),
             FieldVal::Bool(self.is_current),
             FieldVal::Text(self.location.clone()),
+            FieldVal::Text(self.origin.clone()),
+            FieldVal::OptText(self.edited_at.clone()),
+            FieldVal::OptText(self.verified_at.clone()),
         ]
     }
 
@@ -595,6 +640,15 @@ pub struct Education {
     pub start_date: Option<String>,
     pub end_date: Option<String>,
     pub is_current: bool,
+    /// Provenance: 'manual' (authored in Kairo) or 'imported' (from a resume).
+    #[serde(default = "default_origin")]
+    pub origin: String,
+    /// First content edit after an import — the honest "Edited by you" mark.
+    #[serde(default)]
+    pub edited_at: Option<String>,
+    /// Set only by an explicit "verified by you" action.
+    #[serde(default)]
+    pub verified_at: Option<String>,
 }
 
 impl VaultEntity for Education {
@@ -609,6 +663,9 @@ impl VaultEntity for Education {
         "start_date",
         "end_date",
         "is_current",
+        "origin",
+        "edited_at",
+        "verified_at",
     ];
 
     fn id(&self) -> i64 {
@@ -625,6 +682,9 @@ impl VaultEntity for Education {
             start_date: row.get(5)?,
             end_date: row.get(6)?,
             is_current: row.get::<_, i64>(7)? != 0,
+            origin: row.get(8)?,
+            edited_at: row.get(9)?,
+            verified_at: row.get(10)?,
         })
     }
 
@@ -637,6 +697,9 @@ impl VaultEntity for Education {
             FieldVal::OptText(self.start_date.clone()),
             FieldVal::OptText(self.end_date.clone()),
             FieldVal::Bool(self.is_current),
+            FieldVal::Text(self.origin.clone()),
+            FieldVal::OptText(self.edited_at.clone()),
+            FieldVal::OptText(self.verified_at.clone()),
         ]
     }
 
@@ -663,6 +726,15 @@ pub struct Certification {
     pub expiry_date: Option<String>,
     pub credential_id: String,
     pub url: String,
+    /// Provenance: 'manual' (authored in Kairo) or 'imported' (from a resume).
+    #[serde(default = "default_origin")]
+    pub origin: String,
+    /// First content edit after an import — the honest "Edited by you" mark.
+    #[serde(default)]
+    pub edited_at: Option<String>,
+    /// Set only by an explicit "verified by you" action.
+    #[serde(default)]
+    pub verified_at: Option<String>,
 }
 
 impl VaultEntity for Certification {
@@ -677,6 +749,9 @@ impl VaultEntity for Certification {
         "expiry_date",
         "credential_id",
         "url",
+        "origin",
+        "edited_at",
+        "verified_at",
     ];
 
     fn id(&self) -> i64 {
@@ -693,6 +768,9 @@ impl VaultEntity for Certification {
             expiry_date: row.get(5)?,
             credential_id: row.get(6)?,
             url: row.get(7)?,
+            origin: row.get(8)?,
+            edited_at: row.get(9)?,
+            verified_at: row.get(10)?,
         })
     }
 
@@ -705,6 +783,9 @@ impl VaultEntity for Certification {
             FieldVal::OptText(self.expiry_date.clone()),
             FieldVal::Text(self.credential_id.clone()),
             FieldVal::Text(self.url.clone()),
+            FieldVal::Text(self.origin.clone()),
+            FieldVal::OptText(self.edited_at.clone()),
+            FieldVal::OptText(self.verified_at.clone()),
         ]
     }
 
@@ -727,13 +808,30 @@ pub struct Achievement {
     pub issuer: String,
     pub description: String,
     pub achieved_on: Option<String>,
+    /// Provenance: 'manual' (authored in Kairo) or 'imported' (from a resume).
+    #[serde(default = "default_origin")]
+    pub origin: String,
+    /// First content edit after an import — the honest "Edited by you" mark.
+    #[serde(default)]
+    pub edited_at: Option<String>,
+    /// Set only by an explicit "verified by you" action.
+    #[serde(default)]
+    pub verified_at: Option<String>,
 }
 
 impl VaultEntity for Achievement {
     const TABLE: &'static str = "achievements";
     const ORDER_BY: &'static str = "COALESCE(achieved_on, '') DESC, id DESC";
     const SEARCH_COLS: &'static [&'static str] = &["title", "description", "issuer"];
-    const INSERT_COLS: &'static [&'static str] = &["title", "issuer", "description", "achieved_on"];
+    const INSERT_COLS: &'static [&'static str] = &[
+        "title",
+        "issuer",
+        "description",
+        "achieved_on",
+        "origin",
+        "edited_at",
+        "verified_at",
+    ];
 
     fn id(&self) -> i64 {
         self.id
@@ -746,6 +844,9 @@ impl VaultEntity for Achievement {
             issuer: row.get(2)?,
             description: row.get(3)?,
             achieved_on: row.get(4)?,
+            origin: row.get(5)?,
+            edited_at: row.get(6)?,
+            verified_at: row.get(7)?,
         })
     }
 
@@ -755,6 +856,9 @@ impl VaultEntity for Achievement {
             FieldVal::Text(self.issuer.clone()),
             FieldVal::Text(self.description.clone()),
             FieldVal::OptText(self.achieved_on.clone()),
+            FieldVal::Text(self.origin.clone()),
+            FieldVal::OptText(self.edited_at.clone()),
+            FieldVal::OptText(self.verified_at.clone()),
         ]
     }
 
@@ -1051,6 +1155,9 @@ mod tests {
                 is_current: true,
                 url: String::new(),
                 repo_url: "https://github.com/me/pykv".to_string(),
+                origin: "manual".to_string(),
+                edited_at: None,
+                verified_at: None,
                 skills: vec![
                     SkillRef {
                         skill_id: python.id,
@@ -1115,6 +1222,9 @@ mod tests {
             repo_url: String::new(),
             skills: vec![],
             evidence_count: 0,
+            origin: "manual".to_string(),
+            edited_at: None,
+            verified_at: None,
         };
 
         assert!(vault_create(&conn, &base("", Some("2025-01".into()), None)).is_err());
@@ -1163,6 +1273,9 @@ mod tests {
                 confidence: 9,
             }],
             evidence_count: 0,
+            origin: "manual".to_string(),
+            edited_at: None,
+            verified_at: None,
         };
         assert!(vault_create(&conn, &p).is_err());
         p.skills[0].confidence = 3;
@@ -1227,6 +1340,9 @@ mod tests {
                 location: "Remote".to_string(),
                 skills: vec![],
                 evidence_count: 0,
+                origin: "manual".to_string(),
+                edited_at: None,
+                verified_at: None,
             },
         )
         .unwrap();
@@ -1243,6 +1359,9 @@ mod tests {
                 start_date: Some("2022-08".to_string()),
                 end_date: Some("2026-05".to_string()),
                 is_current: false,
+                origin: "manual".to_string(),
+                edited_at: None,
+                verified_at: None,
             },
         )
         .unwrap();

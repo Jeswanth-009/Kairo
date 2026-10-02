@@ -2,6 +2,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { CONFIDENCE_LEVELS } from "../../lib/types";
 import type { AnyVaultRecord } from "../../lib/types";
+import { originBadge } from "../../lib/origin";
 import { descriptionOf, linksOf, rangeOf, subtitleOf } from "./vaultConfig";
 import type { EntityKey } from "./vaultConfig";
 
@@ -30,6 +31,12 @@ export function VaultCard({
   const skills = "skills" in record ? record.skills : [];
   const evidenceCount =
     "evidenceCount" in record ? (record.evidenceCount as number) : null;
+  // Honest provenance: imported records show where they are on the review
+  // ladder; manual records carry no badge by design.
+  const badge =
+    evidenceCount !== null
+      ? originBadge({ ...record, evidenceCount })
+      : originBadge(record);
 
   return (
     <Card className={`flex flex-col p-5 transition-all ${selected ? "ring-2 ring-kairo-blue/70 bg-kairo-blue/[0.02]" : ""}`}>
@@ -74,7 +81,7 @@ export function VaultCard({
       ) : null}
 
       {evidenceCount !== null ? (
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <span
             title={
               evidenceCount > 0
@@ -87,6 +94,14 @@ export function VaultCard({
           >
             {evidenceCount > 0 ? "✓" : "…"} {evidenceCount} proof
           </span>
+          {badge ? (
+            <span
+              title="Where this record came from and how far you've confirmed it"
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+          ) : null}
         </div>
       ) : null}
 

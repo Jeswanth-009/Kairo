@@ -8,6 +8,7 @@ pub mod import_commands;
 pub mod interview_commands;
 pub mod job_commands;
 pub mod match_commands;
+pub mod origin_commands;
 pub mod pdf_commands;
 pub mod trash_commands;
 pub mod trust_commands;

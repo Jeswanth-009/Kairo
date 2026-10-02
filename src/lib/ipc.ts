@@ -34,6 +34,7 @@ import type {
   BackupInfo,
   RestoreOk,
   TrashItem,
+  OnboardingStatus,
 } from "./types";
 
 /**
@@ -257,4 +258,12 @@ export const ipc = {
     invoke<{ ok: boolean }>("trash_restore", { entityType, entityId }),
   trashPurge: (entityType: string, entityId: number): Promise<{ ok: boolean }> =>
     invoke<{ ok: boolean }>("trash_purge", { entityType, entityId }),
+
+  // Provenance + first-run (onboarding)
+  markVerified: (entityType: string, entityId: number): Promise<void> =>
+    invoke<void>("mark_verified", { entityType, entityId }),
+  unmarkVerified: (entityType: string, entityId: number): Promise<void> =>
+    invoke<void>("unmark_verified", { entityType, entityId }),
+  getOnboardingStatus: (): Promise<OnboardingStatus> =>
+    invoke<OnboardingStatus>("get_onboarding_status"),
 };

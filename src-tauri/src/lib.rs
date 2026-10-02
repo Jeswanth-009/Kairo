@@ -166,6 +166,9 @@ pub fn run() {
             commands::trash_commands::trash_list,
             commands::trash_commands::trash_restore,
             commands::trash_commands::trash_purge,
+            commands::origin_commands::mark_verified,
+            commands::origin_commands::unmark_verified,
+            commands::origin_commands::get_onboarding_status,
         ])
         .run(tauri::generate_context!())
         .expect("Kairo failed to start");

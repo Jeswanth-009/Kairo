@@ -668,6 +668,9 @@ mod tests {
                 repo_url: String::new(),
                 skills: vec![],
                 evidence_count: 0,
+                origin: "manual".to_string(),
+                edited_at: None,
+                verified_at: None,
             },
         )
         .unwrap()

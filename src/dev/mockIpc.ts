@@ -394,6 +394,19 @@ const handlers: Record<string, Handler> = {
   trash_restore: () => ({ ok: true }),
   trash_purge: () => ({ ok: true }),
 
+  // Provenance + first-run — the demo vault already has content.
+  mark_verified: () => undefined,
+  unmark_verified: () => undefined,
+  get_onboarding_status: () => ({
+    hasProfile: true,
+    projectCount: 2,
+    experienceCount: 1,
+    educationCount: 1,
+    skillCount: 6,
+    jobCount: 3,
+    hasAnyContent: true,
+  }),
+
   // import parsers (pure heuristics — the real extraction lives in the backend)
   parse_resume_text: (a) => parseResume(String(a.text ?? "")),
   parse_certificate_text: (a) => parseCertificate(String(a.text ?? "")),

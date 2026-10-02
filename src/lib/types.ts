@@ -25,7 +25,20 @@ export interface SkillRef {
   confidence: number; // 0-5
 }
 
-export interface Project {
+/** Where a vault record came from — provenance is always shown honestly. */
+export type RecordOrigin = "manual" | "imported";
+
+/** Provenance columns shared by the five record kinds. */
+export interface RecordProvenance {
+  /** 'manual' (authored in Kairo) or 'imported' (from a resume). */
+  origin?: RecordOrigin;
+  /** First content edit after an import — the honest "Edited by you" mark. */
+  editedAt?: string | null;
+  /** Set only by an explicit "verified by you" action. */
+  verifiedAt?: string | null;
+}
+
+export interface Project extends RecordProvenance {
   id: number;
   title: string;
   description: string;
@@ -38,7 +51,7 @@ export interface Project {
   evidenceCount: number;
 }
 
-export interface Experience {
+export interface Experience extends RecordProvenance {
   id: number;
   organization: string;
   role: string;
@@ -51,7 +64,7 @@ export interface Experience {
   evidenceCount: number;
 }
 
-export interface Education {
+export interface Education extends RecordProvenance {
   id: number;
   institution: string;
   degree: string;
@@ -62,7 +75,7 @@ export interface Education {
   isCurrent: boolean;
 }
 
-export interface Certification {
+export interface Certification extends RecordProvenance {
   id: number;
   title: string;
   issuer: string;
@@ -73,12 +86,23 @@ export interface Certification {
   url: string;
 }
 
-export interface Achievement {
+export interface Achievement extends RecordProvenance {
   id: number;
   title: string;
   issuer: string;
   description: string;
   achievedOn: string | null;
+}
+
+/** Snapshot for the first-run redirect and the dashboard CTA. */
+export interface OnboardingStatus {
+  hasProfile: boolean;
+  projectCount: number;
+  experienceCount: number;
+  educationCount: number;
+  skillCount: number;
+  jobCount: number;
+  hasAnyContent: boolean;
 }
 
 export type SkillCategory =
@@ -433,6 +457,8 @@ export interface PlanItem {
   skills: string[];
   relevance: number;
   evidenceCount: number;
+  /** Provenance of the source record ('manual' | 'imported'). */
+  origin?: "manual" | "imported";
   excluded?: boolean;
 }
 

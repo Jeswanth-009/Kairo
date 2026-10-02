@@ -18,6 +18,8 @@ import type {
 } from "../../lib/types";
 import { useVaultStore } from "../../stores/vaultStore";
 import { toast } from "../../stores/toastStore";
+import { ipc } from "../../lib/ipc";
+import { ORIGIN_KINDS, originBadge, originState } from "../../lib/origin";
 import { ENTITY_CONFIGS, subtitleOf, type EntityKey } from "./vaultConfig";
 
 const ENTITY_TYPE: Record<EntityKey, TrustEntityType> = {
@@ -81,6 +83,32 @@ export function RecordInspector({
   const title = "title" in record ? record.title : "";
   const subtitle = subtitleOf(entityKey, record);
 
+  // Explicit record-level verification — the top of the honest provenance
+  // ladder. Only the user's deliberate action sets it.
+  const [verifying, setVerifying] = useState(false);
+  const badge = originBadge(record);
+  const isVerified = originState(record) === "verified";
+  const canVerify = ORIGIN_KINDS.includes(entityType as (typeof ORIGIN_KINDS)[number]);
+
+  const toggleVerified = async () => {
+    setVerifying(true);
+    try {
+      if (isVerified) {
+        await ipc.unmarkVerified(entityType, entityId);
+        toast.ok("Verification withdrawn — the record keeps its honest state.");
+      } else {
+        await ipc.markVerified(entityType, entityId);
+        toast.ok("Marked as verified by you.");
+      }
+      // Refresh the store so cards and the inspector reflect the new state.
+      await useVaultStore.getState().load();
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const TABS: { key: InspectorTab; label: string; count?: number; show: boolean }[] = [
     { key: "overview", label: "Overview", show: true },
     { key: "proof", label: "Proof", count: evidence.length, show: true },
@@ -90,6 +118,25 @@ export function RecordInspector({
 
   return (
     <Dialog open onClose={onClose} title={`${config.singular} · ${title}`} maxWidth="max-w-2xl">
+      {canVerify ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-accent-soft px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            {badge ? (
+              <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
+                {badge.label}
+              </span>
+            ) : null}
+            <span className="text-[11px] text-muted">
+              {isVerified
+                ? "You've personally checked these facts."
+                : "Only mark verified if you have checked these facts yourself."}
+            </span>
+          </div>
+          <Button size="sm" variant={isVerified ? "ghost" : "secondary"} onClick={() => void toggleVerified()} disabled={verifying}>
+            {verifying ? "Saving…" : isVerified ? "Withdraw verification" : "Mark verified"}
+          </Button>
+        </div>
+      ) : null}
       <div className="mb-5 flex flex-wrap gap-1.5">
         {TABS.filter((t) => t.show).map((t) => (
           <button
