@@ -126,6 +126,7 @@ mod tests {
             skills: vec![],
             relevance: 0.0,
             evidence_count: 0,
+            origin: "manual".to_string(),
             excluded: false,
         });
         let original = render_fingerprint(&plan, "jake", "letter");

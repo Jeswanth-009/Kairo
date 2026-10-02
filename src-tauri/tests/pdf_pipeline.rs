@@ -46,6 +46,7 @@ fn sample_plan() -> ResumePlan {
             relevance: 0.2,
             evidence_count: 0,
             excluded: false,
+            origin: "manual".to_string(),
         }],
         projects: vec![PlanItem {
             entity_type: "project".to_string(),
@@ -68,6 +69,7 @@ fn sample_plan() -> ResumePlan {
             relevance: 0.91,
             evidence_count: 1,
             excluded: false,
+            origin: "manual".to_string(),
         }],
         achievements: vec![],
         skills: vec!["Python".to_string(), "SQL".to_string()],

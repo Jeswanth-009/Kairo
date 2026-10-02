@@ -305,6 +305,7 @@ fn assemble(
                 ))
                 .copied()
                 .unwrap_or(0.0),
+            origin: project.origin.clone(),
         });
     }
 
@@ -345,6 +346,7 @@ fn assemble(
                 ))
                 .copied()
                 .unwrap_or(0.0),
+            origin: experience.origin.clone(),
         });
     }
 

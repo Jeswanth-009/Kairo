@@ -98,6 +98,16 @@ pub struct ComposerEntity {
     pub bullets: Vec<ComposerBullet>,
     /// Relevance from the match report (0 if it was never mentioned).
     pub relevance: f64,
+    /// Provenance of the source record ('manual' | 'imported') so the plan
+    /// can show honestly where each selected item came from.
+    #[serde(default = "default_origin")]
+    pub origin: String,
+}
+
+/// Serde default for provenance fields — pre-provenance payloads behave as
+/// Vault-authored records.
+fn default_origin() -> String {
+    "manual".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,6 +177,10 @@ pub struct PlanItem {
     pub skills: Vec<String>,
     pub relevance: f64,
     pub evidence_count: i64,
+    /// Provenance of the source record ('manual' | 'imported'); plans saved
+    /// before provenance existed deserialize as 'manual'.
+    #[serde(default = "default_origin")]
+    pub origin: String,
     /// Studio-only toggle: excluded items stay in the plan but don't render.
     #[serde(default)]
     pub excluded: bool,
@@ -510,6 +524,7 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             skills: entity.skill_names.clone(),
             relevance: entity.relevance,
             evidence_count: entity.evidence_count,
+            origin: entity.origin.clone(),
             excluded: false,
         });
     }
@@ -860,6 +875,7 @@ mod tests {
             evidence_count: 1,
             bullets,
             relevance,
+            origin: "manual".to_string(),
         }
     }
 
