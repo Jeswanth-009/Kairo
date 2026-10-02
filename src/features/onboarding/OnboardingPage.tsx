@@ -302,6 +302,35 @@ function ReviewStep({
       </Card>
     );
   }
+  const empty =
+    !parsed.profile &&
+    parsed.projects.length === 0 &&
+    parsed.experiences.length === 0 &&
+    parsed.education.length === 0 &&
+    parsed.achievements.length === 0 &&
+    parsed.skills.length === 0;
+  if (empty) {
+    return (
+      <Card className="p-6 text-center">
+        <p className="text-sm font-semibold text-ink">
+          This doesn't look like a resume
+        </p>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
+          No contact details, work, projects, education or skills were found. If this was a
+          presentation or a report (slides extract poorly), try the actual resume PDF instead —
+          or paste the resume text directly.
+        </p>
+        <div className="mt-4 flex justify-center gap-2">
+          <Button variant="secondary" onClick={() => window.history.back()}>
+            Try another file
+          </Button>
+          <Button variant="ghost" onClick={onSkip}>
+            Skip — add records manually
+          </Button>
+        </div>
+      </Card>
+    );
+  }
   return <ReviewGroups parsed={parsed} onDone={onDone} onSkip={onSkip} />;
 }
 

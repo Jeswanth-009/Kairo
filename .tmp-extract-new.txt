@@ -1,0 +1,71 @@
+Jeswanth Sai Kancharana
++91 9182452133 | jeswanth1811@gmail.com | linkedin.com/in/jeswanth-sai-k |
+github.com/Jeswanth-009 | jeswanth-portfolio.vercel.app
+Summary
+Software Developer | GSoC ’26 Eval Call (Apache) | HackAp ’25 Winner (100+ teams) | 1300+ Codeforces
+Systems & Backend: Local-first Rust workspace (pure domain solver, Tectonic TeX engine) · in-memory LRU cache
+(O(1), AOF persistence) · encrypted messenger (<100ms, AES-256-GCM + RSA-OAEP)
+Cloud & Applied AI: AI VS Code extension (4-layer Socratic reasoning, AWS Bedrock/Lambda, <2s) · Host IDS
+daemon
+Experience
+Infosys Springboard | February 2026 – April 2026
+Python Intern Remote
+• Engineered PyKV, an in-memory LRU cache engine with O(1) GET/SET via OrderedDict + asyncio.Lock;
+implemented AOF append-only persistence with atomic log compaction, reducing disk usage by 60% over 30-day
+operation
+• Architected primary-to-standby replication with async best-effort forwarding; built real-time observability
+dashboard tracking hit-rate, memory utilization, and eviction patterns
+• Built automated benchmarking pipeline with 20-way concurrent httpx load, characterizing true server throughput
+at 708 ops/s (1.41ms/op) vs. in-process dict baseline; identified serialization and connection pooling as primary
+latency drivers
+BDL (Bharat Dynamics Limited) | June 2025 – July 2025
+Project Intern Visakhapatnam, India
+• Reduced message delivery latency to <100ms by optimizing WebSocket payload serialization and implementing
+per-room connection pooling, while maintaining AES-256-GCM + RSA-OAEP E2E encryption with zero
+server-side key exposure
+• Eliminated man-in-the-middle attack surface by enforcing out-of-band RSA key fingerprint verification and
+per-room rate limiting (10 msg/s per user), blocking unauthorized session hijacking in integration tests
+• Containerized Node.js WebSocket server and Express API with Docker Compose; wrote 15+ integration tests
+covering connection drops, key exchange failures, and message replay attacks
+Projects
+Kairo↗ | Rust, Tauri 2, TypeScript, React, SQLite (WAL), Tectonic
+• Architected a local-first career workspace in Rust and Tauri 2 with decoupled domain modules and an append-only
+10-migration SQLite WAL layer, verified through 77 unit and integration tests
+• Built a deterministic constraint solver and matching engine computing coverage against JDs via pure functions,
+enforcing zero-fabrication metrics and technology diff validation on rewrites
+• Integrated headless ATS-safe PDF compilation via portable Tectonic LaTeX binary, running unlocked async I/O to
+guarantee zero UI thread blocking during compilation
+CodeSensei↗ | TypeScript, AWS Lambda, API Gateway, Amazon Bedrock (Nova Lite), DynamoDB
+• Architected 4-layer Socratic reasoning pipeline (Beginner → Design → Pitfalls → Socratic) via structured JSON
+prompts to Amazon Bedrock Nova Lite; multi-turn conversation history with role alternation prevents context loss
+across follow-ups
+• Optimized cross-region architecture (ap-south-2 Lambda → us-east-1 Bedrock) reducing model costs by 60% while
+maintaining sub-2s end-to-end latency; DynamoDB TTL enables 30-day per-user history at INR 0 idle cost
+• Built auto-explain provider with 1.5s diagnostic debounce and CodeLens coverage for 10+ languages; serverless
+stack (SAM, Lambda, API Gateway) scales to zero with INR 0/month when inactive
+WatchDog↗ | Python, Flask, SQLite (WAL), psutil, bcrypt, SHA-256
+• Built user-space background daemon implementing async producer-consumer pipeline with queue.Queue and
+SQLite executemany batch writes, eliminating synchronous I/O blocking on telemetry ingestion
+• Replaced static threat thresholds with Exponential Moving Average (EMA) algorithm learning per-process resource
+baselines; flags anomalies at 3σ deviation with <5% false positive rate during 72-hour testing
+• Enforced tamper-evident log integrity via canonical JSON serialization + SHA-256 hashing; implemented
+session-authenticated glassmorphic SOC dashboard with real-time threat feed and forensic audit trail
+
+Achievements
+Google Summer of Code 2026 | Apache Software Foundation | May 2026
+• Received a direct evaluation call from the Apache Software Foundation for UI/UX engineering on AMO Physics on
+the 1st attempt.
+HackAp Hackathon 2025 | Winner | March 2025
+• Secured 1st place competing against a field of over 100+ technical teams.
+Competitive Programming & Hackathons | Codeforces, AWS Active
+• Earned a 1400+ peak rating on Codeforces through consistent competitive programming.
+• Qualified for the high-stakes prototype stage of the AI for Bharat Hackathon built entirely on AWS infrastructure.
+Skills
+Languages: Rust, Python, TypeScript, JavaScript, C++, C, Java, Dart, SQL
+Frameworks & Libraries: Tauri, FastAPI, Flask, Node.js, Next.js, React, Flutter, Tailwind CSS, Shadcn UI
+Developer Tools: Docker, Git, GitHub Actions, AWS (Lambda, API Gateway, DynamoDB, Bedrock), Linux, Tectonic
+Data & ML: Pandas, NumPy, Scikit-learn
+Databases: SQLite (WAL), PostgreSQL, MongoDB, Hive
+Education
+Andhra University College Of Engineering Visakhapatnam, Andhra Pradesh
+Bachelor of Technology in Computer Science & Systems Engineering September 2023 – May 2027

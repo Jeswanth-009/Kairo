@@ -132,6 +132,8 @@ fn detect_section(line: &str) -> Option<Section> {
         .trim()
         .trim_start_matches(['#', '-', '*', '•', '·', '▪'])
         .trim()
+        .trim_end_matches([':', '-', '–', '—', '|', '·', '•', '*', '▪', '_'])
+        .trim()
         .trim_end_matches(':')
         .trim()
         .to_lowercase();
@@ -141,10 +143,21 @@ fn detect_section(line: &str) -> Option<Section> {
         | "about me"
         | "objective"
         | "career objective"
+        | "career summary"
         | "professional summary"
+        | "professional profile"
         | "profile summary" => Some(Section::Summary),
-        "projects" | "project" | "personal projects" | "key projects" | "selected projects"
-        | "projects & work" => Some(Section::Projects),
+        "projects"
+        | "project"
+        | "personal projects"
+        | "key projects"
+        | "selected projects"
+        | "projects & work"
+        | "academic projects"
+        | "mini projects"
+        | "major projects"
+        | "projects & experience"
+        | "experience & projects" => Some(Section::Projects),
         "experience"
         | "work experience"
         | "professional experience"
@@ -152,9 +165,18 @@ fn detect_section(line: &str) -> Option<Section> {
         | "employment history"
         | "internships"
         | "internship"
+        | "internship experience"
+        | "work history"
+        | "relevant experience"
+        | "industrial training"
         | "work & experience"
         | "experience & work" => Some(Section::Experience),
-        "education" => Some(Section::Education),
+        "education"
+        | "education & training"
+        | "education & qualifications"
+        | "academic background"
+        | "academic qualifications"
+        | "qualifications" => Some(Section::Education),
         "achievements"
         | "achievement"
         | "awards"
@@ -162,7 +184,9 @@ fn detect_section(line: &str) -> Option<Section> {
         | "honours"
         | "awards & achievements"
         | "achievements & awards"
-        | "accomplishments" => Some(Section::Achievements),
+        | "awards & honors"
+        | "accomplishments"
+        | "extra-curricular achievements" => Some(Section::Achievements),
         "skills"
         | "technical skills"
         | "skills & technologies"
@@ -171,6 +195,16 @@ fn detect_section(line: &str) -> Option<Section> {
         | "skills and tools"
         | "skills & tools"
         | "toolkit"
+        | "core skills"
+        | "key skills"
+        | "skill set"
+        | "skills summary"
+        | "areas of expertise"
+        | "tools & technologies"
+        | "technologies & tools"
+        | "tools used"
+        | "programming languages"
+        | "languages & tools"
         | "technical expertise" => Some(Section::Skills),
         "certifications"
         | "certificates"
@@ -722,7 +756,15 @@ fn strip_trailing_dates(line: &str) -> String {
             words.pop();
         }
     }
-    words.join(" ")
+    // Right-aligned dates reach this function joined with '|' by the PDF
+    // extractor ("Infosys Springboard | February 2026 – April 2026"); after
+    // the range is stripped, the leftover separator must not leak into the
+    // organization or issuer name.
+    words
+        .join(" ")
+        .trim_end_matches(['|', '·', '•', '-', '–', '—', ':', ';', ' '])
+        .trim()
+        .to_string()
 }
 
 const LOCATION_SUFFIXES: &[&str] = &["remote", "hybrid", "on-site", "onsite", "wfh"];
@@ -1832,6 +1874,107 @@ Docker | Kubernetes
         assert_eq!(import.skills[0].category, "language");
         assert_eq!(import.skills[1].category, "language");
         assert_eq!(import.skills[3].category, "devops");
+    }
+
+    /// The real-world shape produced by the PDF extractor: right-aligned
+    /// dates arrive joined with '|' on the heading line ("Org | Feb 2026 –
+    /// Apr 2026"), and the role line carries a trailing location.
+    #[test]
+    fn resume_parser_handles_right_aligned_dates_and_locations() {
+        let import = parse_resume_text(
+            r#"
+Jeswanth Sai Kancharana
++91 9182452133 | jeswanth1811@gmail.com | linkedin.com/in/jeswanth-sai-k
+
+EXPERIENCE
+Infosys Springboard | February 2026 – April 2026
+Python Intern Remote
+- Engineered an in-memory LRU cache engine
+BDL (Bharat Dynamics Limited) | June 2025 – July 2025
+Project Intern Visakhapatnam, India
+- Reduced message delivery latency
+
+SKILLS
+Languages: Rust, Python, TypeScript
+Data & ML: Pandas, NumPy
+"#,
+        );
+
+        assert_eq!(import.experiences.len(), 2);
+        let first = &import.experiences[0];
+        assert_eq!(first.organization, "Infosys Springboard");
+        assert_eq!(first.role, "Python Intern");
+        assert_eq!(first.start_date.as_deref(), Some("2026-02"));
+        assert_eq!(first.end_date.as_deref(), Some("2026-04"));
+        assert_eq!(first.location, "Remote");
+        let second = &import.experiences[1];
+        assert_eq!(second.organization, "BDL (Bharat Dynamics Limited)");
+        assert_eq!(second.location, "Visakhapatnam, India");
+        assert_eq!(second.start_date.as_deref(), Some("2025-06"));
+
+        let langs = import
+            .skills
+            .iter()
+            .find(|s| s.name == "Rust")
+            .expect("Rust skill extracted");
+        assert_eq!(langs.category, "language");
+        let pandas = import
+            .skills
+            .iter()
+            .find(|s| s.name == "Pandas")
+            .expect("Pandas extracted");
+        assert_eq!(pandas.category, "tool");
+    }
+
+    /// Achievements: "Title | Issuer | Month Year" — the date is stripped
+    /// without leaving separator residue in the issuer, and the title keeps
+    /// its inner pipes intact.
+    #[test]
+    fn resume_parser_handles_achievement_title_issuer_date() {
+        let import = parse_resume_text(
+            r#"
+ACHIEVEMENTS
+Google Summer of Code 2026 | Apache Software Foundation | May 2026
+- Received a direct evaluation call for UI/UX engineering.
+HackAp Hackathon 2025 | Winner | March 2025
+- Secured 1st place against 100+ teams.
+"#,
+        );
+
+        assert_eq!(import.achievements.len(), 2);
+        let gsoc = &import.achievements[0];
+        assert_eq!(gsoc.title, "Google Summer of Code 2026");
+        assert_eq!(gsoc.issuer, "Apache Software Foundation");
+        assert_eq!(gsoc.achieved_on.as_deref(), Some("2026-05"));
+        let hackap = &import.achievements[1];
+        assert_eq!(hackap.title, "HackAp Hackathon 2025");
+        assert_eq!(hackap.issuer, "Winner");
+        assert_eq!(hackap.achieved_on.as_deref(), Some("2025-03"));
+    }
+
+    /// Decorated headings (trailing separators) and common synonyms must
+    /// still be recognized.
+    #[test]
+    fn resume_parser_recognizes_synonym_and_decorated_headings() {
+        let import = parse_resume_text(
+            r#"
+WORK HISTORY
+Acme Corp — Software Engineer
+- Shipped REST APIs
+
+Core Skills
+Python, Rust
+
+Technical Expertise
+Docker | Kubernetes
+"#,
+        );
+
+        assert_eq!(import.experiences.len(), 1);
+        assert_eq!(import.experiences[0].organization, "Acme Corp");
+        assert_eq!(import.experiences[0].role, "Software Engineer");
+        let names: Vec<String> = import.skills.iter().map(|s| s.name.clone()).collect();
+        assert_eq!(names, vec!["Python", "Rust", "Docker", "Kubernetes"]);
     }
 
     #[test]

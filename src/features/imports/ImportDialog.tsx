@@ -351,9 +351,18 @@ function ResumeCandidates({
 
   if (total === 0 || activeKeys.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">
-        No candidates recognized. Try text with clear section headings — or add records manually.
-      </p>
+      <div className="rounded-lg border border-dashed border-line-strong px-4 py-8 text-center">
+        <p className="text-sm font-medium text-ink">No candidates recognized</p>
+        <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted">
+          {result.profile === null &&
+          result.projects.length === 0 &&
+          result.experiences.length === 0 &&
+          result.education.length === 0 &&
+          result.skills.length === 0
+            ? "The text has no contact details and no work / projects / education / skills sections — this may be a presentation or report rather than a resume. Try the actual resume file, or paste resume text with clear section headings."
+            : "Try text with clear section headings — or add records manually."}
+        </p>
+      </div>
     );
   }
 
