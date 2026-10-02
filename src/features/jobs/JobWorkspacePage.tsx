@@ -9,7 +9,12 @@ import { Skeleton } from "../../components/ui/Feedback";
 import { Field, Input, Select } from "../../components/ui/inputs";
 import { JOB_REQUIREMENT_KINDS } from "../../lib/types";
 import { scrollMainToTop } from "../../lib/dom";
-import type { Job, JobRequirement, JobRequirementKind } from "../../lib/types";
+import type {
+  Job,
+  JobRequirement,
+  JobRequirementKind,
+  MatchReport,
+} from "../../lib/types";
 import { useJobsStore } from "../../stores/jobsStore";
 import { toast } from "../../stores/toastStore";
 import { MatchTab } from "./MatchTab";
@@ -25,15 +30,21 @@ const KIND_LABELS: Record<JobRequirementKind, string> = {
 
 const KIND_ORDER: JobRequirementKind[] = ["required_skill", "preferred_skill", "responsibility"];
 
-type WorkspaceTab = "overview" | "requirements" | "match" | "plan" | "tailor" | "resume";
+type WorkspaceTab =
+  | "overview"
+  | "requirements"
+  | "match"
+  | "resume"
+  | "interview"
+  | "application";
 
-const TAB_META: { key: WorkspaceTab; label: string }[] = [
-  { key: "overview", label: "Overview" },
-  { key: "requirements", label: "Requirements" },
-  { key: "match", label: "Match" },
-  { key: "plan", label: "Plan" },
-  { key: "tailor", label: "Tailor" },
-  { key: "resume", label: "Resume" },
+const TAB_META: { key: WorkspaceTab; label: string; hint: string }[] = [
+  { key: "overview", label: "1 · Role", hint: "The posting, stored verbatim" },
+  { key: "requirements", label: "2 · Requirements", hint: "Confirm what matters" },
+  { key: "match", label: "3 · Match", hint: "Where your proof stands" },
+  { key: "resume", label: "4 · Resume", hint: "Plan, tailor, export" },
+  { key: "interview", label: "5 · Interview", hint: "Questions for this job" },
+  { key: "application", label: "6 · Application", hint: "Track what you sent" },
 ];
 
 export default function JobWorkspacePage() {
@@ -114,7 +125,7 @@ export default function JobWorkspacePage() {
         </Button>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-2">
         <Tabs
           tabs={TAB_META.map((t) => ({ id: t.key, label: t.label }))}
           active={tab}
@@ -126,13 +137,16 @@ export default function JobWorkspacePage() {
           className="flex-wrap"
         />
       </div>
+      <p className="mb-6 text-[11px] text-muted">
+        {TAB_META.find((t) => t.key === tab)?.hint}
+      </p>
 
       {tab === "overview" ? <OverviewTab job={job} counts={counts} /> : null}
       {tab === "requirements" ? <RequirementsTab job={job} /> : null}
       {tab === "match" ? <MatchTab jobId={job.id} domain={job.domain} /> : null}
-      {tab === "plan" ? <PlanTab jobId={job.id} /> : null}
-      {tab === "tailor" ? <TailorTab jobId={job.id} onComposePlan={() => setTab("plan")} /> : null}
-      {tab === "resume" ? <ResumeTab jobId={job.id} /> : null}
+      {tab === "resume" ? <ResumeStep jobId={job.id} /> : null}
+      {tab === "interview" ? <InterviewTab jobId={job.id} /> : null}
+      {tab === "application" ? <ApplicationTab job={job} /> : null}
     </div>
   );
 }
@@ -140,6 +154,44 @@ export default function JobWorkspacePage() {
 async function ipcGetJob(id: number): Promise<Job> {
   const { ipc } = await import("../../lib/ipc");
   return ipc.getJob(id);
+}
+
+async function ipcGetMatch(id: number): Promise<MatchReport | null> {
+  const { ipc } = await import("../../lib/ipc");
+  return ipc.getMatch(id);
+}
+
+/** One honest line per requirement: which records support it, and why. */
+function RequirementSupport({
+  support,
+}: {
+  support: MatchReport["results"][number] | null;
+}) {
+  if (!support) {
+    return (
+      <p className="mt-1 text-[11px] text-muted/80">
+        No match computed yet — run step 3 to see which records support this.
+      </p>
+    );
+  }
+  if (support.entityRefs.length === 0) {
+    return (
+      <p className="mt-1 text-[11px] text-muted/80">
+        {support.coverage === "missing"
+          ? "Nothing in your Vault supports this yet — no fabrication; close the gap or address it in interviews."
+          : support.explanation}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-1.5 space-y-0.5">
+      {support.entityRefs.slice(0, 2).map((ref, i) => (
+        <p key={i} className="text-[11px] text-muted/90">
+          <span className="font-medium text-ink/80">{ref.title}</span> — {ref.contribution}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 function OverviewTab({
@@ -227,6 +279,26 @@ function RequirementsTab({ job }: { job: Job }) {
   const updateRequirement = useJobsStore((s) => s.updateRequirement);
   const deleteRequirement = useJobsStore((s) => s.deleteRequirement);
   const loadRequirements = useJobsStore((s) => s.loadRequirements);
+  // The stored report says which records support each requirement — the
+  // "why" behind every match, shown right where the user confirms it.
+  const [report, setReport] = useState<MatchReport | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stored = await ipcGetMatch(job.id);
+        if (!cancelled) setReport(stored);
+      } catch {
+        if (!cancelled) setReport(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [job.id]);
+
+  const supportFor = (reqId: number) =>
+    report?.results.find((r) => r.requirementId === reqId) ?? null;
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -323,6 +395,7 @@ function RequirementsTab({ job }: { job: Job }) {
                           importance {Math.round(req.importance * 100)}%
                           {req.userConfirmed ? " · user-confirmed" : " · unconfirmed"}
                         </p>
+                        <RequirementSupport support={supportFor(req.id)} />
                       </div>
                       <div className="flex shrink-0 gap-1">
                         <Button variant="ghost" size="sm" onClick={() => setEditingId(req.id)}>

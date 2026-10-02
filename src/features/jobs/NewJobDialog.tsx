@@ -271,6 +271,7 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
                       size="sm"
                       className="shrink-0 text-bad hover:bg-bad-soft dark:text-red-400 dark:hover:bg-bad/10"
                       onClick={() => removeReq(req.id)}
+                      aria-label={`Remove requirement: ${req.rawText || "empty"}`}
                     >
                       ✕
                     </Button>

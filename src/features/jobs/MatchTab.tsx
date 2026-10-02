@@ -136,20 +136,30 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
           </Button>
         </div>
 
-        <div className="mt-4 space-y-2">
-          <ScoreRow label="Required skills" value={report.components.requiredSkills} />
-          <ScoreRow label="Preferred skills" value={report.components.preferredSkills} />
-          <ScoreRow label="Responsibilities" value={report.components.responsibilities} />
-          <ScoreRow label="Domain" value={report.components.domain} />
-          <ScoreRow label="Recency" value={report.components.recency} />
-          <ScoreRow label="Proof strength" value={report.components.evidenceStrength} />
-        </div>
         <p className="mt-3 text-[11px] leading-relaxed text-muted">
-          Weighted overall relevance {report.overallScore.toFixed(2)} — a ranking of your own
-          evidence, not a prediction of hiring outcomes. Weights: required 35% · preferred 20% ·
-          responsibilities 15% · domain 10% · recency 10% · evidence strength 10% · engine v
-          {report.matchingVersion}.
+          The list below is the point: what's covered, what's partial, and where the honest gaps
+          are. This ranks <span className="font-medium">your own evidence</span> against the
+          posting — it is never a prediction of hiring outcomes.
         </p>
+
+        <details className="mt-3 rounded-lg border border-line bg-accent-soft/60 px-3 py-2">
+          <summary className="cursor-pointer select-none text-[11px] font-medium text-muted hover:text-ink">
+            Why this ranking (weights and component scores)
+          </summary>
+          <div className="mt-2.5 space-y-2">
+            <ScoreRow label="Required skills" value={report.components.requiredSkills} />
+            <ScoreRow label="Preferred skills" value={report.components.preferredSkills} />
+            <ScoreRow label="Responsibilities" value={report.components.responsibilities} />
+            <ScoreRow label="Domain" value={report.components.domain} />
+            <ScoreRow label="Recency" value={report.components.recency} />
+            <ScoreRow label="Proof strength" value={report.components.evidenceStrength} />
+          </div>
+          <p className="mt-2 text-[11px] text-muted">
+            Weighted overall relevance {report.overallScore.toFixed(2)}. Weights: required 35% ·
+            preferred 20% · responsibilities 15% · domain 10% · recency 10% · evidence strength
+            10% · engine v{report.matchingVersion}.
+          </p>
+        </details>
       </Card>
 
       <div className="space-y-2">
