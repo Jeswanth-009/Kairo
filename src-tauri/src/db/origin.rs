@@ -73,6 +73,9 @@ pub struct OnboardingStatus {
     pub education_count: i64,
     pub skill_count: i64,
     pub job_count: i64,
+    /// Imported records still on the bottom rung of the ladder — accepted
+    /// but neither edited, evidenced, nor verified.
+    pub imported_unreviewed: i64,
     /// True once the user has anything to work with — the guided first-run
     /// flow is only for the truly blank slate.
     pub has_any_content: bool,
@@ -88,6 +91,20 @@ pub fn onboarding_status(conn: &Connection) -> Result<OnboardingStatus, String> 
     let skill_count = count("SELECT COUNT(*) FROM skills WHERE deleted_at IS NULL")?;
     let job_count = count("SELECT COUNT(*) FROM jobs WHERE deleted_at IS NULL")?;
     let profile: i64 = count("SELECT COUNT(*) FROM profiles")?;
+    // Unreviewed imports: accepted as extracted, never edited, evidenced or
+    // explicitly verified by the user.
+    let mut imported_unreviewed = 0i64;
+    for table in [
+        "projects",
+        "experiences",
+        "education",
+        "certifications",
+        "achievements",
+    ] {
+        imported_unreviewed += count(&format!(
+            "SELECT COUNT(*) FROM {table} WHERE deleted_at IS NULL              AND origin = 'imported' AND verified_at IS NULL"
+        ))?;
+    }
     Ok(OnboardingStatus {
         has_profile: profile > 0,
         project_count,
@@ -95,6 +112,7 @@ pub fn onboarding_status(conn: &Connection) -> Result<OnboardingStatus, String> 
         education_count,
         skill_count,
         job_count,
+        imported_unreviewed,
         has_any_content: profile > 0
             || project_count > 0
             || experience_count > 0
@@ -102,6 +120,94 @@ pub fn onboarding_status(conn: &Connection) -> Result<OnboardingStatus, String> 
             || skill_count > 0
             || job_count > 0,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Home overview — per-job state for the "continue" card
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobHomeRow {
+    pub job_id: i64,
+    pub role_title: String,
+    pub company: String,
+    pub has_plan: bool,
+    /// missing (no compiled PDF) · stale (plan or design changed after the
+    /// export) · current.
+    pub pdf_state: String,
+    /// Most recent of plan edit / compile — ordering for the continue card.
+    pub last_activity: String,
+}
+
+/// One row per live job with the state of its resume, newest activity first.
+/// The Home page derives the next specific action from `pdf_state`.
+pub fn home_overview(conn: &Connection) -> Result<Vec<JobHomeRow>, String> {
+    let mut stmt = sql_err(conn.prepare(
+        "SELECT j.id, j.role_title, j.company, p.plan_json,                 p.updated_at, p.compiled_at, p.artifact_template_id, p.artifact_paper, p.config_json,                 COALESCE(p.updated_at, p.compiled_at, j.created_at, '')          FROM jobs j LEFT JOIN resume_plans p ON p.job_id = j.id          WHERE j.deleted_at IS NULL          ORDER BY COALESCE(p.updated_at, p.compiled_at, j.created_at, '') DESC, j.id DESC",
+    ))?;
+    let rows = sql_err(stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, Option<String>>(4)?,
+            row.get::<_, Option<String>>(5)?,
+            row.get::<_, Option<String>>(6)?,
+            row.get::<_, Option<String>>(7)?,
+            row.get::<_, Option<String>>(8)?,
+            row.get::<_, String>(9)?,
+        ))
+    }))?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        let (job_id, role_title, company, plan_json, updated_at, compiled_at, artifact_template, artifact_paper, config_json, last_activity) = sql_err(row)?;
+        let has_plan = plan_json.is_some();
+        let pdf_state = match compiled_at.as_deref() {
+            None => "missing".to_string(),
+            Some(compiled) => {
+                // Content edited after the compile…
+                let content_stale = updated_at
+                    .as_deref()
+                    .map(|u| u > compiled)
+                    .unwrap_or(false);
+                // …or the template/paper picks moved on from the artifact.
+                let design = config_json
+                    .as_deref()
+                    .and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok());
+                let wanted_template = design
+                    .as_ref()
+                    .and_then(|v| v.get("templateId"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("jake");
+                let wanted_paper = design
+                    .as_ref()
+                    .and_then(|v| v.get("paper"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("letter");
+                let template = artifact_template.as_deref().unwrap_or("");
+                let paper = artifact_paper.as_deref().unwrap_or("");
+                let design_stale = (!template.is_empty() && template != wanted_template)
+                    || (!paper.is_empty() && paper != wanted_paper);
+                if content_stale || design_stale {
+                    "stale".to_string()
+                } else {
+                    "current".to_string()
+                }
+            }
+        };
+        out.push(JobHomeRow {
+            job_id,
+            role_title,
+            company,
+            has_plan,
+            pdf_state,
+            last_activity,
+        });
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -264,5 +370,93 @@ mod tests {
         assert_eq!(status.skill_count, 1);
         assert!(status.has_any_content);
         assert!(!status.has_profile);
+    }
+
+    #[test]
+    fn home_overview_states_and_ordering() {
+        let conn = mem_db();
+        // Job with nothing: missing.
+        conn.execute(
+            "INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Acme', 'Dev', 'jd')",
+            [],
+        )
+        .unwrap();
+        let j1 = conn.last_insert_rowid();
+        // Keep the created_at out of the way — activity ordering is driven by
+        // plan edits and compiles.
+        conn.execute(
+            "UPDATE jobs SET created_at = '2025-01-01 00:00:00' WHERE id = ?1",
+            [j1],
+        )
+        .unwrap();
+        // Job with a current export.
+        conn.execute(
+            "INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Beta', 'Lead', 'jd')",
+            [],
+        )
+        .unwrap();
+        let j2 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO resume_plans (job_id, config_json, plan_json, artifact_template_id, artifact_paper, updated_at, compiled_at, composer_version)              VALUES (?1, '{\"templateId\":\"jake\",\"paper\":\"letter\"}', '{}', 'jake', 'letter', '2026-01-01 10:00:00', '2026-01-01 11:00:00', 1)",
+            [j2],
+        )
+        .unwrap();
+        // Job edited after the compile: stale.
+        conn.execute(
+            "INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Gamma', 'Dev', 'jd')",
+            [],
+        )
+        .unwrap();
+        let j3 = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO resume_plans (job_id, config_json, plan_json, artifact_template_id, artifact_paper, updated_at, compiled_at, composer_version)              VALUES (?1, '{\"templateId\":\"jake\",\"paper\":\"letter\"}', '{}', 'jake', 'letter', '2026-02-01 10:00:00', '2026-01-05 09:00:00', 1)",
+            [j3],
+        )
+        .unwrap();
+
+        let rows = home_overview(&conn).unwrap();
+        assert_eq!(rows.len(), 3);
+        // Newest activity first: Gamma (edited 2026-02) → Beta (compiled 2026-01-11) → Acme.
+        assert_eq!(rows[0].job_id, j3);
+        assert_eq!(rows[0].pdf_state, "stale");
+        assert_eq!(rows[1].job_id, j2);
+        assert_eq!(rows[1].pdf_state, "current");
+        assert_eq!(rows[2].job_id, j1);
+        assert_eq!(rows[2].pdf_state, "missing");
+        assert!(!rows[2].has_plan);
+
+        // Design drift also marks stale without any content edit.
+        conn.execute(
+            "UPDATE resume_plans SET artifact_template_id = 'plushcv', updated_at = '2026-01-01 10:00:00' WHERE job_id = ?1",
+            [j2],
+        )
+        .unwrap();
+        let rows = home_overview(&conn).unwrap();
+        assert_eq!(rows[1].pdf_state, "stale");
+    }
+
+    #[test]
+    fn imported_unreviewed_counts_only_unverified_imports() {
+        let conn = mem_db();
+        conn.execute(
+            "INSERT INTO projects (title, description, origin) VALUES ('A', 'x', 'imported')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO projects (title, description, origin, verified_at) VALUES ('B', 'x', 'imported', datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO projects (title, description, origin, edited_at) VALUES ('C', 'x', 'imported', datetime('now'))",
+            [],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO projects (title, description) VALUES ('D', 'x')", [])
+            .unwrap();
+        let status = onboarding_status(&conn).unwrap();
+        // A and C count; B is verified; D is manual.
+        assert_eq!(status.imported_unreviewed, 2);
     }
 }

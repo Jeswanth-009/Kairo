@@ -35,6 +35,7 @@ import type {
   RestoreOk,
   TrashItem,
   OnboardingStatus,
+  JobHomeRow,
 } from "./types";
 
 /**
@@ -266,4 +267,5 @@ export const ipc = {
     invoke<void>("unmark_verified", { entityType, entityId }),
   getOnboardingStatus: (): Promise<OnboardingStatus> =>
     invoke<OnboardingStatus>("get_onboarding_status"),
+  getHomeOverview: (): Promise<JobHomeRow[]> => invoke<JobHomeRow[]>("get_home_overview"),
 };

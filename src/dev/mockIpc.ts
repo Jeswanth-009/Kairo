@@ -404,8 +404,35 @@ const handlers: Record<string, Handler> = {
     educationCount: 1,
     skillCount: 6,
     jobCount: 3,
+    importedUnreviewed: 1,
     hasAnyContent: true,
   }),
+  get_home_overview: () => [
+    {
+      jobId: 3,
+      roleTitle: "Senior Frontend Engineer",
+      company: "Northwind",
+      hasPlan: true,
+      pdfState: "stale",
+      lastActivity: "2026-10-01 09:30:00",
+    },
+    {
+      jobId: 2,
+      roleTitle: "Platform Engineer",
+      company: "Hopper",
+      hasPlan: true,
+      pdfState: "current",
+      lastActivity: "2026-09-28 14:00:00",
+    },
+    {
+      jobId: 1,
+      roleTitle: "Full-stack Developer",
+      company: "Lumon",
+      hasPlan: false,
+      pdfState: "missing",
+      lastActivity: "2026-09-20 11:00:00",
+    },
+  ],
 
   // import parsers (pure heuristics — the real extraction lives in the backend)
   parse_resume_text: (a) => parseResume(String(a.text ?? "")),

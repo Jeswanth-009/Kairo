@@ -415,19 +415,28 @@ pub fn save_plan(
 pub struct StoredPlan {
     pub config: ComposerConfig,
     pub plan: ResumePlan,
+    /// Last edit of the plan row — lets the Studio flag a PDF as out of date
+    /// when content changed after the export.
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 pub fn get_plan(conn: &Connection, job_id: i64) -> Result<Option<StoredPlan>, String> {
-    let mut stmt =
-        sql_err(conn.prepare("SELECT config_json, plan_json FROM resume_plans WHERE job_id = ?1"))?;
+    let mut stmt = sql_err(conn.prepare(
+        "SELECT config_json, plan_json, updated_at FROM resume_plans WHERE job_id = ?1",
+    ))?;
     match stmt.query_row([job_id], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<String>>(2)?,
+        ))
     }) {
-        Ok((config_json, plan_json)) => {
+        Ok((config_json, plan_json, updated_at)) => {
             let config: ComposerConfig =
                 serde_json::from_str(&config_json).map_err(|e| e.to_string())?;
             let plan: ResumePlan = serde_json::from_str(&plan_json).map_err(|e| e.to_string())?;
-            Ok(Some(StoredPlan { config, plan }))
+            Ok(Some(StoredPlan { config, plan, updated_at }))
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),

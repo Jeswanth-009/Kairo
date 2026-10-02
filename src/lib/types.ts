@@ -102,7 +102,20 @@ export interface OnboardingStatus {
   educationCount: number;
   skillCount: number;
   jobCount: number;
+  /** Imported records still on the bottom rung of the review ladder. */
+  importedUnreviewed: number;
   hasAnyContent: boolean;
+}
+
+/** Per-job resume state for the Home continue card, newest activity first. */
+export interface JobHomeRow {
+  jobId: number;
+  roleTitle: string;
+  company: string;
+  hasPlan: boolean;
+  /** missing (no compiled PDF) · stale (changed after export) · current. */
+  pdfState: "missing" | "stale" | "current";
+  lastActivity: string;
 }
 
 export type SkillCategory =

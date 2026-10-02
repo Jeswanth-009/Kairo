@@ -19,7 +19,13 @@ import { Card, CardTitle } from "../../components/ui/Card";
 import { Skeleton } from "../../components/ui/Feedback";
 import { fmtAgo } from "../../lib/dateFmt";
 import { ipc } from "../../lib/ipc";
-import type { ActivityItem, DashboardOverview, EvidenceReviewItem } from "../../lib/types";
+import type {
+  ActivityItem,
+  DashboardOverview,
+  EvidenceReviewItem,
+  JobHomeRow,
+  OnboardingStatus,
+} from "../../lib/types";
 
 const KIND_COLORS: Record<string, string> = {
   job: "bg-kairo-blue/10 text-kairo-blue",
@@ -37,7 +43,7 @@ const KIND_COLORS: Record<string, string> = {
 function activityRoute(item: ActivityItem): string {
   if (item.refType === "job") return `/jobs/${item.refId}`;
   if (item.refType === "application") return "/applications";
-  return "/vault";
+  return "/story";
 }
 
 interface Tile {
@@ -181,14 +187,164 @@ function GettingStarted() {
   );
 }
 
+/** The next specific action for a job, derived from its resume state. */
+function nextActionFor(job: JobHomeRow): { label: string; to: string } {
+  if (job.pdfState === "missing") {
+    return job.hasPlan
+      ? { label: "Compile the resume you planned", to: "/resume-studio" }
+      : { label: "Compose the resume from your Vault", to: "/resume-studio" };
+  }
+  if (job.pdfState === "stale") {
+    return {
+      label: "Recompile — your edits came after the last export",
+      to: "/resume-studio",
+    };
+  }
+  return { label: "Review the current PDF and save a version", to: "/resume-studio" };
+}
+
+function ContinueCard({
+  homeRows,
+  navigate,
+}: {
+  homeRows: JobHomeRow[];
+  navigate: (to: string) => void;
+}) {
+  if (homeRows.length === 0) {
+    return (
+      <Card className="p-6">
+        <CardTitle>Continue where you left off</CardTitle>
+        <p className="mt-2 max-w-xl text-xs leading-relaxed text-muted">
+          Your job workspaces will show up here with the next specific action — compose, compile,
+          or save a version.
+        </p>
+        <Button className="mt-4" onClick={() => navigate("/jobs")}>
+          Add a job
+        </Button>
+      </Card>
+    );
+  }
+  const job = homeRows[0];
+  const action = nextActionFor(job);
+  return (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <CardTitle>Continue this job</CardTitle>
+          <p className="mt-1.5 text-base font-semibold text-ink">
+            {job.roleTitle || "Untitled role"}
+            {job.company ? <span className="font-normal text-muted"> · {job.company}</span> : null}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {homeRows.length > 1
+              ? `${homeRows.length - 1} other job${homeRows.length === 2 ? "" : "s"} waiting`
+              : "Your only active workspace"}
+          </p>
+        </div>
+        <Button onClick={() => navigate(action.to)}>{action.label}</Button>
+      </div>
+      {homeRows.length > 1 ? (
+        <ul className="mt-4 space-y-1 border-t border-line pt-3">
+          {homeRows.slice(1, 4).map((row) => {
+            const next = nextActionFor(row);
+            return (
+              <li key={row.jobId}>
+                <button
+                  type="button"
+                  onClick={() => navigate(next.to)}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent-soft"
+                >
+                  <span className="truncate font-medium text-ink">
+                    {row.roleTitle || "Untitled role"}
+                    {row.company ? <span className="text-muted"> · {row.company}</span> : null}
+                  </span>
+                  <span className="shrink-0 text-muted">
+                    {row.pdfState === "stale"
+                      ? "PDF needs update"
+                      : row.pdfState === "missing"
+                        ? "No PDF yet"
+                        : "Up to date"}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </Card>
+  );
+}
+
+/** Prominent, honest attention list: what needs the user's eyes. */
+function AttentionRow({
+  homeRows,
+  importedUnreviewed,
+  navigate,
+}: {
+  homeRows: JobHomeRow[];
+  importedUnreviewed: number;
+  navigate: (to: string) => void;
+}) {
+  const stale = homeRows.filter((j) => j.pdfState === "stale");
+  const items: { label: string; detail: string; to: string; tone: string }[] = [];
+  for (const job of stale.slice(0, 3)) {
+    items.push({
+      label: `PDF needs update — ${job.roleTitle || "Untitled role"}`,
+      detail: "Changed after the last export",
+      to: "/resume-studio",
+      tone: "warn",
+    });
+  }
+  if (importedUnreviewed > 0) {
+    items.push({
+      label: `${importedUnreviewed} imported item${importedUnreviewed === 1 ? "" : "s"} to review`,
+      detail: "Still marked “Imported from resume”",
+      to: "/story",
+      tone: "info",
+    });
+  }
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-6 grid gap-2 sm:grid-cols-2">
+      {items.map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          onClick={() => navigate(item.to)}
+          className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-accent-soft ${
+            item.tone === "warn"
+              ? "border-warn/30 bg-warn-soft/60 dark:border-warn/25 dark:bg-warn/10"
+              : "border-line bg-card"
+          }`}
+        >
+          <span className="min-w-0">
+            <span className="block truncate text-xs font-semibold text-ink">{item.label}</span>
+            <span className="text-[11px] text-muted">{item.detail}</span>
+          </span>
+          <ArrowUpRight className="size-3.5 shrink-0 text-muted" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [homeRows, setHomeRows] = useState<JobHomeRow[]>([]);
+  const [status, setStatus] = useState<OnboardingStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       try {
-        setOverview(await ipc.getDashboard());
+        const [overview, homeRows, onboarding] = await Promise.all([
+          ipc.getDashboard(),
+          ipc.getHomeOverview().catch(() => [] as JobHomeRow[]),
+          ipc.getOnboardingStatus().catch(() => null),
+        ]);
+        setOverview(overview);
+        setHomeRows(homeRows);
+        setStatus(onboarding);
       } catch (e) {
         setError(String(e));
       }
@@ -248,28 +404,28 @@ export default function DashboardPage() {
 
   const vaultTiles: Tile[] = [
     {
-      to: "/vault",
+      to: "/story",
       value: counts.projects,
       label: "Projects",
       icon: Folder,
       iconClass: "bg-info-soft text-kairo-blue dark:bg-kairo-blue/15 dark:text-blue-400",
     },
     {
-      to: "/vault",
+      to: "/story",
       value: counts.experiences,
       label: "Experiences",
       icon: Briefcase,
       iconClass: "bg-kairo-violet/10 text-violet-600 dark:bg-kairo-violet/15 dark:text-violet-400",
     },
     {
-      to: "/vault",
+      to: "/story",
       value: counts.skills,
       label: "Skills",
       icon: Code2,
       iconClass: "bg-cyan-50 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-400",
     },
     {
-      to: "/vault",
+      to: "/story",
       value: counts.evidenceVerified,
       label: "Proof verified",
       sub:
@@ -329,52 +485,41 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-8">
-      {/* Identity moment — the only place a gradient hero is allowed. */}
-      <section className="relative mb-8 overflow-hidden rounded-2xl bg-kairo-midnight p-8 text-white shadow-raised">
-        <div
-          aria-hidden
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(560px 280px at 10% -30%, rgba(37,99,235,0.45), transparent 62%), radial-gradient(520px 320px at 108% 130%, rgba(139,92,246,0.35), transparent 60%)",
-          }}
-        />
-        <div
-          aria-hidden
-          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent"
-        />
-        <div className="relative flex flex-wrap items-center gap-4">
-          <BrandMark size={52} />
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold tracking-tight">
-              {brandNew ? "Welcome to Kairo" : "Welcome back"}
-            </h1>
-            <p className="mt-1 text-sm text-muted/60">
-              {brandNew
-                ? "Store verified career proof once. For every opportunity, select the strongest proof, improve the wording without changing the facts, and review every change."
-                : `${counts.projects + counts.experiences} records · ${
-                    counts.evidenceVerified
-                  } verified proof ${counts.evidenceVerified === 1 ? "item" : "items"} · ${
-                    counts.jobs
-                  } job workspace${counts.jobs === 1 ? "" : "s"}`}
-            </p>
-          </div>
-        </div>
-        <div className="relative mt-5 flex flex-wrap gap-2">
-          {["Local-first", "Offline-ready", "No fabrication, ever"].map((chip) => (
-            <span
-              key={chip}
-              className="rounded-full bg-white/[0.08] px-3 py-1 text-xs font-medium text-slate-200 ring-1 ring-white/10"
-            >
-              {chip}
-            </span>
-          ))}
+      {/* Quiet identity strip — the brand stays, the glow goes. */}
+      <section className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-line bg-card p-6 shadow-card">
+        <BrandMark size={44} />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-semibold tracking-tight text-ink">
+            {brandNew ? "Welcome to Kairo" : "Welcome back"}
+          </h1>
+          <p className="mt-0.5 text-sm text-muted">
+            {brandNew
+              ? "Bring your resume, add a role, and get a reviewed PDF — in one sitting."
+              : `${counts.projects + counts.experiences} records · ${counts.evidenceVerified} verified proof · ${counts.jobs} job workspace${counts.jobs === 1 ? "" : "s"}`}
+          </p>
         </div>
       </section>
 
-      {/* Real counts — every tile is a live query result, no derived scores. */}
+      {/* First: the single most important unfinished action. */}
+      {brandNew ? (
+        <GettingStarted />
+      ) : (
+        <>
+          <div className="mb-4">
+            <ContinueCard homeRows={homeRows} navigate={(to) => navigate(to)} />
+          </div>
+          <AttentionRow
+            homeRows={homeRows}
+            importedUnreviewed={status?.importedUnreviewed ?? 0}
+            navigate={(to) => navigate(to)}
+          />
+        </>
+      )
+      }
+
+      {/* Secondary: compact live counts — no derived scores. */}
       <div className="mb-3 flex items-center gap-3">
-        <h2 className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">Vault</h2>
+        <h2 className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">Overview</h2>
         <span className="h-px flex-1 bg-line" />
       </div>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -383,19 +528,13 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div className="mb-3 flex items-center gap-3">
-        <h2 className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">Pipeline</h2>
-        <span className="h-px flex-1 bg-line" />
-      </div>
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {pipelineTiles.map((tile) => (
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[...vaultTiles, ...pipelineTiles].map((tile) => (
           <StatTile key={tile.label} tile={tile} />
         ))}
       </div>
 
-      {brandNew ? (
-        <GettingStarted />
-      ) : (
+      {brandNew ? null : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
           <Card className="p-5 lg:col-span-3">
             <div className="flex items-center justify-between gap-3">
