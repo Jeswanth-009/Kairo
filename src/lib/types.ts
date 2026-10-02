@@ -508,6 +508,10 @@ export interface ResumeVersion {
   versionNumber: number;
   createdAt: string;
   pdfPath: string;
+  /** Export fingerprint frozen with this version (null for pre-13 rows). */
+  fingerprint?: string | null;
+  /** SHA-256 of this version's own PDF copy. */
+  pdfHash?: string | null;
   snapshot: {
     versionNumber: number;
     job: Job;

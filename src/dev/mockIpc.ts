@@ -184,6 +184,10 @@ const handlers: Record<string, Handler> = {
       pdfPath: "sample-resume.pdf",
       pageCount: 1,
       compiledAt: new Date().toISOString(),
+      templateId: "jake",
+      paper: "letter",
+      fingerprint: "mock-fingerprint",
+      pdfHash: "mock-hash",
     },
     logTail: "mock compile ok",
   }),
@@ -193,15 +197,27 @@ const handlers: Record<string, Handler> = {
     pdfPath: "sample-resume.pdf",
     pageCount: 1,
     compiledAt: "2026-09-17T20:12:00",
+    templateId: "jake",
+    paper: "letter",
+    fingerprint: null,
+    pdfHash: null,
   }),
-  read_pdf_bytes: async (a) => {
-    const res = await fetch(String(a.path));
+  read_job_pdf_bytes: async () => {
+    const res = await fetch("sample-resume.pdf");
     const buf = await res.arrayBuffer();
     return Array.from(new Uint8Array(buf));
   },
-  open_file: () => undefined,
-  reveal_file: () => undefined,
-  save_pdf_to_downloads: (a) => String(a.customName ?? "resume.pdf"),
+  read_version_pdf_bytes: async () => {
+    const res = await fetch("sample-resume.pdf");
+    const buf = await res.arrayBuffer();
+    return Array.from(new Uint8Array(buf));
+  },
+  open_job_pdf: () => undefined,
+  open_version_pdf: () => undefined,
+  reveal_job_pdf: () => undefined,
+  reveal_version_pdf: () => undefined,
+  save_job_pdf_to_downloads: (a) => String(a.customName ?? "resume.pdf"),
+  save_version_pdf_to_downloads: (a) => String(a.customName ?? "resume.pdf"),
 
   // versions
   save_resume_version: () => {

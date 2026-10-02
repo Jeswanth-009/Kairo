@@ -1,6 +1,6 @@
 //! PDF command boundary (Phase 9).
 
-use crate::db::{fingerprint, pdf, DbState};
+use crate::db::{fingerprint, pdf, versions, DbState};
 use serde::Serialize;
 use tauri::{Emitter, State};
 
@@ -134,80 +134,104 @@ pub fn get_pdf_artifact(
 /// Managed state carrying the app data dir into commands (Tauri provides it).
 pub struct AppDataDir(pub std::path::PathBuf);
 
-/// Open a file (e.g. a PDF) with the OS default application.
-#[tauri::command]
-pub fn open_file(path: String) -> Result<(), String> {
+// ---------------------------------------------------------------------------
+// Artifact-scoped file access
+// ---------------------------------------------------------------------------
+
+/// Resolve an app-recorded path, refusing anything that is missing or
+/// resolves outside the app data dir. Canonicalizes both roots so symlinks
+/// and `..` cannot smuggle a path past the check (same pattern as the old
+/// `read_pdf_bytes` guard).
+fn scoped_artifact_path(
+    path: &std::path::Path,
+    app_data_dir: &AppDataDir,
+) -> Result<std::path::PathBuf, String> {
+    if !path.exists() {
+        return Err(format!("File does not exist: {}", path.display()));
+    }
+    let allowed_root = app_data_dir
+        .0
+        .canonicalize()
+        .map_err(|e| format!("cannot resolve app data dir: {e}"))?;
+    let requested = path
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve file: {e}"))?;
+    if !requested.starts_with(&allowed_root) {
+        return Err("File is outside the Kairo data directory".to_string());
+    }
+    Ok(requested)
+}
+
+fn resolve_job_pdf(
+    state: State<'_, DbState>,
+    job_id: i64,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<std::path::PathBuf, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    let artifact = pdf::get_artifact(&conn, job_id)?
+        .ok_or_else(|| "No compiled PDF for this workspace — export it first".to_string())?;
+    drop(conn);
+    scoped_artifact_path(std::path::Path::new(&artifact.pdf_path), &app_data_dir)
+}
+
+fn resolve_version_pdf(
+    state: State<'_, DbState>,
+    version_id: i64,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<std::path::PathBuf, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    let version = versions::get_version(&conn, version_id)?;
+    drop(conn);
+    scoped_artifact_path(std::path::Path::new(&version.pdf_path), &app_data_dir)
+}
+
+fn open_with_os(path: &std::path::Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        // `explorer.exe <path>` — never a shell, so frontend-supplied paths
-        // can't reach a command interpreter (cmd metacharacter injection).
+        // `explorer.exe <path>` — never a shell, so paths can't reach a
+        // command interpreter (cmd metacharacter injection).
         std::process::Command::new("explorer")
-            .arg(&path)
+            .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
-            .arg(&path)
+            .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
-            .arg(&path)
+            .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
-/// Read a local file into raw binary bytes for frontend PDF rendering.
-/// Scoped to the app data dir — the webview must not become a general file
-/// read primitive.
-#[tauri::command]
-pub fn read_pdf_bytes(
-    path: String,
-    app_data_dir: State<'_, AppDataDir>,
-) -> Result<Vec<u8>, String> {
-    let p = std::path::Path::new(&path);
-    if !p.exists() {
-        return Err(format!("File does not exist: {}", path));
-    }
-    let allowed_root = app_data_dir.0.canonicalize().map_err(|e| e.to_string())?;
-    let requested = p
-        .canonicalize()
-        .map_err(|e| format!("Failed to resolve file: {e}"))?;
-    if !requested.starts_with(&allowed_root) {
-        return Err("File is outside the Kairo data directory".to_string());
-    }
-    // Read the canonicalized path: checking `p` but reading `requested` closes
-    // the TOCTOU window where a symlink swap between the two calls would
-    // smuggle a file in from outside the allowed root.
-    std::fs::read(&requested).map_err(|e| format!("Failed to read file: {e}"))
-}
-
-/// Reveal a file in the OS file explorer with the file selected.
-#[tauri::command]
-pub fn reveal_file(path: String) -> Result<(), String> {
+fn reveal_with_os(path: &std::path::Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("explorer")
-            .args(["/select,", &path])
+            .arg("/select,")
+            .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
-            .args(["-R", &path])
+            .arg("-R")
+            .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        if let Some(parent) = std::path::Path::new(&path).parent() {
+        if let Some(parent) = path.parent() {
             std::process::Command::new("xdg-open")
                 .arg(parent)
                 .spawn()
@@ -217,17 +241,73 @@ pub fn reveal_file(path: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Save / copy a PDF to the user's standard Downloads folder.
+/// Open a workspace's compiled PDF with the OS default application.
 #[tauri::command]
-pub fn save_pdf_to_downloads(
-    src_path: String,
-    custom_name: Option<String>,
-) -> Result<String, String> {
-    let src = std::path::Path::new(&src_path);
-    if !src.exists() {
-        return Err("Source file does not exist".to_string());
-    }
+pub fn open_job_pdf(
+    state: State<'_, DbState>,
+    job_id: i64,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<(), String> {
+    open_with_os(&resolve_job_pdf(state, job_id, app_data_dir)?)
+}
 
+/// Open a saved version's PDF copy with the OS default application.
+#[tauri::command]
+pub fn open_version_pdf(
+    state: State<'_, DbState>,
+    version_id: i64,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<(), String> {
+    open_with_os(&resolve_version_pdf(state, version_id, app_data_dir)?)
+}
+
+/// Reveal a workspace's compiled PDF in the OS file explorer.
+#[tauri::command]
+pub fn reveal_job_pdf(
+    state: State<'_, DbState>,
+    job_id: i64,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<(), String> {
+    reveal_with_os(&resolve_job_pdf(state, job_id, app_data_dir)?)
+}
+
+/// Reveal a saved version's PDF copy in the OS file explorer.
+#[tauri::command]
+pub fn reveal_version_pdf(
+    state: State<'_, DbState>,
+    version_id: i64,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<(), String> {
+    reveal_with_os(&resolve_version_pdf(state, version_id, app_data_dir)?)
+}
+
+/// Read a workspace's compiled PDF into raw bytes for frontend rendering.
+#[tauri::command]
+pub fn read_job_pdf_bytes(
+    state: State<'_, DbState>,
+    job_id: i64,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<Vec<u8>, String> {
+    let path = resolve_job_pdf(state, job_id, app_data_dir)?;
+    std::fs::read(&path).map_err(|e| format!("Failed to read file: {e}"))
+}
+
+/// Read a saved version's PDF copy into raw bytes for frontend rendering.
+#[tauri::command]
+pub fn read_version_pdf_bytes(
+    state: State<'_, DbState>,
+    version_id: i64,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<Vec<u8>, String> {
+    let path = resolve_version_pdf(state, version_id, app_data_dir)?;
+    std::fs::read(&path).map_err(|e| format!("Failed to read file: {e}"))
+}
+
+/// Copy a PDF to the user's standard Downloads folder. Never overwrites an
+/// existing file — duplicates get "name (1).ext" — and the copy lands
+/// atomically via a `.part` file so an interrupted copy cannot leave a
+/// truncated file where a good one used to be.
+fn copy_to_downloads(src: &std::path::Path, custom_name: Option<String>) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     let downloads = std::env::var("USERPROFILE")
         .map(|p| std::path::PathBuf::from(p).join("Downloads"))
@@ -254,9 +334,72 @@ pub fn save_pdf_to_downloads(
     });
     let file_name = sanitize_download_name(&raw_name)?;
 
-    let dest = downloads.join(&file_name);
-    std::fs::copy(src, &dest).map_err(|e| format!("Failed to copy to {}: {e}", dest.display()))?;
+    let mut dest = downloads.join(&file_name);
+    if dest.exists() {
+        dest = dedup_path(&downloads, &file_name);
+    }
+
+    // Copy to a sibling .part file first; only a complete copy is renamed
+    // over the destination name.
+    let part = downloads.join(format!(
+        ".{}.part",
+        dest.file_name()
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_else(|| "resume.pdf".to_string())
+    ));
+    std::fs::copy(src, &part)
+        .map_err(|e| format!("Failed to copy to {}: {e}", dest.display()))?;
+    if let Err(e) = std::fs::rename(&part, &dest) {
+        let _ = std::fs::remove_file(&part);
+        return Err(format!("Failed to save to {}: {e}", dest.display()));
+    }
     Ok(dest.to_string_lossy().to_string())
+}
+
+/// `resume.pdf` taken? Try `resume (1).pdf`, `resume (2).pdf`, …
+fn dedup_path(downloads: &std::path::Path, file_name: &str) -> std::path::PathBuf {
+    let stem = std::path::Path::new(file_name)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| file_name.to_string());
+    let ext = std::path::Path::new(file_name)
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
+    for n in 1..1000u32 {
+        let candidate = downloads.join(format!("{stem} ({n}){ext}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    // Practically unreachable; fall back to a timestamped name.
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    downloads.join(format!("{stem} ({stamp}){ext}"))
+}
+
+#[tauri::command]
+pub fn save_job_pdf_to_downloads(
+    state: State<'_, DbState>,
+    job_id: i64,
+    custom_name: Option<String>,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<String, String> {
+    let path = resolve_job_pdf(state, job_id, app_data_dir)?;
+    copy_to_downloads(&path, custom_name)
+}
+
+#[tauri::command]
+pub fn save_version_pdf_to_downloads(
+    state: State<'_, DbState>,
+    version_id: i64,
+    custom_name: Option<String>,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<String, String> {
+    let path = resolve_version_pdf(state, version_id, app_data_dir)?;
+    copy_to_downloads(&path, custom_name)
 }
 
 /// Reduces a user-supplied name to a bare file name so the destination always

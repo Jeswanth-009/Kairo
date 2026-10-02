@@ -16,7 +16,9 @@ const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.5;
 
 interface PdfViewerProps {
-  pdfPath: string;
+  /** The job workspace whose compiled PDF to render — the backend resolves
+   * and re-validates the artifact path from its own records by ID. */
+  jobId: number;
   candidateName?: string;
   className?: string;
 }
@@ -72,7 +74,7 @@ function PdfPage({
 }
 
 /** Continuous multi-page PDF preview with fit-width default and zoom. */
-export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps) {
+export function PdfViewer({ jobId, candidateName, className }: PdfViewerProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -99,7 +101,7 @@ export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps)
 
     async function loadPdf() {
       try {
-        const bytes = await ipc.readPdfBytes(pdfPath);
+        const bytes = await ipc.readJobPdfBytes(jobId);
         if (cancelled) return;
         const uint8 = new Uint8Array(bytes);
         const doc = await pdfjsLib.getDocument({ data: uint8 }).promise;
@@ -121,7 +123,7 @@ export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps)
     return () => {
       cancelled = true;
     };
-  }, [pdfPath]);
+  }, [jobId]);
 
   // Fit width on first load and on demand.
   const fitToWidth = useCallback(async (doc: pdfjsLib.PDFDocumentProxy) => {
@@ -164,7 +166,7 @@ export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps)
   const handleSaveToDownloads = async () => {
     setSavingDownload(true);
     try {
-      const savedPath = await ipc.savePdfToDownloads(pdfPath, suggestedFileName);
+      const savedPath = await ipc.saveJobPdfToDownloads(jobId, suggestedFileName);
       toast.ok(`Saved to Downloads: ${savedPath}`);
     } catch (e) {
       toast.error(`Save failed: ${String(e)}`);
@@ -173,8 +175,8 @@ export function PdfViewer({ pdfPath, candidateName, className }: PdfViewerProps)
     }
   };
 
-  const handleReveal = () => void ipc.revealFile(pdfPath).catch((e) => toast.error(String(e)));
-  const handleOpenExternal = () => void ipc.openFile(pdfPath).catch((e) => toast.error(String(e)));
+  const handleReveal = () => void ipc.revealJobPdf(jobId).catch((e) => toast.error(String(e)));
+  const handleOpenExternal = () => void ipc.openJobPdf(jobId).catch((e) => toast.error(String(e)));
 
   return (
     <div className={cn("flex flex-col overflow-hidden rounded-xl border border-line bg-card shadow-card", className)}>

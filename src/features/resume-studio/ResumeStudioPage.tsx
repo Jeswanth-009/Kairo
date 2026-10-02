@@ -668,6 +668,10 @@ export default function ResumeStudioPage() {
     { key: "projects", label: "Projects", items: plan.projects, cap: plan.config.maxProjects },
   ];
 
+  // Everything below renders per-job controls; a plan only exists once a job
+  // is selected (plans load with the job, and mutatePlan guards null).
+  if (jobId === null) return null;
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -1108,10 +1112,10 @@ export default function ResumeStudioPage() {
             </div>
           ) : null}
 
-          {previewMode === "pdf" && artifact ? (
+          {previewMode === "pdf" && artifact && jobId !== null ? (
             <PdfViewer
               key={artifact.compiledAt ?? artifact.pdfPath}
-              pdfPath={artifact.pdfPath}
+              jobId={jobId}
               candidateName={plan.header.fullName}
               className="min-h-0 flex-1"
             />
@@ -1257,8 +1261,8 @@ export default function ResumeStudioPage() {
                     className="h-7 text-[11px]"
                     onClick={() =>
                       void ipc
-                        .savePdfToDownloads(
-                          artifact.pdfPath,
+                        .saveJobPdfToDownloads(
+                          jobId,
                           `${plan.header.fullName.replace(/\s+/g, "_") || "Resume"}.pdf`,
                         )
                         .then((p) => toast.ok(`Saved copy to Downloads: ${p}`))
@@ -1271,7 +1275,7 @@ export default function ResumeStudioPage() {
                     size="sm"
                     variant="ghost"
                     className="h-7 text-[11px]"
-                    onClick={() => void ipc.revealFile(artifact.pdfPath).catch((e) => toast.error(String(e)))}
+                    onClick={() => void ipc.revealJobPdf(jobId).catch((e) => toast.error(String(e)))}
                   >
                     <FolderOpen className="size-3.5" /> Reveal
                   </Button>
@@ -1279,7 +1283,7 @@ export default function ResumeStudioPage() {
                     size="sm"
                     variant="ghost"
                     className="h-7 text-[11px]"
-                    onClick={() => void ipc.openFile(artifact.pdfPath).catch((e) => toast.error(String(e)))}
+                    onClick={() => void ipc.openJobPdf(jobId).catch((e) => toast.error(String(e)))}
                   >
                     <ExternalLink className="size-3.5" /> Open
                   </Button>
@@ -1332,7 +1336,7 @@ export default function ResumeStudioPage() {
                     <span className="text-muted">{fmtAgo(v.createdAt)}</span>
                     <button
                       type="button"
-                      onClick={() => void ipc.openFile(v.pdfPath).catch((e: unknown) => toast.error(String(e)))}
+                      onClick={() => void ipc.openVersionPdf(v.id).catch((e: unknown) => toast.error(String(e)))}
                       className="shrink-0 text-kairo-blue hover:underline"
                     >
                       Open

@@ -78,7 +78,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
 
   const openPdf = () => {
     if (!artifact) return;
-    void ipc.openFile(artifact.pdfPath).catch((e: unknown) => toast.error(String(e)));
+    void ipc.openJobPdf(jobId).catch((e: unknown) => toast.error(String(e)));
   };
 
   return (
@@ -183,7 +183,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
                   type="button"
                   onClick={() =>
                     void ipc
-                      .savePdfToDownloads(artifact.pdfPath)
+                      .saveJobPdfToDownloads(jobId)
                       .then((p) => toast.ok(`Saved to Downloads: ${p}`))
                       .catch((e) => toast.error(String(e)))
                   }
@@ -193,7 +193,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void ipc.revealFile(artifact.pdfPath).catch((e) => toast.error(String(e)))}
+                  onClick={() => void ipc.revealJobPdf(jobId).catch((e) => toast.error(String(e)))}
                   className="flex flex-1 items-center justify-center gap-1 rounded border border-line bg-accent-soft py-1 text-[11px] font-medium text-ink hover:bg-accent-soft/80"
                 >
                   <FolderOpen className="size-3.5" /> Folder
@@ -212,7 +212,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
         {!loaded ? (
           <Skeleton className="h-[600px] w-full" />
         ) : artifact ? (
-          <PdfViewer pdfPath={artifact.pdfPath} className="w-full" />
+          <PdfViewer jobId={jobId} className="w-full" />
         ) : (
           <Card className="flex min-h-[600px] items-center justify-center overflow-hidden bg-accent-soft p-0">
             <div className="flex flex-col items-center gap-3 p-8 text-center">

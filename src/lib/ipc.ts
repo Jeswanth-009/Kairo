@@ -201,16 +201,25 @@ export const ipc = {
     invoke<RestoreOk>("restore_backup", { fileName }),
   openBackupsDir: (): Promise<void> => invoke<void>("open_backups_dir"),
 
-  // PDF (Phase 9)
+  // PDF (Phase 9; artifact-scoped — paths are resolved from app records by ID)
   exportPdf: (jobId: number, templateId: string = "classic"): Promise<{ artifact: PdfArtifact; logTail: string }> =>
     invoke<{ artifact: PdfArtifact; logTail: string }>("export_pdf", { jobId, templateId }),
   getPdfArtifact: (jobId: number): Promise<PdfArtifact | null> =>
     invoke<PdfArtifact | null>("get_pdf_artifact", { jobId }),
-  openFile: (path: string): Promise<void> => invoke<void>("open_file", { path }),
-  readPdfBytes: (path: string): Promise<number[]> => invoke<number[]>("read_pdf_bytes", { path }),
-  revealFile: (path: string): Promise<void> => invoke<void>("reveal_file", { path }),
-  savePdfToDownloads: (srcPath: string, customName?: string): Promise<string> =>
-    invoke<string>("save_pdf_to_downloads", { srcPath, customName }),
+  openJobPdf: (jobId: number): Promise<void> => invoke<void>("open_job_pdf", { jobId }),
+  openVersionPdf: (versionId: number): Promise<void> =>
+    invoke<void>("open_version_pdf", { versionId }),
+  readJobPdfBytes: (jobId: number): Promise<number[]> =>
+    invoke<number[]>("read_job_pdf_bytes", { jobId }),
+  readVersionPdfBytes: (versionId: number): Promise<number[]> =>
+    invoke<number[]>("read_version_pdf_bytes", { versionId }),
+  revealJobPdf: (jobId: number): Promise<void> => invoke<void>("reveal_job_pdf", { jobId }),
+  revealVersionPdf: (versionId: number): Promise<void> =>
+    invoke<void>("reveal_version_pdf", { versionId }),
+  saveJobPdfToDownloads: (jobId: number, customName?: string): Promise<string> =>
+    invoke<string>("save_job_pdf_to_downloads", { jobId, customName }),
+  saveVersionPdfToDownloads: (versionId: number, customName?: string): Promise<string> =>
+    invoke<string>("save_version_pdf_to_downloads", { versionId, customName }),
 
   // Applications (Phase 11)
   listApplications: (): Promise<Application[]> => invoke<Application[]>("list_applications"),
