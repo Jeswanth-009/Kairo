@@ -42,7 +42,7 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
-            let conn = db::open_and_migrate(&data_dir.join("kairo.db"))?;
+            let conn = db::open_and_migrate(&data_dir.join("kairo.db"), &data_dir)?;
             if let Err(e) = logging::init(&data_dir.join("logs")) {
                 eprintln!("logging disabled: {e}");
             }

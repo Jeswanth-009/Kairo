@@ -31,20 +31,13 @@ pub fn update_job(state: State<'_, DbState>, job: jobs::Job) -> Result<jobs::Job
     jobs::update_job(&conn, &job)
 }
 
+/// Soft delete only: the row moves to the 30-day trash and the compiled PDF
+/// plus every version copy stay on disk so a restore brings the whole
+/// workspace back. Files are removed by `trash_purge` / trash expiry.
 #[tauri::command]
-pub fn delete_job(
-    state: State<'_, DbState>,
-    id: i64,
-    app_data_dir: State<'_, crate::commands::pdf_commands::AppDataDir>,
-) -> Result<MutationOk, String> {
+pub fn delete_job(state: State<'_, DbState>, id: i64) -> Result<MutationOk, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     jobs::delete_job(&conn, id)?;
-    drop(conn);
-    // Best-effort cleanup of the job's LaTeX build dir and version copies.
-    let dir = app_data_dir.0.join("pdf").join(format!("job_{id}"));
-    if dir.exists() {
-        let _ = std::fs::remove_dir_all(&dir);
-    }
     Ok(MutationOk { ok: true })
 }
 

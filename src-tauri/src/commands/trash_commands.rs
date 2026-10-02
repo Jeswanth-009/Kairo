@@ -30,14 +30,21 @@ pub fn trash_restore(
 }
 
 /// Delete forever — this is the only user-facing hard delete for vault
-/// records and jobs.
+/// records and jobs. A purged job's compiled PDF and version copies go with
+/// it; soft-deleted jobs keep their files until this point.
 #[tauri::command]
 pub fn trash_purge(
     state: State<'_, DbState>,
     entity_type: String,
     entity_id: i64,
+    app_data_dir: State<'_, crate::commands::pdf_commands::AppDataDir>,
 ) -> Result<MutationOk, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    trash::purge(&conn, &entity_type, entity_id)?;
+    trash::purge(
+        &conn,
+        &entity_type,
+        entity_id,
+        &app_data_dir.0.join("pdf"),
+    )?;
     Ok(MutationOk { ok: true })
 }

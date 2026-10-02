@@ -69,17 +69,23 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ),
 ];
 
-pub fn open_and_migrate(path: &Path) -> Result<Connection, Box<dyn Error>> {
-    if let Some(parent) = path.parent() {
+pub fn open_and_migrate(db_path: &Path, data_dir: &Path) -> Result<Connection, Box<dyn Error>> {
+    if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let conn = Connection::open(path)?;
+    let conn = Connection::open(db_path)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
     apply_migrations(&conn)?;
-    // Trash expiry runs at startup only — a failure must not block opening.
-    if let Err(e) = trash::purge_expired(&conn) {
+    // Trash expiry and orphan-file reconciliation run at startup only — a
+    // failure in either must not block opening.
+    let pdf_root = data_dir.join("pdf");
+    if let Err(e) = trash::purge_expired(&conn, &pdf_root) {
         eprintln!("[kairo] trash purge failed: {e}");
+    }
+    let orphans = trash::gc_orphan_job_dirs(&conn, &pdf_root);
+    if orphans > 0 {
+        eprintln!("[kairo] removed {orphans} orphaned job PDF directories");
     }
     Ok(conn)
 }
