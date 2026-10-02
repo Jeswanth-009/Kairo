@@ -323,6 +323,8 @@ export default function ResumeStudioPage() {
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [savingVersion, setSavingVersion] = useState(false);
   const [previewMode, setPreviewMode] = useState<"pdf" | "plan">("pdf");
+  // First version gate: the user confirms the final PDF before it's frozen.
+  const [finalReviewed, setFinalReviewed] = useState(false);
 
   const templateId = (plan?.config.templateId ?? "jake") as ResumeTemplateId;
   const paper = plan?.config.paper ?? "letter";
@@ -1305,7 +1307,7 @@ export default function ResumeStudioPage() {
             ) : null}
           </Card>
 
-          {/* Versions */}
+            {/* Versions */}
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <CardTitle>Saved versions</CardTitle>
@@ -1313,18 +1315,37 @@ export default function ResumeStudioPage() {
                 size="sm"
                 variant="secondary"
                 onClick={() => void saveVersion()}
-                disabled={savingVersion || !artifact || artifactStale}
+                disabled={savingVersion || !artifact || artifactStale || (versions.length === 0 && !finalReviewed)}
                 title={
                   !artifact
                     ? "Export the PDF first"
                     : artifactStale
                       ? "Your template/paper picks changed — recompile, then save the version"
-                      : "Freeze this plan + PDF as a version"
+                      : versions.length === 0 && !finalReviewed
+                        ? "Tick the final-review checklist below first"
+                        : "Freeze this plan + PDF as a version"
                 }
               >
                 {savingVersion ? "Saving…" : "Save version"}
               </Button>
             </div>
+            {versions.length === 0 && artifact ? (
+              <label className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-accent-soft px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+                <input
+                  type="checkbox"
+                  checked={finalReviewed}
+                  onChange={(e) => setFinalReviewed(e.target.checked)}
+                  className="mt-0.5 accent-kairo-blue"
+                />
+                <span>
+                  <span className="font-medium text-ink">Final review</span> — the PDF shows{" "}
+                  {artifact.pageCount ?? "?"} page(s) for {plan.header.fullName || "you"}; every
+                  included item carries its origin (“Imported from resume”, “Edited by you”,
+                  “Evidence attached” or “Verified by you”). I've read the actual PDF and I'm ready
+                  to freeze version 1.
+                </span>
+              </label>
+            ) : null}
             {versions.length > 0 ? (
               <ul className="mt-3 space-y-1">
                 {versions.map((v) => (
