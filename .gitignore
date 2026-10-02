@@ -23,3 +23,4 @@ tmp_baseline/
 src-tauri/gen/
 site-dist/
 dist-demo/
+.tmp-*
