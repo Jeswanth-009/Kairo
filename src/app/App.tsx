@@ -16,6 +16,7 @@ import JobWorkspacePage from "../features/jobs/JobWorkspacePage";
 import ResumeStudioPage from "../features/resume-studio/ResumeStudioPage";
 import ApplicationsPage from "../features/applications/ApplicationsPage";
 import SettingsPage from "../features/settings/SettingsPage";
+import DesignPage from "../features/design/DesignPage";
 
 const TITLES: Record<string, string> = {
   "/": "Home",
@@ -25,6 +26,7 @@ const TITLES: Record<string, string> = {
   "/resume-studio": "Resume Studio",
   "/applications": "Applications",
   "/settings": "Settings",
+  "/design": "Design system",
 };
 
 function titleFor(pathname: string): string {
@@ -73,6 +75,7 @@ export default function App() {
               <Route path="/resume-studio" element={<Navigate to="/jobs" replace />} />
               <Route path="/applications" element={<ApplicationsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/design" element={<DesignPage />} />
               {needsOnboarding ? (
                 <Route path="*" element={<Navigate to="/onboarding" replace />} />
               ) : null}

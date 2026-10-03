@@ -235,6 +235,15 @@
   animation: kairo-shimmer 1.8s linear infinite;
 }
 
+/*
+ * Type scale (Stage-2 design system): page titles 28-32px (PageHeader h2 +
+ * text-2xl where used), section titles 18-20px, body 15-16px, secondary
+ * 13-14px. Never 10-11px for instructions, status, or actions.
+ * Spacing rhythm: 8 / 12 / 16 / 24 / 32 / 48 px.
+ * The glow shadow/pulse is reserved for the splash and brand moments —
+ * everyday cards and buttons stay quiet.
+ */
+
 /* Motion policy: 160-220ms normal, 350-500ms major; respect OS reduced-motion preference. */
 @media (prefers-reduced-motion: reduce) {
   *,
