@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { Input } from "../../components/ui/inputs";
 import { TrashDialog } from "../../components/ui/TrashDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
@@ -57,11 +58,23 @@ export default function JobsPage() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Job | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     load().catch(() => { /* surfaced via store error */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const filtered = jobs.filter((j) => {
+    const q = search.trim().toLowerCase();
+    if (
+      q &&
+      !`${j.roleTitle} ${j.company}`.toLowerCase().includes(q)
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   const confirmDelete = async () => {
     if (!deleting) return;
@@ -76,18 +89,28 @@ export default function JobsPage() {
   return (
     <div className="mx-auto max-w-6xl p-8">
       <PageHeader
-        title="Job workspaces"
-        description="The exact job description is stored verbatim; requirements are only saved after your review."
+        title="Jobs"
+        description="Each workspace keeps the posting, its requirements, and the resume you build for it."
         actions={
           <>
             <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>
               Recently deleted
             </Button>
-            <Button onClick={() => setCreating(true)}>New workspace</Button>
+            <Button onClick={() => setCreating(true)}>New job</Button>
           </>
         }
       />
       <TrashDialog open={trashOpen} onClose={() => setTrashOpen(false)} />
+
+      {jobs.length > 3 ? (
+        <div className="mb-5">
+          <Input
+            value={search}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+            placeholder="Search by role or company…"
+          />
+        </div>
+      ) : null}
 
       {loadError ? (
         <div className="mb-6 rounded-xl border border-bad/25 bg-bad-soft p-4 text-sm text-bad dark:border-red-500/30 dark:bg-bad/10 dark:text-red-300">
@@ -107,11 +130,15 @@ export default function JobsPage() {
           title="Paste a job description to start a workspace."
           description="The original text is stored unchanged, then turned into an editable requirement model you can correct before anything is matched."
         >
-          <Button onClick={() => setCreating(true)}>New workspace</Button>
+          <Button onClick={() => setCreating(true)}>New job</Button>
         </EmptyState>
+      ) : filtered.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-line-strong px-4 py-6 text-center text-sm text-muted">
+          No jobs match "{search.trim()}".
+        </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {jobs.map((job) => (
+          {filtered.map((job) => (
             <JobCard
               key={job.id}
               job={job}

@@ -275,12 +275,19 @@ export function InterviewTab({ jobId }: { jobId: number }) {
 export function ApplicationTab({ job }: { job: Job }) {
   const navigate = useNavigate();
   const [applications, setApplications] = useState<Application[] | null>(null);
+  const [versions, setVersions] = useState<{ id: number; versionNumber: number }[]>([]);
   const [tracking, setTracking] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
-        setApplications(await ipc.listApplications());
+        const [apps, vers] = await Promise.all([
+          ipc.listApplications(),
+          ipc.listResumeVersions(job.id).catch(() => []),
+        ]);
+        setApplications(apps);
+        // Newest first — the default "sent" version is the latest saved.
+        setVersions([...vers].sort((a, b) => b.versionNumber - a.versionNumber));
       } catch (e) {
         toast.error(String(e));
         setApplications([]);
@@ -290,22 +297,26 @@ export function ApplicationTab({ job }: { job: Job }) {
 
   const linked = (applications ?? []).filter((a) => a.jobId === job.id);
 
-  const track = async () => {
+  const track = async (versionId: number | null) => {
     setTracking(true);
     try {
       const created = await ipc.createApplication({
         id: 0,
         jobId: job.id,
-        resumeVersionId: null,
+        resumeVersionId: versionId,
         company: job.company,
         role: job.roleTitle,
         url: job.url,
-        status: "wishlist",
-        appliedDate: null,
+        status: "applied",
+        appliedDate: new Date().toISOString().slice(0, 10),
         nextAction: "",
-        notes: "",
+        notes: versionId ? `Sent version ${versions.find((v) => v.id === versionId)?.versionNumber ?? "?"}` : "",
       });
-      toast.ok("Application tracked — update it as you progress.");
+      toast.ok(
+        versionId
+          ? "Application tracked with the selected resume version."
+          : "Application tracked — link a resume version when you send it.",
+      );
       navigate("/applications");
       void created;
     } catch (e) {
@@ -329,17 +340,25 @@ export function ApplicationTab({ job }: { job: Job }) {
               What you sent (which version) and what happened next.
             </p>
           </div>
-          {linked.length === 0 ? (
-            <Button onClick={() => void track()} disabled={tracking}>
-              {tracking ? "Tracking…" : "Track this application"}
+          {linked.length === 0 && versions.length > 0 ? (
+            <Button
+              onClick={() => void track(versions[0].id)}
+              disabled={tracking}
+            >
+              {tracking ? "Tracking…" : `Track — sent version ${versions[0].versionNumber}`}
+            </Button>
+          ) : linked.length === 0 ? (
+            <Button onClick={() => void track(null)} disabled={tracking}>
+              {tracking ? "Tracking…" : "Track without a version"}
             </Button>
           ) : null}
         </div>
 
         {linked.length === 0 ? (
           <p className="mt-4 rounded-lg border border-dashed border-line-strong px-4 py-6 text-center text-xs text-muted">
-            Not tracked yet — “Track this application” creates one for {job.roleTitle || "this role"}
-            {job.company ? ` at ${job.company}` : ""} and links it to this workspace.
+            {versions.length === 0
+              ? "Not tracked yet — save a version in the editor first, then track it here."
+              : `Not tracked yet — the latest saved version (v${versions[0].versionNumber}) will be linked.`}
           </p>
         ) : (
           <ul className="mt-4 space-y-2">
@@ -354,6 +373,11 @@ export function ApplicationTab({ job }: { job: Job }) {
                     {a.status}
                   </Badge>
                 </div>
+                {a.resumeVersionId ? (
+                  <p className="mt-0.5 text-xs text-muted">
+                    Sent: version #{versions.find((v) => v.id === a.resumeVersionId)?.versionNumber ?? a.resumeVersionId}
+                  </p>
+                ) : null}
                 {a.nextAction ? (
                   <p className="mt-1 text-xs text-muted">Next: {a.nextAction}</p>
                 ) : null}
@@ -364,7 +388,7 @@ export function ApplicationTab({ job }: { job: Job }) {
       </Card>
       <button
         type="button"
-        className="text-[11px] text-muted hover:text-ink"
+        className="text-[13px] text-muted hover:text-ink"
         onClick={() => navigate("/applications")}
       >
         Open all applications
