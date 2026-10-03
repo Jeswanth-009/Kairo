@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Routes, Route } from "react-router-dom";
 import OnboardingPage from "../features/onboarding/OnboardingPage";
 import { NewJobDialog } from "../features/jobs/NewJobDialog";
 import ResumeStudioPage from "../features/resume-studio/ResumeStudioPage";
@@ -136,6 +137,7 @@ describe("journey · creating a job", () => {
 // ---------------------------------------------------------------------------
 
 const JOB = { id: 11, company: "Acme", roleTitle: "Backend Engineer", url: "", rawJd: "jd", seniority: "", domain: "", requirementCount: 2 };
+const JOB2 = { id: 12, company: "Northwind", roleTitle: "Frontend Developer", url: "", rawJd: "jd", seniority: "", domain: "", requirementCount: 1 };
 
 const PLAN: ResumePlan = {
   composerVersion: 1,
@@ -183,7 +185,7 @@ const ARTIFACT: PdfArtifact = {
 };
 
 function studioMocks(artifact: PdfArtifact | null) {
-  mocks.listJobs = vi.fn().mockResolvedValue([JOB]);
+  mocks.listJobs = vi.fn().mockResolvedValue([JOB, JOB2]);
   mocks.getPlan = vi.fn().mockResolvedValue({ config: PLAN.config, plan: PLAN });
   mocks.tailorList = vi.fn().mockResolvedValue([]);
   mocks.getPdfArtifact = vi.fn().mockResolvedValue(artifact);
@@ -191,14 +193,25 @@ function studioMocks(artifact: PdfArtifact | null) {
   mocks.getProfile = vi.fn().mockResolvedValue(null);
   mocks.listSkills = vi.fn().mockResolvedValue([]);
   mocks.estimatePlanLines = vi.fn().mockResolvedValue(10);
-  mocks.savePlan = vi.fn().mockResolvedValue(undefined);
+  mocks.savePlan = vi.fn().mockResolvedValue({ ok: true, revision: 1 });
   mocks.getOnboardingStatus = vi.fn().mockResolvedValue({
     hasProfile: true, projectCount: 1, experienceCount: 1, educationCount: 1, skillCount: 1, jobCount: 1, hasAnyContent: true,
   });
 }
 
+/** The editor is job-scoped: journeys render it at /jobs/11/resume. */
+function renderStudioRoute() {
+  render(
+    <MemoryRouter initialEntries={["/jobs/11/resume"]}>
+      <Routes>
+        <Route path="/jobs/:jobId/resume" element={<ResumeStudioPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 async function renderStudio() {
-  renderAt(<ResumeStudioPage />);
+  renderStudioRoute();
   // The status bar is the journey's stable landmark (the page title is
   // split across header elements, so don't match on it).
   await waitFor(() => expect(screen.getByTestId("studio-status")).toBeTruthy(), {
@@ -231,6 +244,28 @@ describe("journey · editing a bullet", () => {
     fireEvent.click(screen.getByTestId("studio-undo"));
     await waitFor(() => expect(screen.getByRole("button", { name: /^exclude$/i })).toBeTruthy());
     expect((mocks.savePlan as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(saveAfterExclude);
+  });
+
+  /// Regression: undo history must be job-scoped. Editing job 11 then
+  /// switching to job 12 must disable undo — restoring job 11's plan into
+  /// job 12 would write the wrong resume into the wrong workspace.
+  it("undo never crosses jobs after a workspace switch", async () => {
+    studioMocks(ARTIFACT);
+    await renderStudio();
+
+    fireEvent.click(screen.getByRole("button", { name: /^exclude$/i }));
+    expect(
+      (screen.getByTestId("studio-undo") as HTMLButtonElement).disabled,
+    ).toBe(false);
+
+    // Switch jobs via the header Select (the first combobox on the page).
+    const jobSelect = screen.getAllByRole("combobox")[0] as HTMLSelectElement;
+    fireEvent.change(jobSelect, { target: { value: "12" } });
+    await waitFor(() =>
+      expect(
+        (screen.getByTestId("studio-undo") as HTMLButtonElement).disabled,
+      ).toBe(true),
+    );
   });
 
   it("editing content after an export flips the status to PDF needs update", async () => {

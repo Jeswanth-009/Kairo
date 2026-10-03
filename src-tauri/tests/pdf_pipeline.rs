@@ -111,6 +111,7 @@ fn compile_locked_produces_valid_pdf() {
         "jake",
         &candidate,
         &out_dir.parent().unwrap().join("kairo-pdf-root"),
+        None,
         &|_line| {},
     )
     .unwrap_or_else(|e| {
@@ -127,6 +128,7 @@ fn compile_locked_produces_valid_pdf() {
                     paper: String::new(),
                     fingerprint: None,
                     pdf_hash: None,
+                    artifact_plan_revision: None,
                 },
                 log_tail: String::new(),
             };

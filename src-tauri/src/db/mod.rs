@@ -16,6 +16,7 @@ pub mod backup;
 pub mod composer;
 pub mod dashboard;
 pub mod fingerprint;
+pub mod import_batch;
 pub mod interview;
 pub mod jobs;
 pub mod matching;
@@ -76,6 +77,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
     (
         "0014_record_origin",
         include_str!("../../migrations/0014_record_origin.sql"),
+    ),
+    (
+        "0015_plan_revisions",
+        include_str!("../../migrations/0015_plan_revisions.sql"),
     ),
 ];
 
@@ -155,7 +160,8 @@ mod tests {
                 "0011_artifact_template".to_string(),
                 "0012_soft_delete".to_string(),
                 "0013_artifact_fingerprints".to_string(),
-                "0014_record_origin".to_string()
+                "0014_record_origin".to_string(),
+                "0015_plan_revisions".to_string()
             ]
         );
     }
@@ -166,7 +172,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
-        assert_eq!(names.len(), 14);
+        assert_eq!(names.len(), 15);
     }
 
     #[test]
@@ -224,7 +230,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
         assert_eq!(names.len(), MIGRATIONS.len());
-        assert_eq!(names.last().unwrap(), "0014_record_origin");
+        assert_eq!(names.last().unwrap(), "0015_plan_revisions");
 
         // Pre-upgrade data survives byte-for-byte.
         let title: String = conn

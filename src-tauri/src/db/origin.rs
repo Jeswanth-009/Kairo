@@ -144,7 +144,7 @@ pub struct JobHomeRow {
 /// The Home page derives the next specific action from `pdf_state`.
 pub fn home_overview(conn: &Connection) -> Result<Vec<JobHomeRow>, String> {
     let mut stmt = sql_err(conn.prepare(
-        "SELECT j.id, j.role_title, j.company, p.plan_json,                 p.updated_at, p.compiled_at, p.artifact_template_id, p.artifact_paper, p.config_json,                 COALESCE(p.updated_at, p.compiled_at, j.created_at, '')          FROM jobs j LEFT JOIN resume_plans p ON p.job_id = j.id          WHERE j.deleted_at IS NULL          ORDER BY COALESCE(p.updated_at, p.compiled_at, j.created_at, '') DESC, j.id DESC",
+        "SELECT j.id, j.role_title, j.company, p.plan_json,                 p.updated_at, p.compiled_at, p.artifact_template_id, p.artifact_paper, p.config_json,                 p.plan_revision, p.artifact_plan_revision,                 COALESCE(p.updated_at, p.compiled_at, j.created_at, '')          FROM jobs j LEFT JOIN resume_plans p ON p.job_id = j.id          WHERE j.deleted_at IS NULL AND j.kind = 'role'          ORDER BY COALESCE(p.updated_at, p.compiled_at, j.created_at, '') DESC, j.id DESC",
     ))?;
     let rows = sql_err(stmt.query_map([], |row| {
         Ok((
@@ -157,7 +157,9 @@ pub fn home_overview(conn: &Connection) -> Result<Vec<JobHomeRow>, String> {
             row.get::<_, Option<String>>(6)?,
             row.get::<_, Option<String>>(7)?,
             row.get::<_, Option<String>>(8)?,
-            row.get::<_, String>(9)?,
+            row.get::<_, Option<i64>>(9)?,
+            row.get::<_, Option<i64>>(10)?,
+            row.get::<_, String>(11)?,
         ))
     }))?;
 
@@ -173,14 +175,26 @@ pub fn home_overview(conn: &Connection) -> Result<Vec<JobHomeRow>, String> {
             artifact_template,
             artifact_paper,
             config_json,
+            plan_revision,
+            artifact_plan_revision,
             last_activity,
         ) = sql_err(row)?;
         let has_plan = plan_json.is_some();
         let pdf_state = match compiled_at.as_deref() {
             None => "missing".to_string(),
-            Some(compiled) => {
-                // Content edited after the compile…
-                let content_stale = updated_at.as_deref().map(|u| u > compiled).unwrap_or(false);
+            Some(_) => {
+                // Revision comparison is authoritative when both sides have
+                // one (post-0015): the artifact is stale iff the plan moved
+                // past the revision it was compiled from. Legacy rows fall
+                // back to the second-resolution timestamp compare.
+                let revision_stale = match (plan_revision, artifact_plan_revision) {
+                    (Some(plan), Some(artifact)) if plan > 0 => plan != artifact,
+                    _ => updated_at
+                        .as_deref()
+                        .zip(compiled_at.as_deref())
+                        .map(|(u, c)| u > c)
+                        .unwrap_or(false),
+                };
                 // …or the template/paper picks moved on from the artifact.
                 let design = config_json
                     .as_deref()
@@ -199,7 +213,7 @@ pub fn home_overview(conn: &Connection) -> Result<Vec<JobHomeRow>, String> {
                 let paper = artifact_paper.as_deref().unwrap_or("");
                 let design_stale = (!template.is_empty() && template != wanted_template)
                     || (!paper.is_empty() && paper != wanted_paper);
-                if content_stale || design_stale {
+                if revision_stale || design_stale {
                     "stale".to_string()
                 } else {
                     "current".to_string()

@@ -26,8 +26,8 @@ function deferredCalls(): Deferred[] {
   const calls: Deferred[] = [];
   savePlan.mockImplementation(
     () =>
-      new Promise<void>((resolve, reject) => {
-        calls.push({ resolve, reject });
+      new Promise<{ ok: boolean; revision: number }>((resolve, reject) => {
+        calls.push({ resolve: () => resolve({ ok: true, revision: 1 }), reject });
       }),
   );
   return calls;
@@ -43,7 +43,7 @@ const settle = async () => {
 beforeEach(() => {
   resetPlanSaves();
   savePlan.mockReset();
-  savePlan.mockResolvedValue(undefined);
+  savePlan.mockResolvedValue({ ok: true, revision: 1 });
 });
 
 describe("planAutosave", () => {

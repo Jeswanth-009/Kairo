@@ -7,7 +7,9 @@
 //! and a panic inside a parser can no longer unwind through the Windows event
 //! loop and kill the whole app (v4 regression).
 
+use crate::db::DbState;
 use crate::imports;
+use tauri::State;
 
 /// Hard cap for pasted text. Anything beyond this is rejected with a clear
 /// message instead of being parsed (guards IPC payload size and pathological
@@ -47,6 +49,18 @@ pub async fn github_repo_candidate(
     tauri::async_runtime::spawn_blocking(move || imports::github_repo_candidate(&owner, &repo))
         .await
         .map_err(|e| format!("Import task failed: {e}"))?
+}
+
+/// Saves a whole reviewed import in ONE transaction — profile, skills and
+/// every accepted record with correct skill links. Any failure rolls back
+/// everything; the returned ids let the UI mark individual facts verified.
+#[tauri::command]
+pub async fn import_resume_batch(
+    state: State<'_, DbState>,
+    batch: crate::db::import_batch::ImportBatch,
+) -> Result<crate::db::import_batch::ImportBatchResult, String> {
+    let mut conn = state.0.lock().map_err(|_| "database lock poisoned")?;
+    crate::db::import_batch::import_resume_batch(&mut conn, &batch)
 }
 
 #[cfg(test)]

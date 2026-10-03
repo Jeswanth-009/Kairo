@@ -14,7 +14,7 @@ describe("SaveStatusChip", () => {
   beforeEach(() => {
     resetPlanSaves();
     savePlan.mockReset();
-    savePlan.mockResolvedValue(undefined);
+    savePlan.mockResolvedValue({ ok: true, revision: 1 });
   });
 
   afterEach(cleanup);
@@ -28,8 +28,8 @@ describe("SaveStatusChip", () => {
     let resolveSave!: () => void;
     savePlan.mockImplementation(
       () =>
-        new Promise<void>((res) => {
-          resolveSave = res;
+        new Promise<{ ok: boolean; revision: number }>((res) => {
+          resolveSave = () => res({ ok: true, revision: 1 });
         }),
     );
     render(<SaveStatusChip jobId={2} />);
@@ -51,11 +51,11 @@ describe("SaveStatusChip", () => {
     savePlan
       .mockImplementationOnce(
         () =>
-          new Promise<void>((_, reject) => {
+          new Promise<{ ok: boolean; revision: number }>((_, reject) => {
             rejectSave = reject;
           }),
       )
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce({ ok: true, revision: 1 });
     render(<SaveStatusChip jobId={3} />);
 
     await act(async () => {

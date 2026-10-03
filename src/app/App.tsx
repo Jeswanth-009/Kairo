@@ -68,7 +68,9 @@ export default function App() {
               <Route path="/interview" element={<Navigate to="/jobs" replace />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/:jobId" element={<JobWorkspacePage />} />
-              <Route path="/resume-studio" element={<ResumeStudioPage />} />
+              <Route path="/jobs/:jobId/resume" element={<ResumeStudioPage />} />
+              {/* Legacy global link: the editor is job-scoped now. */}
+              <Route path="/resume-studio" element={<Navigate to="/jobs" replace />} />
               <Route path="/applications" element={<ApplicationsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               {needsOnboarding ? (

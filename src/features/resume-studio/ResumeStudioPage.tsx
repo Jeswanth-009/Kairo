@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ChevronDown,
   ChevronUp,
@@ -316,8 +316,13 @@ function PlanPreview({
 
 export default function ResumeStudioPage() {
   const navigate = useNavigate();
+  // Job-scoped routing: the editor always belongs to the job in the URL.
+  // No param is treated as a navigation mistake — never silently open the
+  // first job in the list (that is how users edit the wrong resume).
+  const params = useParams();
+  const routeJobId = params.jobId ? Number(params.jobId) : null;
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [jobId, setJobId] = useState<number | null>(null);
+  const [jobId, setJobId] = useState<number | null>(routeJobId);
   const [plan, setPlan] = useState<ResumePlan | null>(null);
   const [suggestions, setSuggestions] = useState<TailorSuggestion[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -372,14 +377,23 @@ export default function ResumeStudioPage() {
       try {
         const list = await ipc.listJobs();
         setJobs(list);
-        if (list.length > 0) setJobId(list[0].id);
+        if (routeJobId === null) {
+          // No job in the URL: route to the Jobs list instead of guessing.
+          navigate("/jobs");
+          toast.error("Open the Resume Studio from a specific job workspace.");
+          return;
+        }
+        if (!list.some((j) => j.id === routeJobId)) {
+          toast.error("That job workspace no longer exists.");
+          navigate("/jobs");
+        }
       } catch (e) {
         toast.error(String(e));
       } finally {
         setLoaded(true);
       }
     })();
-  }, []);
+  }, [routeJobId]);
 
   // Stale-response guard: rapidly switching jobs must never interleave
   // plan/artifact/version state from two different workspaces.
@@ -392,6 +406,13 @@ export default function ResumeStudioPage() {
     if (jobId === null) return;
     const seq = ++loadSeq.current;
     planRef.current = null;
+    // Everything session-scoped belongs to the job, not the page: undo
+    // history and export state must never leak across workspaces.
+    historyRef.current = [];
+    setCanUndo(false);
+    setFinalReviewed(false);
+    setEditedSinceExport(false);
+    setExportFailed(false);
     void (async () => {
       try {
         const stored = await ipc.getPlan(jobId);
@@ -588,11 +609,15 @@ export default function ResumeStudioPage() {
     if (jobId === null) return;
     setExporting(true);
     try {
-      const result = await ipc.exportPdf(jobId, templateId);
+      // Export must describe the SAVED draft: flush the queue first, then
+      // pass the persisted revision so the backend refuses a stale compile.
+      const { revision } = await flushPlanSave(jobId);
+      const result = await ipc.exportPdf(jobId, templateId, revision ?? undefined);
       setArtifact(result.artifact);
       setPreviewMode("pdf");
       setExportFailed(false);
       setEditedSinceExport(false);
+      setFinalReviewed(false);
       toast.ok(`PDF compiled — ${result.artifact.pageCount ?? "?"} page(s)`);
     } catch (e) {
       // The staging export never touched the previous good PDF — say so.
@@ -1223,7 +1248,7 @@ export default function ResumeStudioPage() {
 
           {previewMode === "pdf" && artifact && jobId !== null ? (
             <PdfViewer
-              key={artifact.compiledAt ?? artifact.pdfPath}
+              key={artifact.pdfHash ?? artifact.compiledAt ?? artifact.pdfPath}
               jobId={jobId}
               candidateName={plan.header.fullName}
               className="min-h-0 flex-1"

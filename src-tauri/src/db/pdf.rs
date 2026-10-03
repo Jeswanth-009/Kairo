@@ -31,12 +31,27 @@ pub struct PdfArtifact {
     /// SHA-256 of the generated PDF file at export time.
     #[serde(default)]
     pub pdf_hash: Option<String>,
+    /// Plan revision this PDF was compiled from (null for pre-15 rows).
+    #[serde(default)]
+    pub artifact_plan_revision: Option<i64>,
+}
+
+/// Resolves a stored artifact path. Rows written since migration 0015 hold
+/// paths relative to the app data dir (portable across machines and
+/// restores); older rows may hold absolute paths, which still work.
+pub fn resolve_artifact_path(app_data_dir: &Path, stored: &str) -> PathBuf {
+    let p = Path::new(stored);
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        app_data_dir.join(p)
+    }
 }
 
 pub fn get_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfArtifact>, String> {
     let mut stmt = sql_err(conn.prepare(
         "SELECT job_id, tex_path, pdf_path, page_count, compiled_at, artifact_template_id, artifact_paper, \
-         compiled_fingerprint, pdf_hash \
+         compiled_fingerprint, pdf_hash, artifact_plan_revision \
          FROM resume_plans WHERE job_id = ?1 AND pdf_path IS NOT NULL",
     ))?;
     match stmt.query_row([job_id], |row| {
@@ -50,6 +65,7 @@ pub fn get_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfArtifact
             paper: row.get(6)?,
             fingerprint: row.get(7)?,
             pdf_hash: row.get(8)?,
+            artifact_plan_revision: row.get(9)?,
         })
     }) {
         Ok(a) => Ok(Some(a)),
@@ -62,8 +78,8 @@ pub fn save_artifact(conn: &Connection, artifact: &PdfArtifact) -> Result<(), St
     sql_err(conn.execute(
         "UPDATE resume_plans SET pdf_path = ?1, tex_path = ?2, page_count = ?3, \
            artifact_template_id = ?4, artifact_paper = ?5, \
-           compiled_fingerprint = ?6, pdf_hash = ?7, \
-           compiled_at = datetime('now') WHERE job_id = ?8",
+           compiled_fingerprint = ?6, pdf_hash = ?7, artifact_plan_revision = ?8, \
+           compiled_at = datetime('now') WHERE job_id = ?9",
         params![
             artifact.pdf_path,
             artifact.tex_path,
@@ -72,6 +88,7 @@ pub fn save_artifact(conn: &Connection, artifact: &PdfArtifact) -> Result<(), St
             artifact.paper,
             artifact.fingerprint,
             artifact.pdf_hash,
+            artifact.artifact_plan_revision,
             artifact.job_id
         ],
     ))?;
@@ -251,6 +268,7 @@ pub fn compile_locked(
     template_id: &str,
     tectonic: &Path,
     app_data_dir: &Path,
+    plan_revision: Option<i64>,
     on_line: &dyn Fn(&str),
 ) -> Result<CompileOutput, String> {
     let tex = crate::latex::render_plan(&plan, template_id);
@@ -273,17 +291,24 @@ pub fn compile_locked(
             ))
         })?;
 
+    // Store paths relative to the app data dir so backups restore portable.
+    let relativize = |p: &Path| -> String {
+        p.strip_prefix(app_data_dir)
+            .map(|r| r.to_string_lossy().to_string())
+            .unwrap_or_else(|_| p.to_string_lossy().to_string())
+    };
     Ok(CompileOutput {
         artifact: PdfArtifact {
             job_id,
-            tex_path: tex_path.display().to_string(),
-            pdf_path: pdf_path.display().to_string(),
+            tex_path: relativize(&tex_path),
+            pdf_path: relativize(&pdf_path),
             page_count,
             compiled_at: None,
             template_id: template_id.to_string(),
             paper,
             fingerprint: None,
             pdf_hash: Some(pdf_hash),
+            artifact_plan_revision: plan_revision,
         },
         log_tail,
     })

@@ -113,7 +113,13 @@ fn vault_get_opt<E: VaultEntity>(conn: &Connection, id: i64) -> Result<Option<E>
     }
 }
 
-pub fn vault_create<E: VaultEntity>(conn: &Connection, value: &E) -> Result<E, String> {
+/// Insert core without opening its own transaction — `vault_create` wraps
+/// this in one; batch imports call it on a shared transaction so a whole
+/// import commits or rolls back together.
+pub(crate) fn insert_entity_tx<E: VaultEntity>(
+    conn: &Connection,
+    value: &E,
+) -> Result<i64, String> {
     value.validate()?;
     let cols = E::INSERT_COLS.join(", ");
     let placeholders = (1..=E::INSERT_COLS.len())
@@ -127,11 +133,15 @@ pub fn vault_create<E: VaultEntity>(conn: &Connection, value: &E) -> Result<E, S
         placeholders
     );
     let values: Vec<Value> = value.values().iter().map(|v| v.to_value()).collect();
+    sql_err(conn.execute(&sql, params_from_iter(values.iter())))?;
+    let id = conn.last_insert_rowid();
+    E::after_write(conn, id, value)?;
+    Ok(id)
+}
 
+pub fn vault_create<E: VaultEntity>(conn: &Connection, value: &E) -> Result<E, String> {
     let tx = sql_err(conn.unchecked_transaction())?;
-    sql_err(tx.execute(&sql, params_from_iter(values.iter())))?;
-    let id = tx.last_insert_rowid();
-    E::after_write(&tx, id, value)?;
+    let id = insert_entity_tx::<E>(&tx, value)?;
     sql_err(tx.commit())?;
     vault_get::<E>(conn, id)
 }
@@ -343,7 +353,7 @@ where
     Ok(())
 }
 
-fn write_links(
+pub(crate) fn write_links(
     conn: &Connection,
     entity_type: &str,
     entity_id: i64,
@@ -1054,6 +1064,15 @@ pub fn get_profile(conn: &Connection) -> Result<Option<Profile>, String> {
 }
 
 pub fn upsert_profile(conn: &Connection, profile: &Profile) -> Result<Profile, String> {
+    validate_profile(profile)?;
+    let tx = sql_err(conn.unchecked_transaction())?;
+    upsert_profile_tx(&tx, profile)?;
+    sql_err(tx.commit())?;
+    get_profile(conn)?.ok_or_else(|| "profile row just written could not be read back".to_string())
+}
+
+/// Validation shared by `upsert_profile` and batch imports.
+fn validate_profile(profile: &Profile) -> Result<(), String> {
     for (label, value) in [
         ("Name", profile.full_name.as_str()),
         ("Email", profile.email.as_str()),
@@ -1062,8 +1081,13 @@ pub fn upsert_profile(conn: &Connection, profile: &Profile) -> Result<Profile, S
     }
     valid_url(&profile.website, "Website")?;
     valid_url(&profile.github, "GitHub URL")?;
-    valid_url(&profile.linkedin, "LinkedIn URL")?;
+    valid_url(&profile.linkedin, "LinkedIn URL")
+}
 
+/// Profile write core without its own transaction — batch imports call this
+/// on a shared transaction so everything commits or rolls back together.
+pub(crate) fn upsert_profile_tx(conn: &Connection, profile: &Profile) -> Result<(), String> {
+    validate_profile(profile)?;
     let values: Vec<Value> = PROFILE_COLS
         .iter()
         .map(|col| Value::Text(profile_field(profile, col)))
@@ -1075,13 +1099,12 @@ pub fn upsert_profile(conn: &Connection, profile: &Profile) -> Result<Profile, S
         .collect::<Vec<_>>()
         .join(", ");
     let existing: i64 = sql_err(conn.query_row("SELECT COUNT(*) FROM profiles", [], |r| r.get(0)))?;
-    let tx = sql_err(conn.unchecked_transaction())?;
     if existing > 0 {
         let sql = format!(
             "UPDATE profiles SET {}, updated_at = datetime('now') WHERE id = (SELECT MIN(id) FROM profiles)",
             assignments
         );
-        sql_err(tx.execute(&sql, params_from_iter(values.iter())))?;
+        sql_err(conn.execute(&sql, params_from_iter(values.iter())))?;
     } else {
         let cols = PROFILE_COLS.join(", ");
         let placeholders = (1..=PROFILE_COLS.len())
@@ -1089,10 +1112,9 @@ pub fn upsert_profile(conn: &Connection, profile: &Profile) -> Result<Profile, S
             .collect::<Vec<_>>()
             .join(", ");
         let sql = format!("INSERT INTO profiles ({cols}) VALUES ({placeholders})");
-        sql_err(tx.execute(&sql, params_from_iter(values.iter())))?;
+        sql_err(conn.execute(&sql, params_from_iter(values.iter())))?;
     }
-    sql_err(tx.commit())?;
-    get_profile(conn)?.ok_or_else(|| "profile row just written could not be read back".to_string())
+    Ok(())
 }
 
 fn profile_field(profile: &Profile, column: &str) -> String {

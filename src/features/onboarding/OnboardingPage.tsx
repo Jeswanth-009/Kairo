@@ -120,7 +120,8 @@ export default function OnboardingPage() {
         <DraftStep
           jobId={jobId}
           onContinue={() => {
-            void navigate("/resume-studio");
+            if (jobId !== null) navigate(`/jobs/${jobId}/resume`);
+            else navigate("/jobs");
           }}
         />
       ) : null}
@@ -1125,7 +1126,7 @@ function DraftStep({ jobId, onContinue }: { jobId: number | null; onContinue: ()
           There was nothing to select yet — add records in the Vault and compose again from the
           Studio. You can also write bullets manually there.
           <div className="mt-3">
-            <Button onClick={onContinue}>Continue to the Studio</Button>
+            <Button onClick={onContinue}>Continue</Button>
           </div>
         </Card>
       ) : (

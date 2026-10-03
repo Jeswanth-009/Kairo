@@ -111,6 +111,7 @@ pub fn run() {
             commands::import_commands::parse_resume_text,
             commands::import_commands::parse_certificate_text,
             commands::import_commands::github_repo_candidate,
+            commands::import_commands::import_resume_batch,
             commands::job_commands::list_jobs,
             commands::job_commands::get_job,
             commands::job_commands::update_job,

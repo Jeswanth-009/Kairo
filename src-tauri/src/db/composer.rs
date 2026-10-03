@@ -387,20 +387,16 @@ fn assemble(
     })
 }
 
+/// Persists a plan and returns the new monotonic `plan_revision` — the token
+/// the editor and exporter use to prove which saved draft a PDF came from.
 pub fn save_plan(
     conn: &Connection,
     job_id: i64,
     config: &ComposerConfig,
     plan: &ResumePlan,
-) -> Result<(), String> {
+) -> Result<i64, String> {
     sql_err(conn.execute(
-        "INSERT INTO resume_plans (job_id, config_json, plan_json, composer_version) \
-         VALUES (?1, ?2, ?3, ?4) \
-         ON CONFLICT(job_id) DO UPDATE SET \
-           config_json = excluded.config_json, \
-           plan_json = excluded.plan_json, \
-           composer_version = excluded.composer_version, \
-           updated_at = datetime('now')",
+        "INSERT INTO resume_plans (job_id, config_json, plan_json, composer_version, plan_revision)          VALUES (?1, ?2, ?3, ?4, 1)          ON CONFLICT(job_id) DO UPDATE SET            config_json = excluded.config_json,            plan_json = excluded.plan_json,            composer_version = excluded.composer_version,            plan_revision = resume_plans.plan_revision + 1,            updated_at = datetime('now')",
         params![
             job_id,
             serde_json::to_string(config).map_err(|e| e.to_string())?,
@@ -408,9 +404,13 @@ pub fn save_plan(
             plan.composer_version
         ],
     ))?;
-    Ok(())
+    let revision: i64 = sql_err(conn.query_row(
+        "SELECT plan_revision FROM resume_plans WHERE job_id = ?1",
+        [job_id],
+        |r| r.get(0),
+    ))?;
+    Ok(revision)
 }
-
 #[derive(Debug, Clone, Serialize)]
 pub struct StoredPlan {
     pub config: ComposerConfig,
@@ -419,21 +419,25 @@ pub struct StoredPlan {
     /// when content changed after the export.
     #[serde(default)]
     pub updated_at: Option<String>,
+    /// Monotonic token incremented on every save; the PDF records the
+    /// revision it was compiled from.
+    #[serde(default)]
+    pub plan_revision: i64,
 }
 
 pub fn get_plan(conn: &Connection, job_id: i64) -> Result<Option<StoredPlan>, String> {
-    let mut stmt =
-        sql_err(conn.prepare(
-            "SELECT config_json, plan_json, updated_at FROM resume_plans WHERE job_id = ?1",
-        ))?;
+    let mut stmt = sql_err(conn.prepare(
+        "SELECT config_json, plan_json, updated_at, plan_revision FROM resume_plans WHERE job_id = ?1",
+    ))?;
     match stmt.query_row([job_id], |row| {
         Ok((
             row.get::<_, String>(0)?,
             row.get::<_, String>(1)?,
             row.get::<_, Option<String>>(2)?,
+            row.get::<_, i64>(3)?,
         ))
     }) {
-        Ok((config_json, plan_json, updated_at)) => {
+        Ok((config_json, plan_json, updated_at, plan_revision)) => {
             let config: ComposerConfig =
                 serde_json::from_str(&config_json).map_err(|e| e.to_string())?;
             let plan: ResumePlan = serde_json::from_str(&plan_json).map_err(|e| e.to_string())?;
@@ -441,13 +445,13 @@ pub fn get_plan(conn: &Connection, job_id: i64) -> Result<Option<StoredPlan>, St
                 config,
                 plan,
                 updated_at,
+                plan_revision,
             }))
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
 }
-
 /// Entry point used by the command: load → compose → persist.
 pub fn run_composer(
     conn: &Connection,
@@ -456,7 +460,7 @@ pub fn run_composer(
 ) -> Result<ResumePlan, String> {
     let input = load_composer_input(conn, job_id, config)?;
     let plan = compose(&input);
-    save_plan(conn, job_id, config, &plan)?;
+    let _revision = save_plan(conn, job_id, config, &plan)?;
     Ok(plan)
 }
 

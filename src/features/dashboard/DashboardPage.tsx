@@ -190,18 +190,19 @@ function GettingStarted() {
 
 /** The next specific action for a job, derived from its resume state. */
 function nextActionFor(job: JobHomeRow): { label: string; to: string } {
+  const editor = `/jobs/${job.jobId}/resume`;
   if (job.pdfState === "missing") {
     return job.hasPlan
-      ? { label: "Compile the resume you planned", to: "/resume-studio" }
-      : { label: "Compose the resume from your Vault", to: "/resume-studio" };
+      ? { label: "Compile the resume you planned", to: editor }
+      : { label: "Compose the resume from your Vault", to: editor };
   }
   if (job.pdfState === "stale") {
     return {
       label: "Recompile — your edits came after the last export",
-      to: "/resume-studio",
+      to: editor,
     };
   }
-  return { label: "Review the current PDF and save a version", to: "/resume-studio" };
+  return { label: "Review the current PDF and save a version", to: editor };
 }
 
 function ContinueCard({

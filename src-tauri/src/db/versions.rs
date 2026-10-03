@@ -167,7 +167,9 @@ pub fn create_version(
                 .to_string(),
         );
     }
-    let pdf_src = std::path::PathBuf::from(&artifact.pdf_path);
+    // Resolve the artifact's stored path (relative since migration 0015,
+    // absolute for legacy rows) against the app data dir.
+    let pdf_src = super::pdf::resolve_artifact_path(app_data_dir, &artifact.pdf_path);
     if !pdf_src.is_file() {
         return Err(
             "The compiled PDF is missing on disk — recompile before saving a version".to_string(),
@@ -193,15 +195,16 @@ pub fn create_version(
     // 4. Copy the PDF into a version-owned directory (immutability). The
     //    copy lands via a `.part` rename so a half-written file can never
     //    occupy the version's permanent name, and the row is only inserted
-    //    once the copy is complete.
-    let version_dir = app_data_dir
-        .join("pdf")
-        .join(format!("job_{job_id}"))
-        .join("versions")
-        .join(format!("v{next}"));
+    //    once the copy is complete. The stored path is relative to the app
+    //    data dir so backups restore portable.
+    let version_rel = format!("pdf/job_{job_id}/versions/v{next}/resume.pdf");
+    let version_pdf = app_data_dir.join(&version_rel);
+    let version_dir = version_pdf
+        .parent()
+        .ok_or_else(|| "could not resolve version dir".to_string())?
+        .to_path_buf();
     std::fs::create_dir_all(&version_dir)
         .map_err(|e| format!("could not create version dir: {e}"))?;
-    let version_pdf = version_dir.join("resume.pdf");
     let copy = (|| -> Result<(), String> {
         let part = version_dir.join("resume.pdf.part");
         std::fs::copy(&pdf_src, &part).map_err(|e| {
@@ -232,7 +235,7 @@ pub fn create_version(
             .unwrap_or(0),
         composer_version: stored_plan.plan.composer_version,
         template_version: TEMPLATE_VERSION,
-        pdf_path: version_pdf.display().to_string(),
+        pdf_path: version_rel.clone(),
     };
     let snapshot_json = serde_json::to_string(&snapshot).map_err(|e| e.to_string())?;
 
@@ -243,7 +246,7 @@ pub fn create_version(
             job_id,
             next as i64,
             snapshot_json,
-            version_pdf.display().to_string(),
+            version_rel,
             exported_fingerprint,
             pdf_hash
         ],

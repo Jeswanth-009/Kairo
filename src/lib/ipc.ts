@@ -166,7 +166,7 @@ export const ipc = {
       "get_plan",
       { jobId },
     ),
-  savePlan: (jobId: number, plan: ResumePlan): Promise<void> =>
+  savePlan: (jobId: number, plan: ResumePlan): Promise<{ ok: boolean; revision: number }> =>
     invoke("save_plan", { jobId, plan }),
   estimatePlanLines: (plan: ResumePlan): Promise<number> =>
     invoke<number>("estimate_plan_lines", { plan }),
@@ -209,8 +209,16 @@ export const ipc = {
   openBackupsDir: (): Promise<void> => invoke<void>("open_backups_dir"),
 
   // PDF (Phase 9; artifact-scoped — paths are resolved from app records by ID)
-  exportPdf: (jobId: number, templateId: string = "classic"): Promise<{ artifact: PdfArtifact; logTail: string }> =>
-    invoke<{ artifact: PdfArtifact; logTail: string }>("export_pdf", { jobId, templateId }),
+  exportPdf: (
+    jobId: number,
+    templateId: string = "classic",
+    expectedRevision?: number,
+  ): Promise<{ artifact: PdfArtifact; logTail: string }> =>
+    invoke<{ artifact: PdfArtifact; logTail: string }>("export_pdf", {
+      jobId,
+      templateId,
+      expectedRevision,
+    }),
   getPdfArtifact: (jobId: number): Promise<PdfArtifact | null> =>
     invoke<PdfArtifact | null>("get_pdf_artifact", { jobId }),
   openJobPdf: (jobId: number): Promise<void> => invoke<void>("open_job_pdf", { jobId }),

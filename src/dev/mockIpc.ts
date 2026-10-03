@@ -120,7 +120,7 @@ const handlers: Record<string, Handler> = {
   get_plan: () => ({ config: plan.config, plan }),
   save_plan: (a) => {
     Object.assign(plan, a.plan);
-    return { ok: true };
+    return { ok: true, revision: 1 };
   },
   estimate_plan_lines: (a) => estimateLines(a.plan as typeof mockPlan),
 
@@ -438,6 +438,17 @@ const handlers: Record<string, Handler> = {
   parse_resume_text: (a) => parseResume(String(a.text ?? "")),
   parse_certificate_text: (a) => parseCertificate(String(a.text ?? "")),
   github_repo_candidate: (a) => parseGithubRepo(String(a.owner ?? ""), String(a.repo ?? "")),
+  import_resume_batch: (a) => {
+    const b = (a.batch ?? {}) as Record<string, unknown[] | undefined>;
+    return {
+      profileSaved: Boolean(b.profile),
+      projectIds: (b.projects ?? []).map((_v, i) => 100 + i),
+      experienceIds: (b.experiences ?? []).map((_v, i) => 200 + i),
+      educationIds: (b.education ?? []).map((_v, i) => 300 + i),
+      achievementIds: (b.achievements ?? []).map((_v, i) => 400 + i),
+      skillIds: (b.skills ?? []).map((_v, i) => 500 + i),
+    };
+  },
 };
 
 export function installMockIpc() {

@@ -27,6 +27,8 @@ type JobQueue = {
   inFlight: boolean;
   /** Serializes the writer loop — never more than one save per job at once. */
   chain: Promise<void>;
+  /** Backend revision of the last successful save (proof for exports). */
+  revision: number | null;
 };
 
 const queues = new Map<number, JobQueue>();
@@ -53,7 +55,8 @@ function pump(jobId: number) {
       // edits coalesces into a single save carrying the newest plan.
       const snapshot = queue.plan;
       queue.dirty = false;
-      await ipc.savePlan(jobId, snapshot);
+      const saved = await ipc.savePlan(jobId, snapshot);
+      queue.revision = saved.revision;
       queue.inFlight = false;
       if (queue.dirty) {
         // Edits landed while saving — persist the newest snapshot now.
@@ -75,7 +78,13 @@ function pump(jobId: number) {
 export function enqueuePlanSave(jobId: number, plan: ResumePlan): void {
   const queue = queues.get(jobId);
   if (!queue) {
-    queues.set(jobId, { plan, dirty: true, inFlight: false, chain: Promise.resolve() });
+    queues.set(jobId, {
+      plan,
+      dirty: true,
+      inFlight: false,
+      chain: Promise.resolve(),
+      revision: null,
+    });
   } else {
     queue.plan = plan;
     queue.dirty = true;
@@ -90,12 +99,14 @@ export function retryPlanSave(jobId: number): void {
 }
 
 /**
- * Resolves once nothing is queued or in flight for `jobId` — used by flows
- * that must observe a persisted plan (e.g. Sync from Vault's toast).
+ * Resolves once nothing is queued or in flight for `jobId`, returning the
+ * persisted revision the flow can pass to the exporter. Used by flows that
+ * must observe a persisted plan (Sync from Vault, PDF export).
  */
-export async function flushPlanSave(jobId: number): Promise<void> {
+export async function flushPlanSave(jobId: number): Promise<{ revision: number | null }> {
   const queue = queues.get(jobId);
   if (queue) await queue.chain;
+  return { revision: queue?.revision ?? null };
 }
 
 export function planSaveStatus(jobId: number | null): PlanSaveStatus {

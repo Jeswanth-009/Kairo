@@ -31,25 +31,34 @@ pub async fn export_pdf(
     app: tauri::AppHandle,
     job_id: i64,
     mut template_id: String,
+    // The plan revision the UI believes is saved. When it no longer matches
+    // the stored row, edits landed between flush and compile — the export is
+    // refused instead of silently producing an older document.
+    expected_revision: Option<i64>,
     app_data_dir: State<'_, AppDataDir>,
 ) -> Result<ExportResult, String> {
     let started = std::time::Instant::now();
     // 1. Lock: load the plan, overlay accepted tailor suggestions, locate the
     //    compiler. The overlay keeps the PDF in sync with what the Studio
     //    preview shows for accepted AI tailoring.
-    let (plan, tectonic) = {
+    let (plan, tectonic, stored_revision) = {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-        let mut plan: crate::composer::ResumePlan = {
-            let stored = crate::db::composer::get_plan(&conn, job_id)?;
-            stored
-                .ok_or_else(|| {
-                    "No plan for this workspace — compose one in the Plan tab first".to_string()
-                })?
-                .plan
-        };
+        let stored = crate::db::composer::get_plan(&conn, job_id)?;
+        let stored = stored.ok_or_else(|| {
+            "No plan for this workspace — compose one in the Plan tab first".to_string()
+        })?;
+        if let Some(expected) = expected_revision {
+            if stored.plan_revision != expected {
+                return Err(
+                    "Your edits saved after this export request — review the updated PDF instead"
+                        .to_string(),
+                );
+            }
+        }
+        let mut plan: crate::composer::ResumePlan = stored.plan;
         let _ = crate::db::tailor::apply_accepted_suggestions(&conn, job_id, &mut plan)?;
         let tectonic = pdf::find_tectonic(&conn)?;
-        (plan, tectonic)
+        (plan, tectonic, stored.plan_revision)
     }; // DB lock dropped — the compile can take minutes on first run.
 
     // Template fallback: an empty template id defers to the persisted choice.
@@ -84,6 +93,7 @@ pub async fn export_pdf(
         &template_id,
         &tectonic,
         &app_data_dir.0,
+        Some(stored_revision),
         &on_line,
     ) {
         Ok(out) => out,
@@ -171,7 +181,10 @@ fn resolve_job_pdf(
     let artifact = pdf::get_artifact(&conn, job_id)?
         .ok_or_else(|| "No compiled PDF for this workspace — export it first".to_string())?;
     drop(conn);
-    scoped_artifact_path(std::path::Path::new(&artifact.pdf_path), &app_data_dir)
+    // Stored paths are relative (migration 0015); absolute legacy paths pass
+    // through unchanged.
+    let resolved = pdf::resolve_artifact_path(&app_data_dir.0, &artifact.pdf_path);
+    scoped_artifact_path(&resolved, &app_data_dir)
 }
 
 fn resolve_version_pdf(
@@ -182,7 +195,8 @@ fn resolve_version_pdf(
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     let version = versions::get_version(&conn, version_id)?;
     drop(conn);
-    scoped_artifact_path(std::path::Path::new(&version.pdf_path), &app_data_dir)
+    let resolved = pdf::resolve_artifact_path(&app_data_dir.0, &version.pdf_path);
+    scoped_artifact_path(&resolved, &app_data_dir)
 }
 
 fn open_with_os(path: &std::path::Path) -> Result<(), String> {

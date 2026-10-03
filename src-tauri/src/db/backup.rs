@@ -30,6 +30,11 @@ const PRE_RESTORE_SUFFIX: &str = "-pre-restore";
 const ARCHIVE_EXT: &str = ".zip";
 const LEGACY_DB_EXT: &str = ".db";
 const DB_ENTRY: &str = "kairo.db";
+/// Extraction limits: a hostile archive can neither balloon memory nor
+/// escape the staging tree. Entries are plain-content files under `pdf/`.
+const MAX_ENTRY_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const MAX_ENTRIES: usize = 20_000;
 const MANIFEST_ENTRY: &str = "manifest.json";
 const FORMAT_ID: &str = "kairo-backup";
 const FORMAT_VERSION: u32 = 1;
@@ -439,11 +444,52 @@ fn restore_legacy_db(
     let safety = create_db_backup_inner(live, dir, Some(PRE_RESTORE_SUFFIX))?;
     let _ = safety;
     restore_db_into_live(&src, live)?;
+    let rebased = rebase_artifact_paths(live)?;
     Ok(RestoreReport {
         restored_from: file_name.to_string(),
         applied_migrations: count_migrations(live),
-        files_restored: 0,
+        files_restored: rebased,
     })
+}
+
+/// Rewrites artifact paths in a freshly restored DB to canonical locations
+/// relative to the app data dir. Rows written pre-0015 hold absolute paths
+/// from the machine the backup was made on; artifact locations are
+/// deterministic from the job id, so the rebase is exact.
+fn rebase_artifact_paths(live: &Connection) -> Result<usize, String> {
+    let plans = sql_err(live.execute(
+        "UPDATE resume_plans SET          pdf_path = 'pdf/job_' || job_id || '/resume.pdf',          tex_path = 'pdf/job_' || job_id || '/resume.tex'          WHERE pdf_path IS NOT NULL",
+        [],
+    ))?;
+    let versions = sql_err(live.execute(
+        "UPDATE resume_versions SET          pdf_path = 'pdf/job_' || job_id || '/versions/v' || version_number || '/resume.pdf'",
+        [],
+    ))?;
+    Ok(plans + versions)
+}
+
+/// Entry paths must be clean relatives under `pdf/`: no `..`, no absolute
+/// forms, no backslashes. The manifest is not authenticated, so paths are
+/// rejected structurally rather than trusted.
+fn sanitized_pdf_subpath(name: &str) -> Result<(), String> {
+    if name.contains('\\') {
+        return Err(format!("unsafe entry path in archive: {name}"));
+    }
+    let p = Path::new(name);
+    if p.is_absolute() {
+        return Err(format!("unsafe entry path in archive: {name}"));
+    }
+    let mut comps = p.components();
+    match comps.next() {
+        Some(std::path::Component::Normal(c)) if c == "pdf" => {}
+        _ => return Err(format!("unsafe entry path in archive: {name}")),
+    }
+    for c in comps {
+        if !matches!(c, std::path::Component::Normal(_)) {
+            return Err(format!("unsafe entry path in archive: {name}"));
+        }
+    }
+    Ok(())
 }
 
 fn restore_archive(
@@ -452,8 +498,10 @@ fn restore_archive(
     pdf_root: &Path,
     file_name: &str,
 ) -> Result<RestoreReport, String> {
-    // 1. Read the manifest and hash every entry against it. Nothing is
-    //    extracted to its real location until every byte checks out.
+    // 1. Read the manifest, sanitize every path, and hash every entry against
+    //    it. Nothing is extracted to its real location until everything checks
+    //    out — paths are rejected structurally, since the manifest itself is
+    //    not authenticated.
     let manifest = read_archive_manifest(path)?;
     if manifest.format != FORMAT_ID {
         return Err(format!(
@@ -467,6 +515,28 @@ fn restore_archive(
             manifest.format_version
         ));
     }
+    if manifest.files.len() > MAX_ENTRIES {
+        return Err(format!(
+            "archive has too many entries ({} > {MAX_ENTRIES})",
+            manifest.files.len()
+        ));
+    }
+    let mut total: u64 = 0;
+    for expected in &manifest.files {
+        if expected.path != DB_ENTRY {
+            sanitized_pdf_subpath(&expected.path)?;
+        }
+        if expected.bytes > MAX_ENTRY_BYTES {
+            return Err(format!(
+                "archive entry {} is too large ({} bytes)",
+                expected.path, expected.bytes
+            ));
+        }
+        total += expected.bytes;
+        if total > MAX_TOTAL_BYTES {
+            return Err("archive exceeds the total size limit".to_string());
+        }
+    }
     let file = std::fs::File::open(path).map_err(|e| format!("cannot open archive: {e}"))?;
     let mut archive =
         zip::ZipArchive::new(file).map_err(|e| format!("cannot read archive: {e}"))?;
@@ -474,6 +544,13 @@ fn restore_archive(
         let mut entry = archive
             .by_name(&expected.path)
             .map_err(|e| format!("archive missing {}: {e}", expected.path))?;
+        if entry.size() > MAX_ENTRY_BYTES {
+            return Err(format!(
+                "archive entry {} is too large ({} bytes)",
+                expected.path,
+                entry.size()
+            ));
+        }
         let actual = stream_sha256(&mut entry)?;
         if actual != expected.sha256 {
             return Err(format!(
@@ -513,10 +590,32 @@ fn restore_archive(
     //    wrong backup (or an older-schema one) is always reversible.
     let safety = create_db_backup_inner(live, dir, Some(PRE_RESTORE_SUFFIX));
     let result = safety.and_then(|_| {
-        let src = staging_conn.as_ref().map_err(Clone::clone)?;
-        restore_db_into_live(src, live)?;
-        // 4. DB restored — now swap the pdf tree, with rollback on failure.
-        swap_pdf_tree(&mut archive, &manifest, pdf_root)
+        // 4. Swap the pdf tree FIRST. If anything from here on fails, the
+        //    swap is rolled back — the live DB is never left pointing at a
+        //    half-replaced tree.
+        let old_tree = swap_pdf_tree(&mut archive, &manifest, pdf_root)?;
+        // 5. Restore the DB, then rebase artifact paths to this machine.
+        let db = staging_conn
+            .as_ref()
+            .map_err(Clone::clone)
+            .and_then(|src| restore_db_into_live(src, live))
+            .and_then(|_| rebase_artifact_paths(live));
+        if let Err(e) = db {
+            // Roll the previous pdf tree back so the old DB still matches it.
+            let _ = std::fs::remove_dir_all(pdf_root);
+            if let Some(old) = &old_tree {
+                let _ = std::fs::rename(old, pdf_root);
+            }
+            return Err(e);
+        }
+        if let Some(old) = old_tree {
+            let _ = std::fs::remove_dir_all(old);
+        }
+        Ok(manifest
+            .files
+            .iter()
+            .filter(|f| f.path.starts_with("pdf/"))
+            .count())
     });
     let _ = std::fs::remove_file(&staging_db);
     let files_restored = result?;
@@ -525,6 +624,89 @@ fn restore_archive(
         applied_migrations: count_migrations(live),
         files_restored,
     })
+}
+
+/// Extract the archived `pdf/` entries into a staging dir, then swap it in as
+/// the live pdf tree. Returns the path of the set-aside previous tree so the
+/// caller can roll back after a later failure. Entry paths are sanitized and
+/// every staged byte is counted against the extraction limits.
+fn swap_pdf_tree(
+    archive: &mut zip::ZipArchive<std::fs::File>,
+    manifest: &BackupManifest,
+    pdf_root: &Path,
+) -> Result<Option<PathBuf>, String> {
+    let parent = pdf_root.parent().unwrap_or_else(|| Path::new("."));
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let staging = parent.join(format!(".pdf-restore-{stamp}"));
+    std::fs::create_dir_all(&staging).map_err(|e| format!("cannot stage pdf tree: {e}"))?;
+    // A DB-only archive (nothing exported yet) must still swap in an empty
+    // tree rather than fail the rename below.
+    std::fs::create_dir_all(staging.join("pdf"))
+        .map_err(|e| format!("cannot stage pdf tree: {e}"))?;
+
+    let swap = (|| -> Result<(), String> {
+        let mut total: u64 = 0;
+        for expected in &manifest.files {
+            let name = &expected.path;
+            if !name.starts_with("pdf/") {
+                continue;
+            }
+            sanitized_pdf_subpath(name)?;
+            // Join only the sanitized relative portion, then verify the
+            // target really stayed inside the staging tree.
+            let rel = name.strip_prefix("pdf/").unwrap_or("");
+            let target = staging.join("pdf").join(rel);
+            if !target.starts_with(&staging) {
+                return Err(format!("unsafe entry path in archive: {name}"));
+            }
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("cannot stage pdf dir: {e}"))?;
+            }
+            let mut entry = archive
+                .by_name(name)
+                .map_err(|e| format!("archive changed while restoring: {e}"))?;
+            if entry.size() > MAX_ENTRY_BYTES {
+                return Err(format!("archive entry {name} is too large"));
+            }
+            total += entry.size();
+            if total > MAX_TOTAL_BYTES {
+                return Err("archive exceeds the total size limit".to_string());
+            }
+            let mut out = std::fs::File::create(&target)
+                .map_err(|e| format!("cannot stage {}: {e}", name))?;
+            std::io::copy(&mut entry, &mut out).map_err(|e| format!("cannot stage {name}: {e}"))?;
+        }
+        // Staged tree replaces the live one: old aside, new in, old gone.
+        let old = parent.join(format!(".pdf-old-{stamp}"));
+        if pdf_root.exists() {
+            std::fs::rename(pdf_root, &old)
+                .map_err(|e| format!("cannot set aside old pdf dir: {e}"))?;
+        }
+        if let Err(e) = std::fs::rename(staging.join("pdf"), pdf_root) {
+            // Roll the old tree back — the user keeps their current files.
+            if old.exists() {
+                let _ = std::fs::rename(&old, pdf_root);
+            }
+            return Err(format!("cannot move restored pdf tree into place: {e}"));
+        }
+        Ok(())
+    })();
+
+    let _ = std::fs::remove_dir_all(&staging);
+    if swap.is_err() {
+        return swap.map(|_| None);
+    }
+    // The old tree stays until the caller has also restored the DB.
+    let old = parent.join(format!(".pdf-old-{stamp}"));
+    if old.exists() {
+        Ok(Some(old))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Copy the live DB from `src` into `live` through the online backup API and
@@ -546,74 +728,6 @@ fn count_migrations(live: &Connection) -> usize {
     }))
     .map(|n| n as usize)
     .unwrap_or(0)
-}
-
-/// Extract the archived `pdf/` entries into a staging dir, then swap it in as
-/// the live pdf tree. The previous tree is renamed aside first and only
-/// deleted once the new one is in place; on any failure the old tree is
-/// renamed back so the user is never left without their files.
-fn swap_pdf_tree(
-    archive: &mut zip::ZipArchive<std::fs::File>,
-    manifest: &BackupManifest,
-    pdf_root: &Path,
-) -> Result<usize, String> {
-    let parent = pdf_root.parent().unwrap_or_else(|| Path::new("."));
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let staging = parent.join(format!(".pdf-restore-{stamp}"));
-    std::fs::create_dir_all(&staging).map_err(|e| format!("cannot stage pdf tree: {e}"))?;
-    // A DB-only archive (nothing exported yet) must still swap in an empty
-    // tree rather than fail the rename below.
-    std::fs::create_dir_all(staging.join("pdf"))
-        .map_err(|e| format!("cannot stage pdf tree: {e}"))?;
-
-    let swap = (|| -> Result<usize, String> {
-        for expected in &manifest.files {
-            let name = &expected.path;
-            if !name.starts_with("pdf/") {
-                continue;
-            }
-            let target = staging.join(name);
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("cannot stage pdf dir: {e}"))?;
-            }
-            let mut entry = archive
-                .by_name(name)
-                .map_err(|e| format!("archive changed while restoring: {e}"))?;
-            let mut out = std::fs::File::create(&target)
-                .map_err(|e| format!("cannot stage {}: {e}", name))?;
-            std::io::copy(&mut entry, &mut out).map_err(|e| format!("cannot stage {name}: {e}"))?;
-        }
-        // Staged tree replaces the live one: old aside, new in, old gone.
-        let old = parent.join(format!(".pdf-old-{stamp}"));
-        if pdf_root.exists() {
-            std::fs::rename(pdf_root, &old)
-                .map_err(|e| format!("cannot set aside old pdf dir: {e}"))?;
-        }
-        if let Err(e) = std::fs::rename(staging.join("pdf"), pdf_root) {
-            // Roll the old tree back — the user keeps their current files.
-            if old.exists() {
-                let _ = std::fs::rename(&old, pdf_root);
-            }
-            return Err(format!("cannot move restored pdf tree into place: {e}"));
-        }
-        if old.exists() {
-            let _ = std::fs::remove_dir_all(&old);
-        }
-        Ok(manifest
-            .files
-            .iter()
-            .filter(|f| f.path.starts_with("pdf/"))
-            .count())
-    })();
-
-    if swap.is_err() {
-        let _ = std::fs::remove_dir_all(&staging);
-    }
-    swap
 }
 
 /// Hardening gate: the source must be a healthy SQLite file that actually
@@ -962,6 +1076,170 @@ mod tests {
         }
         drop(archive);
         std::fs::rename(&tmp, zip_path).unwrap();
+    }
+
+    /// Builds a minimal but structurally valid archive with a custom
+    /// manifest + entries, for hostile-path tests.
+    fn craft_archive(dir: &Path, stamp: &str, entries: Vec<(&str, Vec<u8>)>) -> String {
+        use sha2::{Digest, Sha256};
+        let file_name = format!("{NAME_PATTERN}{stamp}{ARCHIVE_EXT}");
+        let path = dir.join(&file_name);
+        let file = std::fs::File::create(&path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        let mut files = Vec::new();
+        for (name, bytes) in &entries {
+            zip.start_file(*name, options).unwrap();
+            std::io::Write::write_all(&mut zip, bytes).unwrap();
+            let mut hasher = Sha256::new();
+            hasher.update(bytes);
+            files.push(ManifestFile {
+                path: name.to_string(),
+                sha256: format!("{:x}", hasher.finalize()),
+                bytes: bytes.len() as u64,
+            });
+        }
+        let manifest = BackupManifest {
+            format: FORMAT_ID.to_string(),
+            format_version: FORMAT_VERSION,
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
+            created_at: stamp.to_string(),
+            migrations: MIGRATIONS.len(),
+            job_count: 0,
+            version_count: 0,
+            files,
+        };
+        drop(zip);
+        let manifest_json = serde_json::to_string_pretty(&manifest).unwrap();
+        // Rewrite the zip with the manifest entry included (readers only
+        // hash non-manifest entries against it).
+        let file = std::fs::File::open(&path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let tmp = dir.join(format!(".craft-{stamp}"));
+        {
+            let mut out = std::fs::File::create(&tmp).unwrap();
+            let mut writer = zip::ZipWriter::new(&mut out);
+            writer.start_file(MANIFEST_ENTRY, options).unwrap();
+            std::io::Write::write_all(&mut writer, manifest_json.as_bytes()).unwrap();
+            for i in 0..archive.len() {
+                let mut zipped = archive.by_index(i).unwrap();
+                let name = zipped.name().to_string();
+                let mut bytes = Vec::new();
+                std::io::Read::read_to_end(&mut zipped, &mut bytes).unwrap();
+                writer.start_file(&name, options).unwrap();
+                std::io::Write::write_all(&mut writer, &bytes).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+        std::fs::rename(&tmp, &path).unwrap();
+        file_name
+    }
+
+    /// After a clean-install restore, every artifact row resolves to a real
+    /// file under the NEW app dir, and legacy absolute paths were rebased to
+    /// relative form (migration 0015 semantics).
+    #[test]
+    fn restore_rebases_legacy_absolute_paths() {
+        let conn = db();
+        conn.execute(
+            "INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Acme', 'Dev', 'jd')",
+            [],
+        )
+        .unwrap();
+        let job_id = conn.last_insert_rowid();
+        let dir = dir("rebase");
+        // Simulate a legacy backup: absolute pdf_path in the row, the file
+        // under the ORIGINAL pdf root.
+        let pdfs = pdf_root("rebase", &[job_id]);
+        let abs_pdf = pdfs.join(format!("job_{job_id}")).join("resume.pdf");
+        conn.execute(
+            "INSERT INTO resume_plans (job_id, config_json, plan_json, pdf_path, tex_path, composer_version, plan_revision, artifact_plan_revision) \
+             VALUES (?1, '{}', '{}', ?2, ?3, 1, 3, 2)",
+            rusqlite::params![
+                job_id,
+                abs_pdf.display().to_string(),
+                abs_pdf.display().to_string()
+            ],
+        )
+        .unwrap();
+        let info = create_backup(&conn, &dir, &pdfs).unwrap();
+
+        // Clean install: fresh live DB, an empty pdf root elsewhere.
+        let mut live = db();
+        let fresh_data =
+            std::env::temp_dir().join(format!("kairo-backup-rebase-target-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&fresh_data);
+        // Mirrors the app: pdf_root is the app data dir's pdf/ subdirectory.
+        let fresh_pdf_root = fresh_data.join("pdf");
+        std::fs::create_dir_all(&fresh_pdf_root).unwrap();
+
+        restore_backup(&mut live, &dir, &info.file_name, &fresh_pdf_root).unwrap();
+
+        let (stored, tex): (String, String) = live
+            .query_row(
+                "SELECT pdf_path, tex_path FROM resume_plans WHERE job_id = ?1",
+                [job_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(stored, format!("pdf/job_{job_id}/resume.pdf"));
+        assert!(!std::path::Path::new(&stored).is_absolute());
+        let resolved = crate::db::pdf::resolve_artifact_path(&fresh_data, &stored);
+        assert!(resolved.is_file(), "restored pdf at {}", resolved.display());
+        let _ = tex;
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&pdfs);
+        let _ = std::fs::remove_dir_all(&fresh_data);
+    }
+
+    /// A crafted archive whose entry path escapes the staging tree
+    /// ("pdf/../evil.txt") is refused before anything is written.
+    #[test]
+    fn restore_refuses_archive_path_traversal() {
+        let conn = db();
+        let dir = dir("traversal");
+        std::fs::create_dir_all(&dir).unwrap();
+        let pdfs = pdf_root("traversal", &[]);
+        let file_name = craft_archive(
+            &dir,
+            "20990101-000009",
+            vec![
+                (DB_ENTRY, b"not-a-real-db".to_vec()),
+                ("pdf/../evil.txt", b"escaped".to_vec()),
+            ],
+        );
+
+        let mut live = conn;
+        let err = restore_backup(&mut live, &dir, &file_name, &pdfs).unwrap_err();
+        assert!(err.contains("unsafe entry path"), "unexpected error: {err}");
+        assert!(!dir.join("evil.txt").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&pdfs);
+    }
+
+    /// A backslash entry path is refused too (it would be a separator on
+    /// Windows but a plain character on Unix).
+    #[test]
+    fn restore_refuses_backslash_entry_paths() {
+        let conn = db();
+        let dir = dir("backslash");
+        std::fs::create_dir_all(&dir).unwrap();
+        let pdfs = pdf_root("backslash", &[]);
+        let file_name = craft_archive(
+            &dir,
+            "20990101-000010",
+            vec![
+                (DB_ENTRY, b"not-a-real-db".to_vec()),
+                ("pdf/..\\evil2.txt", b"no".to_vec()),
+            ],
+        );
+
+        let mut live = conn;
+        let err = restore_backup(&mut live, &dir, &file_name, &pdfs).unwrap_err();
+        assert!(err.contains("unsafe entry path"), "unexpected error: {err}");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&pdfs);
     }
 
     #[test]

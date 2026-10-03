@@ -139,13 +139,15 @@ fn version_snapshot_flow_roundtrips_every_input() {
         "version records the export fingerprint"
     );
     assert!(v1.pdf_hash.is_some(), "version records the PDF hash");
-    assert!(std::path::Path::new(&v1.pdf_path).exists());
-    assert_ne!(
-        v1.pdf_path,
-        artifact.display().to_string(),
-        "version owns its PDF copy"
+    // Stored paths are relative to the app data dir (migration 0015).
+    let v1_path = data_dir.join(&v1.pdf_path);
+    assert!(
+        v1_path.exists(),
+        "version pdf exists at {}",
+        v1_path.display()
     );
-    let pdf = std::fs::read(&v1.pdf_path).unwrap();
+    assert_ne!(v1_path, artifact, "version owns its PDF copy");
+    let pdf = std::fs::read(&v1_path).unwrap();
     assert!(pdf.starts_with(b"%PDF-"));
 
     let v2 = versions::create_version(&conn, job_id, &data_dir).expect("second version");
