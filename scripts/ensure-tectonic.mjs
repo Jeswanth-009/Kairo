@@ -85,11 +85,22 @@ if (existsSync(dest)) {
 
 console.log(`[tectonic] fetching binary for ${triple}…`);
 let release;
-try {
-  release = await fetchJson(`https://api.github.com/repos/${REPO}/releases/latest`);
-} catch (e) {
-  console.error(`[tectonic] could not query releases: ${e.message}`);
-  process.exit(1);
+// GitHub API rate limits (403) hit CI occasionally; retry with backoff
+// before giving up so a transient hiccup doesn't fail the whole job.
+for (let attempt = 1; attempt <= 4; attempt++) {
+  try {
+    release = await fetchJson(`https://api.github.com/repos/${REPO}/releases/latest`);
+    break;
+  } catch (e) {
+    if (attempt === 4) {
+      console.error(`[tectonic] could not query releases: ${e.message}`);
+      console.error("[tectonic] continuing without the sidecar — tests that need Tectonic will skip.");
+      process.exit(0);
+    }
+    const wait = attempt * 5000;
+    console.warn(`[tectonic] release query failed (${e.message}); retry ${attempt}/3 in ${wait / 1000}s…`);
+    await new Promise((r) => setTimeout(r, wait));
+  }
 }
 
 const ext = process.platform === "win32" ? "zip" : "tar.gz";
