@@ -84,42 +84,51 @@ if (existsSync(dest)) {
 }
 
 console.log(`[tectonic] fetching binary for ${triple}…`);
-let release;
-// GitHub API rate limits (403) hit CI occasionally; retry with backoff
-// before giving up so a transient hiccup doesn't fail the whole job.
-for (let attempt = 1; attempt <= 4; attempt++) {
-  try {
-    release = await fetchJson(`https://api.github.com/repos/${REPO}/releases/latest`);
-    break;
-  } catch (e) {
-    if (attempt === 4) {
-      console.error(`[tectonic] could not query releases: ${e.message}`);
-      console.error("[tectonic] continuing without the sidecar — tests that need Tectonic will skip.");
-      process.exit(0);
-    }
-    const wait = attempt * 5000;
-    console.warn(`[tectonic] release query failed (${e.message}); retry ${attempt}/3 in ${wait / 1000}s…`);
-    await new Promise((r) => setTimeout(r, wait));
-  }
-}
 
+// GitHub API rate limits (403) hit CI occasionally. Retry with backoff, then
+// fall back to a pinned release fetched from the plain download endpoint
+// (which is not API-rate-limited) so the sidecar always lands — Tauri's
+// externalBin requires the file to exist for any cargo invocation.
+const PINNED_VERSION = "0.17.0";
 const ext = process.platform === "win32" ? "zip" : "tar.gz";
-// Tags look like `tectonic@0.17.0` while assets drop the prefix:
-// `tectonic-0.17.0-x86_64-pc-windows-msvc.zip`.
-const version = String(release.tag_name).replace(/^tectonic@/, "");
-const asset = (release.assets ?? []).find(
-  (a) => a.name === `tectonic-${version}-${triple}.${ext}`,
-);
-if (!asset) {
-  console.error(`[tectonic] no release asset tectonic-${version}-${triple}.${ext}`);
-  console.error("[tectonic] install Tectonic manually and set the path in Kairo Settings.");
-  process.exit(1);
+
+async function resolveAsset() {
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const release = await fetchJson(`https://api.github.com/repos/${REPO}/releases/latest`);
+      const version = String(release.tag_name).replace(/^tectonic@/, "");
+      const asset = (release.assets ?? []).find(
+        (a) => a.name === `tectonic-${version}-${triple}.${ext}`,
+      );
+      if (asset) {
+        return { url: asset.browser_download_url, archiveName: asset.name };
+      }
+      console.error(`[tectonic] no release asset tectonic-${version}-${triple}.${ext}`);
+    } catch (e) {
+      if (attempt < 4) {
+        const wait = attempt * 5000;
+        console.warn(`[tectonic] release query failed (${e.message}); retry ${attempt}/3 in ${wait / 1000}s…`);
+        await new Promise((r) => setTimeout(r, wait));
+        continue;
+      }
+      console.warn(`[tectonic] release query failed (${e.message}); falling back to pinned v${PINNED_VERSION}`);
+    }
+    break;
+  }
+  // Pinned fallback: direct download URL, no API needed.
+  const name = `tectonic-${PINNED_VERSION}-${triple}.${ext}`;
+  return {
+    url: `https://github.com/${REPO}/releases/download/tectonic@${PINNED_VERSION}/${name}`,
+    archiveName: name,
+  };
 }
 
-const archive = join(tmpdir(), asset.name);
+const { url, archiveName } = await resolveAsset();
+
+const archive = join(tmpdir(), archiveName);
 const extractDir = join(tmpdir(), `kairo-tectonic-${triple}`);
-console.log(`[tectonic] downloading ${asset.name} (${Math.round(asset.size / 1e6)} MB)…`);
-await downloadTo(asset.browser_download_url, archive);
+console.log(`[tectonic] downloading ${archiveName}…`);
+await downloadTo(url, archive);
 rmSync(extractDir, { recursive: true, force: true });
 mkdirSync(extractDir, { recursive: true });
 // Windows ships bsdtar at an absolute path (GNU tar from a dev shell would
