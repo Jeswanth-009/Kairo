@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
-import { Tabs } from "../../components/ui/Tabs";
+import { StepNav } from "../../components/ui/ds";
 import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Feedback";
 import { Field, Input, Select } from "../../components/ui/inputs";
@@ -17,7 +17,7 @@ import type {
 } from "../../lib/types";
 import { useJobsStore } from "../../stores/jobsStore";
 import { toast } from "../../stores/toastStore";
-import { ApplicationTab, InterviewTab, ResumeStep } from "./workspaceSteps";
+import { ApplicationTab, InterviewTab, ReviewStage, ResumeStep } from "./workspaceSteps";
 import { MatchTab } from "./MatchTab";
 
 const KIND_LABELS: Record<JobRequirementKind, string> = {
@@ -28,21 +28,14 @@ const KIND_LABELS: Record<JobRequirementKind, string> = {
 
 const KIND_ORDER: JobRequirementKind[] = ["required_skill", "preferred_skill", "responsibility"];
 
-type WorkspaceTab =
-  | "overview"
-  | "requirements"
-  | "match"
-  | "resume"
-  | "interview"
-  | "application";
+type WorkspaceTab = "role" | "evidence" | "resume" | "review" | "applied";
 
 const TAB_META: { key: WorkspaceTab; label: string; hint: string }[] = [
-  { key: "overview", label: "1 · Role", hint: "The posting, stored verbatim" },
-  { key: "requirements", label: "2 · Requirements", hint: "Confirm what matters" },
-  { key: "match", label: "3 · Match", hint: "Where your proof stands" },
-  { key: "resume", label: "4 · Resume", hint: "Plan, tailor, export" },
-  { key: "interview", label: "5 · Interview", hint: "Questions for this job" },
-  { key: "application", label: "6 · Application", hint: "Track what you sent" },
+  { key: "role", label: "Role", hint: "The posting and its requirements" },
+  { key: "evidence", label: "Evidence", hint: "Where your proof stands" },
+  { key: "resume", label: "Resume", hint: "Plan, tailor, export" },
+  { key: "review", label: "Review", hint: "Inspect the exact PDF" },
+  { key: "applied", label: "Applied", hint: "Track what you sent" },
 ];
 
 export default function JobWorkspacePage() {
@@ -52,7 +45,7 @@ export default function JobWorkspacePage() {
 
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<WorkspaceTab>("overview");
+  const [tab, setTab] = useState<WorkspaceTab>("role");
   const loadRequirements = useJobsStore((s) => s.loadRequirements);
   const requirements = useJobsStore((s) => s.reqCache[id]) ?? [];
 
@@ -124,27 +117,37 @@ export default function JobWorkspacePage() {
       </div>
 
       <div className="mb-2">
-        <Tabs
-          tabs={TAB_META.map((t) => ({ id: t.key, label: t.label }))}
+        <StepNav
+          steps={TAB_META.map((t) => ({ key: t.key, label: t.label }))}
           active={tab}
-          onChange={(id) => {
-            setTab(id as WorkspaceTab);
-            // Tab bodies differ wildly in height — never land mid-page.
+          onChange={(key) => {
+            setTab(key as WorkspaceTab);
+            // Stage bodies differ wildly in height — never land mid-page.
             scrollMainToTop();
           }}
-          className="flex-wrap"
+          hint={TAB_META.find((t) => t.key === tab)?.hint}
         />
       </div>
-      <p className="mb-6 text-[11px] text-muted">
-        {TAB_META.find((t) => t.key === tab)?.hint}
-      </p>
 
-      {tab === "overview" ? <OverviewTab job={job} counts={counts} /> : null}
-      {tab === "requirements" ? <RequirementsTab job={job} /> : null}
-      {tab === "match" ? <MatchTab jobId={job.id} domain={job.domain} /> : null}
+      {tab === "role" ? (
+        <>
+          <OverviewTab job={job} counts={counts} />
+          <div className="mt-6">
+            <RequirementsTab job={job} />
+          </div>
+        </>
+      ) : null}
+      {tab === "evidence" ? <MatchTab jobId={job.id} domain={job.domain} /> : null}
       {tab === "resume" ? <ResumeStep jobId={job.id} /> : null}
-      {tab === "interview" ? <InterviewTab jobId={job.id} /> : null}
-      {tab === "application" ? <ApplicationTab job={job} /> : null}
+      {tab === "review" ? <ReviewStage jobId={job.id} /> : null}
+      {tab === "applied" ? (
+        <>
+          <ApplicationTab job={job} />
+          <div className="mt-6">
+            <InterviewTab jobId={job.id} />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

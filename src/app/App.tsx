@@ -8,6 +8,7 @@ import { ToastHost } from "../components/ui/Toast";
 import { useAppStore } from "../stores/appStore";
 import { ipc } from "../lib/ipc";
 import type { OnboardingStatus } from "../lib/types";
+import { useTopBarStore } from "../stores/topBarStore";
 import DashboardPage from "../features/dashboard/DashboardPage";
 import OnboardingPage from "../features/onboarding/OnboardingPage";
 import VaultPage from "../features/vault/VaultPage";
@@ -29,15 +30,32 @@ const TITLES: Record<string, string> = {
   "/design": "Design system",
 };
 
-function titleFor(pathname: string): string {
-  if (/^\/jobs\/\d+$/.test(pathname)) return "Job Workspace";
-  return TITLES[pathname] ?? "Kairo";
+/** Location trail derived from the URL; pages can override via the store. */
+function crumbsFor(pathname: string): { label: string; to?: string }[] {
+  if (/^\/jobs\/\d+\/resume/.test(pathname)) {
+    const id = pathname.split("/")[2];
+    return [
+      { label: "Jobs", to: "/jobs" },
+      { label: `Job #${id}`, to: `/jobs/${id}` },
+      { label: "Resume" },
+    ];
+  }
+  if (/^\/jobs\/\d+/.test(pathname)) {
+    const id = pathname.split("/")[2];
+    return [
+      { label: "Jobs", to: "/jobs" },
+      { label: `Job #${id}` },
+    ];
+  }
+  const label = TITLES[pathname] ?? "";
+  return label ? [{ label }] : [];
 }
 
 export default function App() {
   const location = useLocation();
   const loadDiagnostics = useAppStore((s) => s.loadDiagnostics);
   const { open: paletteOpen, openPalette, closePalette } = useCommandPalette();
+  const topBar = useTopBarStore();
   // First run: a blank slate goes straight to the guided flow.
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
 
@@ -49,6 +67,13 @@ export default function App() {
       .catch(() => setStatus(null));
   }, [loadDiagnostics, location.pathname]);
 
+  // The shell clears page-published top-bar state on every navigation so a
+  // stale breadcrumb/action never bleeds into the next page.
+  useEffect(() => {
+    topBar.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
   const needsOnboarding = status !== null && !status.hasAnyContent && location.pathname === "/";
 
   return (
@@ -56,7 +81,12 @@ export default function App() {
       <Splash />
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar title={titleFor(location.pathname)} onSearchClick={openPalette} />
+        <TopBar
+          crumbs={topBar.crumbs ?? crumbsFor(location.pathname)}
+          saveState={topBar.saveState ?? undefined}
+          primaryAction={topBar.primaryAction ?? undefined}
+          onSearchClick={openPalette}
+        />
         <main id="app-main" className="flex-1 overflow-y-auto">
           {/* Keyed by path so each page plays the enter animation on navigation. */}
           <div key={location.pathname} className="page-enter h-full">

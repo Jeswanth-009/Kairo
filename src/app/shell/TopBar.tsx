@@ -3,48 +3,84 @@ import { useAppStore } from "../../stores/appStore";
 import { useThemeStore } from "../../stores/themeStore";
 import { cn } from "../../lib/cn";
 
-const STATUS_META = {
-  unverified: {
-    dot: "bg-warn",
-    pill: "border-warn/25 bg-warn-soft/60 text-warn dark:bg-warn/10 dark:text-kairo-dawn",
-    label: "SQLite · Unverified",
-  },
-  ok: {
-    dot: "bg-ok",
-    pill: "border-ok/25 bg-ok-soft/60 text-ok dark:bg-ok/10 dark:text-emerald-300",
-    label: "SQLite · Verified",
-  },
-  error: {
-    dot: "bg-bad",
-    pill: "border-bad/25 bg-bad-soft/60 text-bad dark:bg-bad/10 dark:text-red-300",
-    label: "SQLite · Error",
-  },
-} as const;
-
-function ThemeToggle() {
-  const theme = useThemeStore((s) => s.theme);
-  const toggle = useThemeStore((s) => s.toggle);
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-      title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted shadow-sm transition-all duration-150 border border-line bg-card hover:text-ink hover:border-line-strong hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kairo-blue/60"
-    >
-      {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-    </button>
-  );
+interface Crumb {
+  label: string;
+  to?: string;
 }
 
-export function TopBar({ title, onSearchClick }: { title: string; onSearchClick?: () => void }) {
+/**
+ * Top bar: location breadcrumb, optional contextual primary action.
+ * Database health lives in Settings; the bar only surfaces a problem the
+ * user must act on (error state), never routine "verified" noise.
+ */
+export function TopBar({
+  crumbs,
+  saveState,
+  primaryAction,
+  onSearchClick,
+}: {
+  /** Location trail, e.g. Jobs / Acme / Resume. Falls back to a single title. */
+  crumbs?: Crumb[];
+  /** Autosave state for the current context, when one exists. */
+  saveState?: "saved" | "saving" | "error";
+  /** The one primary action for this screen, when it has one. */
+  primaryAction?: { label: string; onClick: () => void; disabled?: boolean };
+  onSearchClick?: () => void;
+}) {
   const dbStatus = useAppStore((s) => s.dbStatus);
-  const meta = STATUS_META[dbStatus];
+  const theme = useThemeStore((s) => s.theme);
+  const toggle = useThemeStore((s) => s.toggle);
+
+  const title = crumbs?.length ? crumbs[crumbs.length - 1].label : "";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-card/80 px-8 backdrop-blur-md">
-      <h1 className="text-[15px] font-semibold tracking-tight text-ink">{title}</h1>
+    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-card/80 px-8 backdrop-blur-md">
+      <nav aria-label="Location" className="flex min-w-0 items-center gap-1.5 text-sm">
+        {crumbs && crumbs.length > 0 ? (
+          crumbs.map((crumb, i) => (
+            <span key={`${crumb.label}-${i}`} className="flex min-w-0 items-center gap-1.5">
+              {i > 0 ? (
+                <span aria-hidden className="text-muted/50">
+                  /
+                </span>
+              ) : null}
+              {i === crumbs.length - 1 ? (
+                <span className="truncate font-semibold text-ink">{crumb.label}</span>
+              ) : crumb.to ? (
+                <a href={crumb.to} className="truncate text-muted hover:text-ink">
+                  {crumb.label}
+                </a>
+              ) : (
+                <span className="truncate text-muted">{crumb.label}</span>
+              )}
+            </span>
+          ))
+        ) : title ? (
+          <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">{title}</h1>
+        ) : null}
+      </nav>
       <div className="flex items-center gap-3">
+        {saveState ? (
+          <span
+            role="status"
+            className={cn(
+              "text-xs font-medium",
+              saveState === "error" ? "text-bad" : "text-muted",
+            )}
+          >
+            {saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn't save" : "Saved"}
+          </span>
+        ) : null}
+        {primaryAction ? (
+          <button
+            type="button"
+            onClick={primaryAction.onClick}
+            disabled={primaryAction.disabled}
+            className="flex h-8 items-center rounded-lg bg-kairo-blue px-3 text-xs font-medium text-white shadow-sm transition-colors hover:bg-kairo-blue/90 disabled:opacity-50"
+          >
+            {primaryAction.label}
+          </button>
+        ) : null}
         {onSearchClick ? (
           <button
             type="button"
@@ -60,20 +96,24 @@ export function TopBar({ title, onSearchClick }: { title: string; onSearchClick?
             </kbd>
           </button>
         ) : null}
-        <span className="hidden text-xs text-muted sm:inline">Local-first · Offline</span>
-        <span
-          className={cn(
-            "flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
-            meta.pill,
-          )}
-        >
-          <span className={`relative flex h-2 w-2`}>
-            <span className={`absolute inline-flex h-full w-full rounded-full ${meta.dot} opacity-40`} />
-            <span className={`relative inline-flex h-2 w-2 rounded-full ${meta.dot}`} />
+        {dbStatus === "error" ? (
+          <span
+            className="flex items-center gap-2 rounded-full border border-bad/25 bg-bad-soft/60 px-3 py-1 text-xs font-medium text-bad dark:bg-bad/10 dark:text-red-300"
+            role="alert"
+          >
+            Database error — check Settings
           </span>
-          {meta.label}
-        </span>
-        <ThemeToggle />
+        ) : null}
+        <span className="hidden text-xs text-muted sm:inline">Local-first · Offline</span>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted shadow-sm transition-all duration-150 border border-line bg-card hover:text-ink hover:border-line-strong hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kairo-blue/60"
+        >
+          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </button>
       </div>
     </header>
   );

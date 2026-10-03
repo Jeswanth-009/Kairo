@@ -5,42 +5,115 @@ import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Feedback";
-import { Tabs } from "../../components/ui/Tabs";
 import { ipc } from "../../lib/ipc";
+import { StatusLine, type DocState } from "../../components/ui/ds";
+import { PdfViewer } from "../resume-studio/PdfViewer";
+import type { PdfArtifact } from "../../lib/types";
 import type { Application, InterviewCategory, InterviewPrep, Job } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
-import { PlanTab } from "./PlanTab";
-import { ResumeTab } from "./ResumeTab";
-import { TailorTab } from "./TailorTab";
 
 /**
- * Steps 4–6 of the workspace sequence: Resume (plan → tailor → export),
- * Interview (grounded prep for this job), Application (what was sent).
+ * Step 4 · Resume — a gateway into the job-scoped editor. The full editing
+ * experience (content curation, tailoring, export) lives in the editor at
+ * /jobs/:jobId/resume; this stage shows the current state and opens it.
  */
-
-type ResumeSegment = "content" | "tailoring" | "export";
-
-const RESUME_SEGMENTS: { key: ResumeSegment; label: string }[] = [
-  { key: "content", label: "Content" },
-  { key: "tailoring", label: "Tailoring" },
-  { key: "export", label: "Export" },
-];
-
-/** Step 4 · Resume — one sequence: curate content, tailor wording, export. */
 export function ResumeStep({ jobId }: { jobId: number }) {
-  const [segment, setSegment] = useState<ResumeSegment>("content");
+  const navigate = useNavigate();
+  const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const a = await ipc.getPdfArtifact(jobId);
+        if (!cancelled) setArtifact(a);
+      } catch {
+        if (!cancelled) setArtifact(null);
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
+
+  if (!loaded) return <Skeleton className="h-40 w-full" />;
+
+  const state: DocState = !artifact
+    ? "draft"
+    : "current";
+
   return (
     <div className="space-y-4">
-      <Tabs
-        tabs={RESUME_SEGMENTS.map((t) => ({ id: t.key, label: t.label }))}
-        active={segment}
-        onChange={(id) => setSegment(id as ResumeSegment)}
+      <StatusLine
+        state={state}
+        detail={artifact ? `${artifact.pageCount ?? "?"} page(s)` : "no PDF yet"}
+        actions={
+          <Button size="sm" onClick={() => navigate(`/jobs/${jobId}/resume`)}>
+            Open editor
+          </Button>
+        }
       />
-      {segment === "content" ? <PlanTab jobId={jobId} /> : null}
-      {segment === "tailoring" ? (
-        <TailorTab jobId={jobId} onComposePlan={() => setSegment("content")} />
-      ) : null}
-      {segment === "export" ? <ResumeTab jobId={jobId} /> : null}
+      <Card className="p-5 text-center">
+        <p className="text-sm text-muted">
+          Content curation, AI tailoring, template design and PDF export all
+          happen in the full editor.
+        </p>
+        <Button className="mt-3" onClick={() => navigate(`/jobs/${jobId}/resume`)}>
+          Open the resume editor
+        </Button>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Review stage: the exact exported PDF is inspected here with a checklist.
+ */
+export function ReviewStage({ jobId }: { jobId: number }) {
+  const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const a = await ipc.getPdfArtifact(jobId);
+        if (!cancelled) setArtifact(a);
+      } catch (e) {
+        toast.error(String(e));
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
+
+  if (!loaded) return <Skeleton className="h-64 w-full" />;
+
+  return (
+    <div className="space-y-4">
+      <StatusLine
+        state={artifact ? "current" : "draft"}
+        detail={
+          artifact
+            ? `${artifact.pageCount ?? "?"} page(s) · ${artifact.compiledAt ?? "unknown"}`
+            : "export the PDF first"
+        }
+      />
+      {artifact ? (
+        <Card className="overflow-hidden p-0">
+          <PdfViewer jobId={jobId} className="min-h-[500px]" />
+        </Card>
+      ) : (
+        <Card className="p-8 text-center text-sm text-muted">
+          No PDF yet — compile one in the Resume stage first.
+        </Card>
+      )}
     </div>
   );
 }
