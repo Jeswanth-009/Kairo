@@ -13,6 +13,8 @@ import type {
   Experience,
   Project,
   Achievement,
+  Skill,
+  SkillRef,
 } from "../lib/types";
 
 type Handler = (args: Record<string, unknown>) => unknown;
@@ -24,6 +26,20 @@ const profile = structuredClone(mockProfile);
 const plan = structuredClone(mockPlan);
 const suggestions = structuredClone(mockSuggestions);
 const versions = structuredClone(mockVersions);
+
+// Education has no fixture import — one seeded row the batch can append to.
+const educations = [
+  {
+    id: 1,
+    institution: "Riverside Institute of Technology, Chennai",
+    degree: "Bachelor of Technology",
+    fieldOfStudy: "Computer Science & Systems Engineering",
+    description: "",
+    startDate: "2023-09",
+    endDate: "2027-05",
+    isCurrent: false,
+  },
+];
 
 const wrappedLines = (text: string) =>
   text.length === 0 ? 0 : Math.max(1, Math.ceil(text.length / 95));
@@ -247,18 +263,7 @@ const handlers: Record<string, Handler> = {
   // vault (records live in fixtures; create/update/delete mutate in-session)
   list_projects: () => mockProjects,
   list_experiences: () => mockExperiences,
-  list_education: () => [
-    {
-      id: 1,
-      institution: "Riverside Institute of Technology, Chennai",
-      degree: "Bachelor of Technology",
-      fieldOfStudy: "Computer Science & Systems Engineering",
-      description: "",
-      startDate: "2023-09",
-      endDate: "2027-05",
-      isCurrent: false,
-    },
-  ],
+  list_education: () => educations,
   list_certifications: () => mockCertifications,
   list_achievements: () => mockAchievements,
   list_skills: () => skills,
@@ -274,7 +279,11 @@ const handlers: Record<string, Handler> = {
     mockExperiences.unshift(e);
     return e;
   },
-  create_education: (a) => a.education,
+  create_education: (a) => {
+    const e = { ...(a.education as (typeof educations)[number]), id: nextId(educations) };
+    educations.unshift(e);
+    return e;
+  },
   create_certification: (a) => {
     const c = { ...(a.certification as Certification), id: nextId(mockCertifications) };
     mockCertifications.unshift(c);
@@ -285,16 +294,22 @@ const handlers: Record<string, Handler> = {
     mockAchievements.unshift(ach);
     return ach;
   },
-  create_skill: (a) => a.skill,
+  create_skill: (a) => {
+    const s = { ...(a.skill as Skill), id: nextId(skills) };
+    if (!skills.some((x) => x.canonicalName.toLowerCase() === s.canonicalName.toLowerCase())) {
+      skills.push(s);
+    }
+    return s;
+  },
   update_project: (a) => replaceById(mockProjects, a.project),
   update_experience: (a) => replaceById(mockExperiences, a.experience),
-  update_education: (a) => a.education,
+  update_education: (a) => replaceById(educations, a.education),
   update_certification: (a) => replaceById(mockCertifications, a.certification),
   update_achievement: (a) => replaceById(mockAchievements, a.achievement),
   update_skill: (a) => a.skill,
   delete_project: (a) => removeById(mockProjects, a.id),
   delete_experience: (a) => removeById(mockExperiences, a.id),
-  delete_education: () => ({ ok: true }),
+  delete_education: (a) => removeById(educations, a.id),
   delete_certification: (a) => removeById(mockCertifications, a.id),
   delete_achievement: (a) => removeById(mockAchievements, a.id),
   delete_skill: () => ({ ok: true }),
@@ -439,14 +454,109 @@ const handlers: Record<string, Handler> = {
   parse_certificate_text: (a) => parseCertificate(String(a.text ?? "")),
   github_repo_candidate: (a) => parseGithubRepo(String(a.owner ?? ""), String(a.repo ?? "")),
   import_resume_batch: (a) => {
-    const b = (a.batch ?? {}) as Record<string, unknown[] | undefined>;
+    const b = (a.batch ?? {}) as {
+      profile?: Record<string, unknown> | null;
+      projects?: Record<string, unknown>[];
+      experiences?: Record<string, unknown>[];
+      education?: Record<string, unknown>[];
+      achievements?: Record<string, unknown>[];
+      skills?: { name?: string }[];
+    };
+    if (b.profile) Object.assign(profile, b.profile);
+
+    // Resolve-or-create every skill; records link by canonical name.
+    const nameId = new Map<string, number>();
+    const skillIdFor = (name: string): number => {
+      const lower = name.trim().toLowerCase();
+      if (!lower) return 0;
+      const existing = skills.find(
+        (s) =>
+          s.canonicalName.toLowerCase() === lower ||
+          s.aliases.some((al) => al.alias.toLowerCase() === lower),
+      );
+      if (existing) {
+        nameId.set(lower, existing.id);
+        return existing.id;
+      }
+      const created = {
+        id: nextId(skills),
+        canonicalName: name.trim(),
+        category: "other" as const,
+        aliases: [],
+      };
+      skills.push(created);
+      nameId.set(lower, created.id);
+      return created.id;
+    };
+    for (const s of b.skills ?? []) skillIdFor(String(s?.name ?? ""));
+
+    const linkSkills = (names: unknown): SkillRef[] => {
+      const out: SkillRef[] = [];
+      for (const n of (names as string[]) ?? []) {
+        const id = skillIdFor(n);
+        if (id > 0) out.push({ skillId: id, canonicalName: n.trim(), confidence: 3 });
+      }
+      return out;
+    };
+
+    const projectIds = (b.projects ?? []).map((p) => {
+      const draft = p as Record<string, unknown> & { skills?: string[] };
+      const created = {
+        ...(draft as unknown as Project),
+        id: nextId(mockProjects),
+        skills: linkSkills(draft.skills),
+        evidenceCount: 0,
+        origin: "imported" as const,
+      };
+      mockProjects.unshift(created);
+      return created.id;
+    });
+
+    const experienceIds = (b.experiences ?? []).map((e) => {
+      const draft = e as Record<string, unknown>;
+      const text = `${draft.organization ?? ""} ${draft.role ?? ""} ${draft.description ?? ""}`.toLowerCase();
+      const linked: SkillRef[] = [];
+      for (const [name, id] of nameId) {
+        if (text.includes(name)) linked.push({ skillId: id, canonicalName: name, confidence: 3 });
+      }
+      const created = {
+        ...(draft as unknown as Experience),
+        id: nextId(mockExperiences),
+        skills: linked,
+        evidenceCount: 0,
+        origin: "imported" as const,
+      };
+      mockExperiences.unshift(created);
+      return created.id;
+    });
+
+    const educationIds = (b.education ?? []).map((e) => {
+      const created = {
+        ...(e as (typeof educations)[number]),
+        id: nextId(educations),
+      };
+      educations.unshift(created);
+      return created.id;
+    });
+
+    const achievementIds = (b.achievements ?? []).map((ach) => {
+      const created = {
+        ...(ach as unknown as Achievement),
+        id: nextId(mockAchievements),
+        evidenceCount: 0,
+        origin: "imported" as const,
+      };
+      mockAchievements.unshift(created);
+      return created.id;
+    });
+
     return {
       profileSaved: Boolean(b.profile),
-      projectIds: (b.projects ?? []).map((_v, i) => 100 + i),
-      experienceIds: (b.experiences ?? []).map((_v, i) => 200 + i),
-      educationIds: (b.education ?? []).map((_v, i) => 300 + i),
-      achievementIds: (b.achievements ?? []).map((_v, i) => 400 + i),
-      skillIds: (b.skills ?? []).map((_v, i) => 500 + i),
+      projectIds,
+      experienceIds,
+      educationIds,
+      achievementIds,
+      skillIds: [...new Set(nameId.values())],
     };
   },
 };

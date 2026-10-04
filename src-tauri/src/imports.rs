@@ -34,6 +34,19 @@ pub struct ProjectDraft {
     pub title: String,
     pub description: String,
     pub skills: Vec<String>,
+    /// Date range printed on the project heading, when the resume carries one.
+    /// Defaults keep older serialized drafts deserializable.
+    #[serde(default)]
+    pub start_date: Option<String>,
+    #[serde(default)]
+    pub end_date: Option<String>,
+    #[serde(default)]
+    pub is_current: bool,
+    /// Live/demo link and repository link lifted from the project block.
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub repo_url: String,
     pub source_snippet: String,
 }
 
@@ -341,6 +354,55 @@ fn github_url(text: &str) -> String {
         }
     }
     String::new()
+}
+
+/// GitHub link inside a project block: keeps the full user/repo path,
+/// unlike the profile-level `github_url` which strips to the user.
+fn github_repo_url(text: &str) -> String {
+    for word in text.split_whitespace() {
+        if let Some(i) = word.find("github.com/") {
+            let mut end = i + "github.com/".len();
+            let bytes = word.as_bytes();
+            while end < bytes.len()
+                && (bytes[end].is_ascii_alphanumeric()
+                    || matches!(bytes[end], b'-' | b'_' | b'.' | b'/'))
+            {
+                end += 1;
+            }
+            let path = word[i..end].trim_end_matches(['.', ',', ';']);
+            let mut parts = path["github.com/".len()..].split('/');
+            let user = parts.next().unwrap_or_default();
+            let repo = parts.next().unwrap_or_default();
+            if !user.is_empty() && !repo.is_empty() {
+                return format!("https://github.com/{user}/{repo}");
+            }
+        }
+    }
+    String::new()
+}
+
+/// Non-GitHub http(s) link inside a project block (live demo, deploy page).
+fn project_website_url(text: &str) -> String {
+    for word in text.split_whitespace() {
+        if (word.starts_with("https://") || word.starts_with("http://"))
+            && !word.contains("github.com")
+            && word.len() <= 120
+        {
+            return word.trim_end_matches(['.', ',', ';']).to_string();
+        }
+    }
+    String::new()
+}
+
+/// Fills a parsed project's links from its own source lines, so the record
+/// keeps the resume URL/repo instead of saving blanks.
+fn fill_project_links(project: &mut ProjectDraft) {
+    if project.repo_url.is_empty() {
+        project.repo_url = github_repo_url(&project.source_snippet);
+    }
+    if project.url.is_empty() {
+        project.url = project_website_url(&project.source_snippet);
+    }
 }
 
 fn website_url(text: &str) -> String {
@@ -1125,12 +1187,41 @@ fn push_narrative_project(
     if description.chars().count() > 600 {
         description = description.chars().take(600).collect();
     }
+    // "Period: 2022 – 2024"-style meta lines carry the date range; the
+    // description text carries the live/repo links.
+    let mut start_date = None;
+    let mut end_date = None;
+    let mut is_current = false;
+    for line in meta.iter() {
+        let lower = line.to_lowercase();
+        if lower.starts_with("period")
+            || lower.starts_with("duration")
+            || lower.starts_with("dates")
+        {
+            let (s, e, cur) =
+                extract_date_range(line.split_once(':').map(|(_, v)| v).unwrap_or(line));
+            if start_date.is_none() {
+                start_date = s;
+            }
+            if end_date.is_none() {
+                end_date = e;
+            }
+            is_current = cur;
+        }
+    }
+    let repo_url = github_repo_url(&description);
+    let url = project_website_url(&description);
     meta.clear();
     prose.clear();
     projects.push(ProjectDraft {
         title,
         description,
         skills: std::mem::take(skills),
+        start_date,
+        end_date,
+        is_current,
+        url,
+        repo_url,
         source_snippet: String::new(),
     });
 }
@@ -1196,6 +1287,7 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
         if let Some(next) = detect_section(trimmed) {
             if let Some(mut p) = cur_project.take() {
                 p.source_snippet = snippet.join("\n");
+                fill_project_links(&mut p);
                 projects.push(p);
             }
             if let Some(mut e) = cur_experience.take() {
@@ -1259,13 +1351,19 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                 } else {
                     if let Some(mut p) = cur_project.take() {
                         p.source_snippet = snippet.join("\n");
+                        fill_project_links(&mut p);
                         projects.push(p);
                     }
                     snippet = vec![line.to_string()];
+                    // Dates live on the heading line ("PyKV 2024 – Present") —
+                    // capture them before they are stripped from the title.
+                    let (start_date, end_date, is_current) = extract_date_range(content);
                     let content = strip_trailing_dates(content);
                     let (title, rest) =
                         split_pair(&content).unwrap_or((content.clone(), String::new()));
-                    let title = clean_title(&title);
+                    // A "|" keeps the date range inside the title part
+                    // ("PyKV 2024 – Present | Python") — strip it there too.
+                    let title = clean_title(&strip_trailing_dates(&title));
                     let (description, skills) = match tech_skill_list(&rest) {
                         Some(list) => (String::new(), list),
                         None => (rest, Vec::new()),
@@ -1274,6 +1372,11 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                         title,
                         description,
                         skills,
+                        start_date,
+                        end_date,
+                        is_current,
+                        url: String::new(),
+                        repo_url: String::new(),
                         source_snippet: String::new(),
                     });
                 }
@@ -1462,6 +1565,7 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
     }
     if let Some(mut p) = cur_project.take() {
         p.source_snippet = snippet.join("\n");
+        fill_project_links(&mut p);
         projects.push(p);
     }
     if let Some(mut e) = cur_experience.take() {
@@ -2142,6 +2246,37 @@ Bachelor of Technology in Computer Science & Systems Engineering September 2023 
         );
         assert_eq!(import.education[0].start_date.as_deref(), Some("2023-09"));
         assert_eq!(import.education[0].end_date.as_deref(), Some("2027-05"));
+    }
+
+    /// Project heading dates and block links (live URL, GitHub repo) survive
+    /// parsing instead of being stripped into the void.
+    #[test]
+    fn resume_parser_extracts_project_dates_and_links() {
+        let import = parse_resume_text(
+            r#"
+PROJECTS
+Mono January 2024 – Present | Rust
+- A small compiler, live at https://mono.dev
+PyKV 2024 – 2025 | Python, Rust
+- In-memory cache — github.com/ada/pykv
+"#,
+        );
+
+        assert_eq!(import.projects.len(), 2, "got {:?}", import.projects);
+        let mono = &import.projects[0];
+        assert_eq!(mono.title, "Mono");
+        assert_eq!(mono.start_date.as_deref(), Some("2024-01"));
+        assert_eq!(mono.end_date, None);
+        assert!(mono.is_current, "Present marks the project current");
+        assert_eq!(mono.url, "https://mono.dev");
+        assert_eq!(mono.repo_url, "");
+
+        let pykv = &import.projects[1];
+        assert_eq!(pykv.title, "PyKV");
+        assert_eq!(pykv.start_date.as_deref(), Some("2024-01"));
+        assert_eq!(pykv.end_date.as_deref(), Some("2025-01"));
+        assert!(!pykv.is_current);
+        assert_eq!(pykv.repo_url, "https://github.com/ada/pykv");
     }
 
     #[test]

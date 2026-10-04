@@ -5,7 +5,7 @@ import OnboardingPage from "./OnboardingPage";
 import { ipc } from "../../lib/ipc";
 import { useJobsStore } from "../../stores/jobsStore";
 import { useVaultStore } from "../../stores/vaultStore";
-import type { ResumeImport } from "../../lib/types";
+import type { ImportBatch, ImportBatchResult, ResumeImport } from "../../lib/types";
 
 vi.mock("../../lib/ipc", () => ({
   ipc: {
@@ -14,6 +14,7 @@ vi.mock("../../lib/ipc", () => ({
     runJobMatch: vi.fn(),
     runComposer: vi.fn(),
     getMatch: vi.fn(),
+    importResumeBatch: vi.fn(),
     markVerified: vi.fn(),
     unmarkVerified: vi.fn(),
     getOnboardingStatus: vi.fn(),
@@ -23,7 +24,17 @@ vi.mock("../../lib/ipc", () => ({
 }));
 
 const parseResumeText = vi.mocked(ipc.parseResumeText);
+const importResumeBatch = vi.mocked(ipc.importResumeBatch);
 const markVerified = vi.mocked(ipc.markVerified);
+
+const BATCH_RESULT: ImportBatchResult = {
+  profileSaved: true,
+  projectIds: [11],
+  experienceIds: [21],
+  educationIds: [31],
+  achievementIds: [],
+  skillIds: [41],
+};
 
 const FIXTURE: ResumeImport = {
   profile: {
@@ -73,6 +84,7 @@ describe("OnboardingPage — guided first run", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     parseResumeText.mockResolvedValue(FIXTURE);
+    importResumeBatch.mockResolvedValue(BATCH_RESULT);
     markVerified.mockResolvedValue(undefined);
     useJobsStore.setState({
       createWorkspace: vi.fn(async (job) => ({ job, requirements: [] })),
@@ -80,14 +92,13 @@ describe("OnboardingPage — guided first run", () => {
     useVaultStore.setState({
       skills: [],
       profile: null,
-      saveProfile: vi.fn(async () => undefined),
-      saveRecord: vi.fn(async (_key, data) => ({ ...data, id: 42 })) as never,
+      load: vi.fn(async () => undefined) as never,
     });
   });
 
   afterEach(cleanup);
 
-  it("walks welcome → import → review and saves records with honest provenance", async () => {
+  it("walks welcome → import → review and saves everything in one transactional batch", async () => {
     render(
       <MemoryRouter>
         <OnboardingPage />
@@ -119,23 +130,29 @@ describe("OnboardingPage — guided first run", () => {
     fireEvent.click(within(workCard as HTMLElement).getByLabelText(/verified by you/i));
     fireEvent.click(screen.getByRole("button", { name: /save \d+ records to my vault/i }));
 
-    await waitFor(() => expect(useJobsStore.getState).toBeTruthy());
-    const saveRecord = useVaultStore.getState().saveRecord as ReturnType<typeof vi.fn>;
-    await waitFor(() => expect(saveRecord).toHaveBeenCalled());
-
-    const experienceCall = saveRecord.mock.calls.find(([key]) => key === "experiences");
-    expect(experienceCall).toBeTruthy();
-    expect(experienceCall?.[1]).toMatchObject({
+    // One transactional batch carries every accepted record — no save loop.
+    await waitFor(() => expect(importResumeBatch).toHaveBeenCalledTimes(1));
+    const batch = importResumeBatch.mock.calls[0][0] as ImportBatch;
+    expect(batch.profile).toMatchObject({ fullName: "Ada Lovelace" });
+    expect(batch.experiences).toHaveLength(1);
+    expect(batch.experiences[0]).toMatchObject({
       organization: "Acme Robotics",
-      origin: "imported",
-      editedAt: expect.any(String),
+      startDate: "2025-06",
     });
-    const projectCall = saveRecord.mock.calls.find(([key]) => key === "projects");
-    expect(projectCall?.[1]).toMatchObject({ origin: "imported", editedAt: null });
+    expect(batch.projects).toHaveLength(1);
+    expect(batch.projects[0]).toMatchObject({
+      title: "PyKV",
+      skills: ["Python"],
+      url: "",
+      repoUrl: "",
+    });
+    // The skill referenced by the project stays in the batch even though the
+    // top-level list is what was reviewed.
+    expect(batch.skills).toEqual([{ name: "Python", category: "language" }]);
 
-    // The verified group's records were explicitly verified.
+    // The verified group's records were verified by their real ids.
     await waitFor(() => expect(markVerified).toHaveBeenCalled());
-    expect(markVerified.mock.calls.every(([kind]) => kind === "experience")).toBe(true);
+    expect(markVerified.mock.calls).toEqual([["experience", 21]]);
   });
 
   it("offers Start manually as the secondary path", () => {

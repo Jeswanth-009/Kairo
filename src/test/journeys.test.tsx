@@ -41,6 +41,7 @@ beforeEach(() => {
   useVaultStore.setState({
     skills: [],
     profile: null,
+    load: vi.fn(async () => undefined) as never,
     saveProfile: vi.fn(async () => undefined),
     saveRecord: vi.fn(async (_k, d) => ({ ...d, id: 7 })) as never,
   });
@@ -63,6 +64,14 @@ describe("journey · importing a resume", () => {
       achievements: [],
       skills: [{ name: "Rust", category: "language" }],
     });
+    mocks.importResumeBatch = vi.fn().mockResolvedValue({
+      profileSaved: true,
+      projectIds: [],
+      experienceIds: [],
+      educationIds: [],
+      achievementIds: [],
+      skillIds: [41],
+    });
     mocks.markVerified = vi.fn().mockResolvedValue(undefined);
 
     renderAt(<OnboardingPage />);
@@ -79,10 +88,13 @@ describe("journey · importing a resume", () => {
     expect(await screen.findByText("Review the facts")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /save \d+ records/i }));
 
-    const saveRecord = useVaultStore.getState().saveRecord as ReturnType<typeof vi.fn>;
-    await waitFor(() => expect(saveRecord).toHaveBeenCalled());
-    const skillCall = saveRecord.mock.calls.find(([key]) => key === "skills");
-    expect(skillCall?.[1]).toMatchObject({ canonicalName: "Rust" });
+    // One transactional batch carries the whole import — records and the
+    // reviewed skill set save together or not at all.
+    const importBatch = mocks.importResumeBatch as ReturnType<typeof vi.fn>;
+    await waitFor(() => expect(importBatch).toHaveBeenCalledTimes(1));
+    const batch = importBatch.mock.calls[0][0];
+    expect(batch.skills).toEqual([{ name: "Rust", category: "language" }]);
+    expect(batch.profile).toMatchObject({ fullName: "Ada Lovelace" });
   });
 });
 

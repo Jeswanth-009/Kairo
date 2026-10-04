@@ -95,10 +95,42 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
         skill_ids.push((draft.name.trim().to_lowercase(), id));
         out.skill_ids.push(id);
     }
-    let skill_id_for = |name: &str, ids: &[(String, i64)]| -> Option<i64> {
+    // Resolves a record-referenced skill that the top-level skill list does
+    // not carry (the user may have pruned the list without editing every
+    // record). Deduped by lowercase name so shared skills stay one row.
+    let referenced = |name: &str,
+                      skill_ids: &mut Vec<(String, i64)>,
+                      out: &mut ImportBatchResult|
+     -> Result<i64, String> {
         let lower = name.trim().to_lowercase();
-        ids.iter().find(|(n, _)| n == &lower).map(|(_, id)| *id)
+        if lower.is_empty() {
+            return Err("empty skill name in import".to_string());
+        }
+        if let Some((_, id)) = skill_ids.iter().find(|(n, _)| *n == lower) {
+            return Ok(*id);
+        }
+        let id = resolve_skill_tx(
+            tx,
+            &SkillDraft {
+                name: name.trim().to_string(),
+                category: "other".to_string(),
+            },
+        )?;
+        skill_ids.push((lower, id));
+        out.skill_ids.push(id);
+        Ok(id)
     };
+
+    // Pre-resolve the skills referenced by project drafts so the experience
+    // text-matching below sees the complete name→id map regardless of the
+    // order the records are processed in.
+    for draft in &batch.projects {
+        for s in &draft.skills {
+            if !s.trim().is_empty() {
+                referenced(s, &mut skill_ids, &mut out)?;
+            }
+        }
+    }
 
     for draft in &batch.experiences {
         let experience = Experience {
@@ -120,25 +152,28 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
         out.experience_ids.push(id);
         // Experiences carry no per-draft skill list — link top-level skills
         // whose name appears in the description (the old importer's behavior).
+        // Collect every match, then write once: write_links replaces the
+        // record's whole link set, so per-link calls would drop all but the
+        // last.
         let text = format!(
             "{} {} {}",
             draft.organization, draft.role, draft.description
         )
         .to_lowercase();
+        let mut links: Vec<super::vault::SkillRef> = Vec::new();
+        let mut seen: Vec<i64> = Vec::new();
         for (name, skill_id) in &skill_ids {
-            if text.contains(name) {
-                let r = super::vault::SkillRef {
+            if text.contains(name.as_str()) && !seen.contains(skill_id) {
+                seen.push(*skill_id);
+                links.push(super::vault::SkillRef {
                     skill_id: *skill_id,
                     canonical_name: name.clone(),
                     confidence: 3,
-                };
-                write_links(
-                    tx,
-                    EntityKind::Experience.as_str(),
-                    id,
-                    std::slice::from_ref(&r),
-                )?;
+                });
             }
+        }
+        if !links.is_empty() {
+            write_links(tx, EntityKind::Experience.as_str(), id, &links)?;
         }
     }
 
@@ -147,11 +182,11 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
             id: 0,
             title: draft.title.trim().to_string(),
             description: draft.description.clone(),
-            start_date: None,
-            end_date: None,
-            is_current: false,
-            url: String::new(),
-            repo_url: String::new(),
+            start_date: draft.start_date.clone(),
+            end_date: draft.end_date.clone(),
+            is_current: draft.is_current,
+            url: draft.url.clone(),
+            repo_url: draft.repo_url.clone(),
             skills: Vec::new(),
             evidence_count: 0,
             origin: "imported".to_string(),
@@ -160,20 +195,25 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
         };
         let id = insert_entity_tx::<Project>(tx, &project)?;
         out.project_ids.push(id);
+        // One write_links call per record with the full link set — see the
+        // experience note above.
+        let mut links: Vec<super::vault::SkillRef> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
         for s in &draft.skills {
-            if let Some(skill_id) = skill_id_for(s, &skill_ids) {
-                let r = super::vault::SkillRef {
-                    skill_id,
-                    canonical_name: s.trim().to_string(),
-                    confidence: 3,
-                };
-                write_links(
-                    tx,
-                    EntityKind::Project.as_str(),
-                    id,
-                    std::slice::from_ref(&r),
-                )?;
+            let lower = s.trim().to_lowercase();
+            if lower.is_empty() || seen.contains(&lower) {
+                continue;
             }
+            seen.push(lower.clone());
+            let skill_id = referenced(s, &mut skill_ids, &mut out)?;
+            links.push(super::vault::SkillRef {
+                skill_id,
+                canonical_name: s.trim().to_string(),
+                confidence: 3,
+            });
+        }
+        if !links.is_empty() {
+            write_links(tx, EntityKind::Project.as_str(), id, &links)?;
         }
     }
 
@@ -241,6 +281,11 @@ mod tests {
                 title: "PyKV".to_string(),
                 description: "in-memory cache".to_string(),
                 skills: vec!["Python".to_string()],
+                start_date: Some("2024-01".to_string()),
+                end_date: None,
+                is_current: true,
+                url: "https://pykv.dev".to_string(),
+                repo_url: "https://github.com/ada/pykv".to_string(),
                 source_snippet: String::new(),
             }],
             experiences: vec![ExperienceDraft {
@@ -311,6 +356,20 @@ mod tests {
         assert_eq!(links.len(), 2, "project + experience link Python");
         assert!(links.iter().all(|id| *id > 0));
 
+        // Project dates and links survive the batch instead of being blanked.
+        let (start, end, current, url, repo): (Option<String>, Option<String>, bool, String, String) = conn
+            .query_row(
+                "SELECT start_date, end_date, is_current, url, repo_url FROM projects WHERE id = ?1",
+                [result.project_ids[0]],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
+        assert_eq!(start.as_deref(), Some("2024-01"));
+        assert_eq!(end, None);
+        assert!(current);
+        assert_eq!(url, "https://pykv.dev");
+        assert_eq!(repo, "https://github.com/ada/pykv");
+
         // Records carry the honest imported origin.
         let origin: String = conn
             .query_row(
@@ -320,6 +379,78 @@ mod tests {
             )
             .unwrap();
         assert_eq!(origin, "imported");
+    }
+
+    /// A record naming several skills keeps every link (write_links replaces
+    /// the record's whole link set, so per-link calls used to drop all but
+    /// the last), and skills referenced by records but missing from the
+    /// top-level skill list are created and linked anyway.
+    #[test]
+    fn batch_keeps_every_link_and_resolves_referenced_skills() {
+        let mut conn = mem_db();
+        let batch = ImportBatch {
+            profile: None,
+            projects: vec![ProjectDraft {
+                title: "Mono".to_string(),
+                description: "a compiler".to_string(),
+                skills: vec!["Rust".to_string(), "LLVM".to_string()],
+                start_date: Some("2023-02".to_string()),
+                end_date: Some("2024-06".to_string()),
+                is_current: false,
+                url: "https://mono.dev".to_string(),
+                repo_url: String::new(),
+                source_snippet: String::new(),
+            }],
+            experiences: vec![ExperienceDraft {
+                organization: "Acme".to_string(),
+                role: "Engineer".to_string(),
+                description: "wrote Rust and LLVM passes".to_string(),
+                start_date: None,
+                end_date: None,
+                is_current: true,
+                location: String::new(),
+                source_snippet: String::new(),
+            }],
+            education: vec![],
+            achievements: vec![],
+            // The list is empty on purpose — the records still get links.
+            skills: vec![],
+        };
+        let result = import_resume_batch(&mut conn, &batch).unwrap();
+
+        // Both referenced skills were created and appear in skill_ids.
+        let mut names = result.skill_ids.clone();
+        names.sort();
+        assert_eq!(names.len(), 2, "Rust + LLVM, deduplicated: {names:?}");
+
+        let links_for = |entity_type: &str, entity_id: i64| -> Vec<String> {
+            let id_str = entity_id.to_string();
+            let mut stmt = conn
+                .prepare(
+                    "SELECT s.canonical_name FROM entity_skills es \
+                     JOIN skills s ON s.id = es.skill_id \
+                     WHERE es.entity_type = ?1 AND es.entity_id = ?2 ORDER BY s.canonical_name",
+                )
+                .unwrap();
+            let rows = stmt
+                .query_map([entity_type, id_str.as_str()], |r| r.get(0))
+                .unwrap();
+            rows.map(|r| r.unwrap()).collect()
+        };
+
+        let project_links = links_for("project", result.project_ids[0]);
+        assert_eq!(
+            project_links,
+            vec!["LLVM", "Rust"],
+            "both project links survive"
+        );
+
+        let experience_links = links_for("experience", result.experience_ids[0]);
+        assert_eq!(
+            experience_links,
+            vec!["Rust"],
+            "text match links the experience"
+        );
     }
 
     /// A batch that fails partway (empty organization fails validation) must

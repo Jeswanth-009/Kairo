@@ -13,6 +13,8 @@ import type {
   Evidence,
   Experience,
   GithubRepoCandidate,
+  ImportBatch,
+  ImportBatchResult,
   Job,
   JobExtraction,
   JobRequirement,
@@ -131,6 +133,10 @@ export const ipc = {
     invoke<CertificateCandidate>("parse_certificate_text", { text }),
   githubRepoCandidate: (owner: string, repo: string): Promise<GithubRepoCandidate> =>
     invoke<GithubRepoCandidate>("github_repo_candidate", { owner, repo }),
+  /** Saves a whole first-run import in one SQLite transaction — all records
+   *  and links commit together, or nothing does. */
+  importResumeBatch: (batch: ImportBatch): Promise<ImportBatchResult> =>
+    invoke<ImportBatchResult>("import_resume_batch", { batch }),
 
   // Job Workspace (Phase 4)
   parseJd: (text: string): Promise<JobExtraction> => invoke<JobExtraction>("parse_jd", { text }),

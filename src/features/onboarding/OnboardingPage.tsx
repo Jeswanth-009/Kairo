@@ -10,12 +10,9 @@ import { enqueuePlanSave } from "../../lib/planAutosave";
 import { extractTextFromFile } from "../imports/extractFile";
 import { originBadge, utcNow } from "../../lib/origin";
 import type {
-  Education,
-  Experience,
   Job,
   JobRequirement,
   MatchReport,
-  Project,
   ResumePlan,
   ResumeImport,
   SkillCategory,
@@ -344,14 +341,13 @@ function ReviewGroups({
   onDone: (outcome: ReviewOutcome) => void;
   onSkip: () => void;
 }) {
-  const saveRecord = useVaultStore((s) => s.saveRecord);
-  const saveProfile = useVaultStore((s) => s.saveProfile);
-  const vaultSkills = useVaultStore((s) => s.skills);
+  const reloadVault = useVaultStore((s) => s.load);
 
   const [contact, setContact] = useState(() => editable(parsed.profile ?? emptyProfile()));
   const [experiences, setExperiences] = useState(() => parsed.experiences.map(editable));
   const [projects, setProjects] = useState(() => parsed.projects.map(editable));
   const [education, setEducation] = useState(() => parsed.education.map(editable));
+  const [achievements, setAchievements] = useState(() => parsed.achievements.map(editable));
   const allSkills = parsed.skills;
   const [removedSkills, setRemovedSkills] = useState<Set<string>>(new Set());
   const [skillsDismissed, setSkillsDismissed] = useState(false);
@@ -360,6 +356,7 @@ function ReviewGroups({
   const [verifyWork, setVerifyWork] = useState(false);
   const [verifyProjects, setVerifyProjects] = useState(false);
   const [verifyEducation, setVerifyEducation] = useState(false);
+  const [verifyAchievements, setVerifyAchievements] = useState(false);
   const [verifySkills, setVerifySkills] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -372,6 +369,7 @@ function ReviewGroups({
     experiences.filter((e) => !e.dismissed).length +
     projects.filter((p) => !p.dismissed).length +
     education.filter((e) => !e.dismissed).length +
+    achievements.filter((a) => !a.dismissed).length +
     (allSkills.length > 0 && !skillsDismissed ? 1 : 0);
 
   const patch = <T,>(
@@ -391,130 +389,129 @@ function ReviewGroups({
     );
   };
 
-  /** Create missing skills and return canonical names for record links. */
-  const resolveSkills = async (names: string[]): Promise<void> => {
-    for (const raw of names) {
-      const name = raw.trim();
-      if (!name) continue;
-      const lower = name.toLowerCase();
-      const exists = vaultSkills.some(
-        (s) =>
-          s.canonicalName.toLowerCase() === lower ||
-          s.aliases.some((a) => a.alias.toLowerCase() === lower),
-      );
-      if (!exists) {
-        await saveRecord("skills", { id: 0, canonicalName: name, category: "other", aliases: [] });
-      }
-    }
-  };
-
   const save = async () => {
     setSaving(true);
     try {
-      let created = 0;
-      const verified: { kind: string; id: number }[] = [];
-
-      if (hasContact && !contact.dismissed) {
-        await saveProfile({
-          fullName: contact.fullName,
-          headline: contact.headline,
-          email: contact.email,
-          phone: contact.phone,
-          location: "",
-          github: contact.github,
-          website: contact.website,
-          linkedin: contact.linkedin,
-          summary: contact.summary,
-        });
-        created += 1;
-        if (verifyContact) toast.ok("Contact details saved — mark them verified from the Vault record.");
-      }
-
-      for (const exp of experiences) {
-        if (exp.dismissed) continue;
-        const record = await saveRecord("experiences", {
-          id: 0,
-          organization: exp.organization,
-          role: exp.role,
-          description: exp.description,
-          startDate: exp.startDate || null,
-          endDate: exp.isCurrent ? null : exp.endDate || null,
-          isCurrent: exp.isCurrent,
-          location: exp.location,
-          skills: [],
-          evidenceCount: 0,
-          origin: "imported" as const,
-          editedAt: exp.changed.size > 0 ? utcNow() : null,
-          verifiedAt: null,
-        } satisfies Experience);
-        created += 1;
-        if (verifyWork) verified.push({ kind: "experience", id: record.id });
-      }
-
+      // Skills referenced by records stay in the batch even when the user
+      // pruned the top-level list — a record's own chips decide its links.
+      const referenced = new Set<string>();
       for (const proj of projects) {
         if (proj.dismissed) continue;
-        await resolveSkills(proj.skills);
-        const record = await saveRecord("projects", {
-          id: 0,
-          title: proj.title,
-          description: proj.description,
-          startDate: null,
-          endDate: null,
-          isCurrent: false,
-          url: "",
-          repoUrl: "",
-          skills: proj.skills
-            .filter((s) => s.trim())
-            .map((s) => {
-              const match = vaultSkills.find((v) => v.canonicalName.toLowerCase() === s.toLowerCase());
-              return {
-                skillId: match?.id ?? 0,
-                canonicalName: s,
-                confidence: 3,
-              };
-            }),
-          evidenceCount: 0,
-          origin: "imported" as const,
-          editedAt: proj.changed.size > 0 ? utcNow() : null,
-          verifiedAt: null,
-        } satisfies Project);
-        created += 1;
-        if (verifyProjects) verified.push({ kind: "project", id: record.id });
+        for (const s of proj.skills) if (s.trim()) referenced.add(s.trim());
+      }
+      const skillList: { name: string; category: SkillCategory }[] = [];
+      if (!skillsDismissed) {
+        for (const s of activeSkills) skillList.push({ name: s.name, category: s.category });
+      }
+      for (const name of referenced) {
+        if (!skillList.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+          skillList.push({ name, category: "other" });
+        }
       }
 
-      for (const edu of education) {
-        if (edu.dismissed) continue;
-        const record = await saveRecord("education", {
-          id: 0,
-          institution: edu.institution,
-          degree: edu.degree,
-          fieldOfStudy: edu.fieldOfStudy,
-          description: "",
-          startDate: edu.startDate || null,
-          endDate: edu.isCurrent ? null : edu.endDate || null,
-          isCurrent: edu.isCurrent,
-          origin: "imported" as const,
-          editedAt: edu.changed.size > 0 ? utcNow() : null,
-          verifiedAt: null,
-        } satisfies Education);
-        created += 1;
-        if (verifyEducation) verified.push({ kind: "education", id: record.id });
-      }
+      // One transactional call: every record and skill link commits together,
+      // or nothing does — a failed save can never leave a partial import.
+      const result = await ipc.importResumeBatch({
+        profile:
+          hasContact && !contact.dismissed
+            ? {
+                fullName: contact.fullName,
+                headline: contact.headline,
+                email: contact.email,
+                phone: contact.phone,
+                location: "",
+                github: contact.github,
+                website: contact.website,
+                linkedin: contact.linkedin,
+                summary: contact.summary,
+              }
+            : null,
+        projects: projects
+          .filter((p) => !p.dismissed)
+          .map((p) => ({
+            title: p.title,
+            description: p.description,
+            skills: p.skills.filter((s) => s.trim()),
+            startDate: p.startDate || null,
+            endDate: p.isCurrent ? null : p.endDate || null,
+            isCurrent: p.isCurrent ?? false,
+            url: p.url ?? "",
+            repoUrl: p.repoUrl ?? "",
+            sourceSnippet: p.sourceSnippet ?? "",
+          })),
+        experiences: experiences
+          .filter((e) => !e.dismissed)
+          .map((e) => ({
+            organization: e.organization,
+            role: e.role,
+            description: e.description,
+            startDate: e.startDate || null,
+            endDate: e.isCurrent ? null : e.endDate || null,
+            isCurrent: e.isCurrent,
+            location: e.location,
+            sourceSnippet: e.sourceSnippet ?? "",
+          })),
+        education: education
+          .filter((e) => !e.dismissed)
+          .map((e) => ({
+            institution: e.institution,
+            degree: e.degree,
+            fieldOfStudy: e.fieldOfStudy,
+            startDate: e.startDate || null,
+            endDate: e.isCurrent ? null : e.endDate || null,
+            isCurrent: e.isCurrent,
+            sourceSnippet: e.sourceSnippet ?? "",
+          })),
+        achievements: achievements
+          .filter((a) => !a.dismissed)
+          .map((a) => ({
+            title: a.title,
+            issuer: a.issuer,
+            description: a.description,
+            achievedOn: a.achievedOn || null,
+            sourceSnippet: a.sourceSnippet ?? "",
+          })),
+        skills: skillList,
+      });
 
-      if (allSkills.length > 0 && !skillsDismissed) {
-        await resolveSkills(activeSkills.map((s) => s.name));
-        created += 1;
+      // Verify the exact records the user confirmed, by their real ids.
+      const verifications: { kind: string; id: number }[] = [];
+      if (verifyWork) {
+        for (const id of result.experienceIds) verifications.push({ kind: "experience", id });
       }
-
-      for (const v of verified) {
+      if (verifyProjects) {
+        for (const id of result.projectIds) verifications.push({ kind: "project", id });
+      }
+      if (verifyEducation) {
+        for (const id of result.educationIds) verifications.push({ kind: "education", id });
+      }
+      if (verifyAchievements) {
+        for (const id of result.achievementIds) verifications.push({ kind: "achievement", id });
+      }
+      for (const v of verifications) {
         await ipc.markVerified(v.kind, v.id);
       }
 
+      // The batch wrote rows behind the store's back — reload so the Vault
+      // and the rest of onboarding see what actually saved.
+      await reloadVault();
+
+      const created =
+        (result.profileSaved ? 1 : 0) +
+        result.projectIds.length +
+        result.experienceIds.length +
+        result.educationIds.length +
+        result.achievementIds.length +
+        (skillList.length > 0 ? 1 : 0);
+      if (verifyContact && result.profileSaved) {
+        toast.ok("Contact details saved — mark them verified from the Vault record.");
+      }
       toast.ok(
         `${created} record${created === 1 ? "" : "s"} saved to your Vault — each shows where it came from.`,
       );
       onDone({ createdCount: created });
     } catch (e) {
+      // Nothing was saved — the whole batch rolled back. Retrying is safe.
       toast.error(String(e));
     } finally {
       setSaving(false);
@@ -616,6 +613,7 @@ function ReviewGroups({
               placeholder="What you did there"
               onChange={(e) => patch(experiences, setExperiences, i, "description", e.target.value)}
             />
+            <SourceNote snippet={exp.sourceSnippet} />
           </GroupCard>
         ),
       )}
@@ -644,6 +642,31 @@ function ReviewGroups({
               placeholder="What it is and what you built"
               onChange={(e) => patch(projects, setProjects, i, "description", e.target.value)}
             />
+            {proj.startDate || proj.endDate || proj.url || proj.repoUrl ? (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Input
+                  value={proj.startDate ?? ""}
+                  placeholder="Start (YYYY-MM)"
+                  onChange={(e) => patch(projects, setProjects, i, "startDate", e.target.value)}
+                />
+                <Input
+                  value={proj.endDate ?? ""}
+                  placeholder="End (YYYY-MM)"
+                  onChange={(e) => patch(projects, setProjects, i, "endDate", e.target.value)}
+                />
+                <Input
+                  value={proj.url ?? ""}
+                  placeholder="Live URL"
+                  onChange={(e) => patch(projects, setProjects, i, "url", e.target.value)}
+                />
+                <Input
+                  value={proj.repoUrl ?? ""}
+                  placeholder="Repository URL"
+                  onChange={(e) => patch(projects, setProjects, i, "repoUrl", e.target.value)}
+                />
+              </div>
+            ) : null}
+            <SourceNote snippet={proj.sourceSnippet} />
             {proj.skills.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {proj.skills.map((s) => (
@@ -691,6 +714,48 @@ function ReviewGroups({
                 onChange={(e) => patch(education, setEducation, i, "endDate", e.target.value)}
               />
             </div>
+            <SourceNote snippet={edu.sourceSnippet} />
+          </GroupCard>
+        ),
+      )}
+
+      {achievements.map((ach, i) =>
+        ach.dismissed ? null : (
+          <GroupCard
+            key={`ach-${i}`}
+            title="Achievement"
+            subtitle={[ach.title, ach.issuer].filter(Boolean).join(" · ") || "Extracted from your resume"}
+            verify={verifyAchievements}
+            setVerify={setVerifyAchievements}
+            edited={ach.changed.size > 0}
+            dismissed={ach.dismissed}
+            setDismissed={(v) => setAchievements(achievements.map((x, j) => (j === i ? { ...x, dismissed: v } : x)))}
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                value={ach.title}
+                placeholder="Title"
+                onChange={(e) => patch(achievements, setAchievements, i, "title", e.target.value)}
+              />
+              <Input
+                value={ach.issuer}
+                placeholder="Issuer"
+                onChange={(e) => patch(achievements, setAchievements, i, "issuer", e.target.value)}
+              />
+              <Input
+                value={ach.achievedOn ?? ""}
+                placeholder="Achieved (YYYY-MM)"
+                onChange={(e) => patch(achievements, setAchievements, i, "achievedOn", e.target.value)}
+              />
+            </div>
+            <Textarea
+              rows={2}
+              className="mt-2"
+              value={ach.description}
+              placeholder="What it involved"
+              onChange={(e) => patch(achievements, setAchievements, i, "description", e.target.value)}
+            />
+            <SourceNote snippet={ach.sourceSnippet} />
           </GroupCard>
         ),
       )}
@@ -731,6 +796,17 @@ function ReviewGroups({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** The supporting passage from the original resume, shown beside the fact. */
+function SourceNote({ snippet }: { snippet?: string | null }) {
+  if (!snippet) return null;
+  return (
+    <p className="mt-2 rounded-lg bg-accent-soft px-3 py-2 text-[11px] leading-relaxed text-muted">
+      <span className="font-semibold text-ink">From your resume: </span>
+      {snippet}
+    </p>
   );
 }
 

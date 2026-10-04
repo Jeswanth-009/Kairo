@@ -275,6 +275,13 @@ export interface ProjectDraft {
   title: string;
   description: string;
   skills: string[];
+  /** Dates printed on the project heading, when the resume carries one. */
+  startDate?: string | null;
+  endDate?: string | null;
+  isCurrent?: boolean;
+  /** Live/demo and repository links lifted from the project block. */
+  url?: string;
+  repoUrl?: string;
   sourceSnippet: string;
 }
 
@@ -324,6 +331,30 @@ export interface ResumeImport {
   education: EducationDraft[];
   achievements: AchievementDraft[];
   skills: SkillDraft[];
+}
+
+// --- Transactional import batch (one SQLite transaction, all-or-nothing) ----
+
+/** Everything a first-run import saves, committed in a single call. */
+export interface ImportBatch {
+  /** Null saves nothing — an absent profile never erases an existing one. */
+  profile: Profile | null;
+  projects: ProjectDraft[];
+  experiences: ExperienceDraft[];
+  education: EducationDraft[];
+  achievements: AchievementDraft[];
+  /** Skill names referenced anywhere in the batch; missing ones are created. */
+  skills: SkillDraft[];
+}
+
+export interface ImportBatchResult {
+  profileSaved: boolean;
+  projectIds: number[];
+  experienceIds: number[];
+  educationIds: number[];
+  achievementIds: number[];
+  /** Ids of the skills the batch resolved or created (deduplicated). */
+  skillIds: number[];
 }
 
 // --- Job Workspace (Phase 4) ----------------------------------------------
