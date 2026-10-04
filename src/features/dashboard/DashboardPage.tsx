@@ -526,12 +526,6 @@ export default function DashboardPage() {
         <span className="h-px flex-1 bg-line" />
       </div>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {vaultTiles.map((tile) => (
-          <StatTile key={tile.label} tile={tile} />
-        ))}
-      </div>
-
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[...vaultTiles, ...pipelineTiles].map((tile) => (
           <StatTile key={tile.label} tile={tile} />
         ))}
