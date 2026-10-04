@@ -9,7 +9,11 @@ default-run = "kairo"
 
 [lib]
 name = "kairo_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# rlib only: the desktop binary links this crate directly. The mobile
+# crate-types (staticlib/cdylib) were never used — no gen/android or
+# gen/apple targets exist — and the debug cdylib cannot link on the
+# windows-gnu dev toolchain anyway (lld chokes on >65k exported symbols).
+crate-type = ["rlib"]
 
 [[bin]]
 name = "render-resume"
