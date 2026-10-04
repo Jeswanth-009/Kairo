@@ -32,3 +32,31 @@ pub fn get_resume_version(
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     versions::get_version(&conn, id)
 }
+
+/// The user has looked at THIS exact PDF (its hash is recorded). Review is
+/// per-artifact: the next compile leaves the old hash behind, so the state
+/// reads "needs review" again — and saving a version requires the match.
+#[tauri::command]
+pub fn mark_artifact_reviewed(
+    state: State<'_, DbState>,
+    job_id: i64,
+    app_data_dir: tauri::State<'_, crate::commands::pdf_commands::AppDataDir>,
+) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    let artifact = crate::db::pdf::get_artifact(&conn, job_id)?
+        .ok_or_else(|| "No compiled PDF for this workspace — export it first".to_string())?;
+    let pdf_path = crate::db::pdf::resolve_artifact_path(&app_data_dir.0, &artifact.pdf_path);
+    let hash = crate::db::fingerprint::file_sha256(&pdf_path)?;
+    if artifact.pdf_hash.as_deref() != Some(hash.as_str()) {
+        return Err(
+            "The PDF on disk no longer matches its export record — recompile, then review it"
+                .to_string(),
+        );
+    }
+    crate::db::vault::sql_err(conn.execute(
+        "UPDATE resume_plans SET reviewed_pdf_hash = ?1, reviewed_at = datetime('now') \
+         WHERE job_id = ?2",
+        rusqlite::params![hash, job_id],
+    ))?;
+    Ok(())
+}

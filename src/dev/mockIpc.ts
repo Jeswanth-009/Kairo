@@ -230,6 +230,8 @@ const handlers: Record<string, Handler> = {
     pageCount: 1,
     compiledAt: "2026-09-17T20:12:00",
     pdfHash: "mock-hash",
+    reviewedPdfHash: "mock-hash",
+    reviewedAt: "2026-09-17 20:13:00",
   }),
   read_job_pdf_bytes: async () => {
     const res = await fetch("sample-resume.pdf");

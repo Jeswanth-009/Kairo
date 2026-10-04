@@ -11,6 +11,8 @@ import type {
   Diagnostics,
   Education,
   Evidence,
+  EvidenceDecision,
+  EvidenceSelection,
   Experience,
   GithubRepoCandidate,
   ImportBatch,
@@ -156,6 +158,29 @@ export const ipc = {
   deleteRequirement: (id: number): Promise<void> => invoke("delete_requirement", { id }),
 
   // Matching (Phase 5)
+  isMatchStale: (jobId: number): Promise<boolean> => invoke<boolean>("is_match_stale", { jobId }),
+  listEvidenceSelections: (jobId: number): Promise<EvidenceSelection[]> =>
+    invoke<EvidenceSelection[]>("list_evidence_selections", { jobId }),
+  setEvidenceSelection: (
+    jobId: number,
+    requirementId: number,
+    entityType: string,
+    entityId: number,
+    decision: EvidenceDecision,
+  ): Promise<EvidenceSelection> =>
+    invoke<EvidenceSelection>("set_evidence_selection", {
+      jobId,
+      requirementId,
+      entityType,
+      entityId,
+      decision,
+    }),
+  deleteEvidenceSelection: (
+    requirementId: number,
+    entityType: string,
+    entityId: number,
+  ): Promise<void> =>
+    invoke<void>("delete_evidence_selection", { requirementId, entityType, entityId }),
   runJobMatch: (jobId: number): Promise<MatchReport> =>
     invoke<MatchReport>("run_job_match", { jobId }),
   getMatch: (jobId: number): Promise<MatchReport | null> =>
@@ -259,6 +284,10 @@ export const ipc = {
   deleteApplication: (id: number): Promise<void> => invoke("delete_application", { id }),
 
   // Versions (Phase 10)
+  /** Records the current artifact's hash as human-reviewed; saving a
+   *  version requires this to match the artifact being frozen. */
+  markArtifactReviewed: (jobId: number): Promise<void> =>
+    invoke<void>("mark_artifact_reviewed", { jobId }),
   saveResumeVersion: (jobId: number): Promise<ResumeVersion> =>
     invoke<ResumeVersion>("save_resume_version", { jobId }),
   listResumeVersions: (jobId: number): Promise<ResumeVersion[]> =>

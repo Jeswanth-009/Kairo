@@ -102,7 +102,7 @@ fn seed_compiled_pdf(conn: &Connection, job_id: i64, tag: &str) -> std::path::Pa
     let pdf_hash = fingerprint::file_sha256(&pdf).expect("artifact hashes");
     conn.execute(
         "UPDATE resume_plans SET pdf_path = ?1, tex_path = ?2, artifact_template_id = ?3, \
-         artifact_paper = ?4, compiled_fingerprint = ?5, pdf_hash = ?6 WHERE job_id = ?7",
+         artifact_paper = ?4, compiled_fingerprint = ?5, pdf_hash = ?6,          reviewed_pdf_hash = ?6 WHERE job_id = ?7",
         rusqlite::params![
             pdf.display().to_string(),
             tex.display().to_string(),
@@ -223,6 +223,47 @@ fn editing_the_plan_after_export_requires_a_new_export() {
     let _ = std::fs::remove_dir_all(&data_dir);
     let _ = std::fs::remove_dir_all(artifact.parent().unwrap());
     let _ = std::fs::remove_dir_all(artifact2.parent().unwrap());
+}
+
+/// Every version needs a human review of THIS exact PDF — not just version 1.
+#[test]
+fn saving_a_version_requires_the_exact_pdf_reviewed() {
+    let conn = fixture_db();
+    seed_profile(&conn);
+    let job_id = seed_job_with_requirements(&conn);
+    composer_db::run_composer(&conn, job_id, &ComposerConfig::default()).expect("plan composes");
+    let artifact = seed_compiled_pdf(&conn, job_id, "review-gate");
+    // The fixture pre-marks the artifact reviewed for the other tests —
+    // clear it here so the gate is what is under test.
+
+    let data_dir =
+        std::env::temp_dir().join(format!("kairo-versions-test-review-{}", std::process::id()));
+    std::fs::create_dir_all(&data_dir).unwrap();
+
+    conn.execute(
+        "UPDATE resume_plans SET reviewed_pdf_hash = NULL WHERE job_id = ?1",
+        [job_id],
+    )
+    .unwrap();
+
+    let err = versions::create_version(&conn, job_id, &data_dir).unwrap_err();
+    assert!(
+        err.contains("not been marked reviewed"),
+        "unreviewed PDFs must not freeze, got: {err}"
+    );
+    assert!(versions::list_versions(&conn, job_id).unwrap().is_empty());
+
+    // Marking this exact artifact reviewed unlocks the save.
+    conn.execute(
+        "UPDATE resume_plans SET reviewed_pdf_hash = pdf_hash, reviewed_at = datetime('now') WHERE job_id = ?1",
+        [job_id],
+    )
+    .unwrap();
+    let v = versions::create_version(&conn, job_id, &data_dir).expect("reviewed version saves");
+    assert_eq!(v.version_number, 1);
+
+    let _ = std::fs::remove_dir_all(&data_dir);
+    let _ = std::fs::remove_dir_all(artifact.parent().unwrap());
 }
 
 /// Acceptance check: the PDF on disk is swapped/truncated after export —

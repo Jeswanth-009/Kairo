@@ -186,6 +186,21 @@ pub fn create_version(
         }
     }
 
+    // 2.5. Review gate: EVERY version frozen for sending needs a human look
+    //      at THIS exact PDF — recorded as the reviewed pdf hash. A new
+    //      compile resets it; there is no "only version 1 needs review".
+    let reviewed_hash: Option<String> = sql_err(conn.query_row(
+        "SELECT reviewed_pdf_hash FROM resume_plans WHERE job_id = ?1",
+        [job_id],
+        |r| r.get(0),
+    ))?;
+    if reviewed_hash.as_deref() != Some(pdf_hash.as_str()) {
+        return Err(
+            "This exact PDF has not been marked reviewed yet — review it in the Review stage, then save the version"
+                .to_string(),
+        );
+    }
+
     // 3. Numbering: next per-job version.
     let next: u32 = sql_err(conn.query_row(
         "SELECT COALESCE(MAX(version_number), 0) + 1 FROM resume_versions WHERE job_id = ?1",

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
+import { Check, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
@@ -8,7 +8,7 @@ import { Skeleton } from "../../components/ui/Feedback";
 import { ipc } from "../../lib/ipc";
 import { StatusLine, type DocState } from "../../components/ui/ds";
 import { PdfViewer } from "../resume-studio/PdfViewer";
-import type { PdfArtifact } from "../../lib/types";
+import type { PdfStatusView, Profile } from "../../lib/types";
 import type { Application, InterviewCategory, InterviewPrep, Job } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
 
@@ -19,17 +19,17 @@ import { toast } from "../../stores/toastStore";
  */
 export function ResumeStep({ jobId }: { jobId: number }) {
   const navigate = useNavigate();
-  const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
+  const [status, setStatus] = useState<PdfStatusView | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const a = await ipc.getPdfArtifact(jobId);
-        if (!cancelled) setArtifact(a);
+        const s = await ipc.getPdfStatus(jobId);
+        if (!cancelled) setStatus(s);
       } catch {
-        if (!cancelled) setArtifact(null);
+        if (!cancelled) setStatus(null);
       } finally {
         if (!cancelled) setLoaded(true);
       }
@@ -41,15 +41,20 @@ export function ResumeStep({ jobId }: { jobId: number }) {
 
   if (!loaded) return <Skeleton className="h-40 w-full" />;
 
-  const state: DocState = !artifact
-    ? "draft"
-    : "current";
+  const state: DocState =
+    status == null || status.state === "none"
+      ? "draft"
+      : status.state === "current"
+        ? "current"
+        : "needs-update";
 
   return (
     <div className="space-y-4">
       <StatusLine
         state={state}
-        detail={artifact ? `${artifact.pageCount ?? "?"} page(s)` : "no PDF yet"}
+        detail={
+          status && status.state !== "none" ? `${status.pageCount ?? "?"} page(s)` : "no PDF yet"
+        }
         actions={
           <Button size="sm" onClick={() => navigate(`/jobs/${jobId}/resume`)}>
             Open editor
@@ -70,42 +75,174 @@ export function ResumeStep({ jobId }: { jobId: number }) {
 }
 
 /**
- * Review stage: the exact exported PDF is inspected here with a checklist.
+ * Review stage: the exact exported PDF with the checklist that gives
+ * "reviewed" a durable meaning — the artifact's hash is what gets marked,
+ * so any later compile or edit shows up as needs-review again.
  */
 export function ReviewStage({ jobId }: { jobId: number }) {
-  const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
+  const navigate = useNavigate();
+  const [status, setStatus] = useState<PdfStatusView | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [importedUnreviewed, setImportedUnreviewed] = useState(0);
+  const [targetPages, setTargetPages] = useState<number | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [marking, setMarking] = useState(false);
+
+  const refresh = (cancelled: () => boolean) =>
+    void (async () => {
+      try {
+        const [s, prof, onboarding, plan] = await Promise.all([
+          ipc.getPdfStatus(jobId),
+          ipc.getProfile().catch(() => null),
+          ipc.getOnboardingStatus().catch(() => null),
+          ipc.getPlan(jobId).catch(() => null),
+        ]);
+        if (cancelled()) return;
+        setStatus(s);
+        setProfile(prof);
+        setImportedUnreviewed(onboarding?.importedUnreviewed ?? 0);
+        setTargetPages(plan?.config.targetPages ?? null);
+        setWarnings(plan?.plan.warnings ?? []);
+      } finally {
+        if (!cancelled()) setLoaded(true);
+      }
+    })();
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
-        const a = await ipc.getPdfArtifact(jobId);
-        if (!cancelled) setArtifact(a);
-      } catch (e) {
-        toast.error(String(e));
-      } finally {
-        if (!cancelled) setLoaded(true);
-      }
-    })();
+    refresh(() => cancelled);
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
+  const markReviewed = async () => {
+    setMarking(true);
+    try {
+      await ipc.markArtifactReviewed(jobId);
+      let cancelled = false;
+      refresh(() => cancelled);
+      toast.ok("Marked reviewed — this exact PDF is what you checked.");
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setMarking(false);
+    }
+  };
+
   if (!loaded) return <Skeleton className="h-64 w-full" />;
+
+  const hasArtifact = status != null && status.state !== "none";
+  const state: DocState = !hasArtifact
+    ? "draft"
+    : status.state === "current"
+      ? "current"
+      : status.state === "missing-file"
+        ? "export-failed"
+        : "needs-update";
+  const reviewed = status?.pdfHash != null && status.reviewedPdfHash === status.pdfHash;
+  const overflow =
+    status?.pageCount != null && targetPages != null && status.pageCount > targetPages;
+  const missingContact = !profile?.fullName || !profile.email;
+
+  const checks: { ok: boolean; label: string }[] = hasArtifact
+    ? [
+        {
+          ok: status.state === "current",
+          label:
+            status.state === "current"
+              ? `Saved draft and PDF match (${status.pageCount ?? "?"} page(s))`
+              : status.state === "missing-file"
+                ? "The PDF file is missing on disk — re-export"
+                : "The saved draft changed after this export — re-export",
+        },
+        {
+          ok: !overflow,
+          label: overflow
+            ? `${status.pageCount} page(s) — more than the ${targetPages}-page target`
+            : `Page count fits the ${targetPages ?? 1}-page target`,
+        },
+        {
+          ok: !missingContact,
+          label: missingContact
+            ? "Contact details incomplete — add your name and email in My story"
+            : "Contact details complete",
+        },
+        {
+          ok: importedUnreviewed === 0,
+          label:
+            importedUnreviewed === 0
+              ? "No imported records waiting for verification"
+              : `${importedUnreviewed} imported record(s) not yet verified`,
+        },
+        {
+          ok: warnings.length === 0,
+          label: warnings.length === 0 ? "No composer warnings" : warnings[0],
+        },
+        {
+          ok: reviewed,
+          label: reviewed
+            ? `Reviewed by you${status?.reviewedAt ? ` · ${status.reviewedAt}` : ""}`
+            : "Not reviewed yet — look through the PDF below, then mark it",
+        },
+      ]
+    : [];
 
   return (
     <div className="space-y-4">
       <StatusLine
-        state={artifact ? "current" : "draft"}
+        state={state}
         detail={
-          artifact
-            ? `${artifact.pageCount ?? "?"} page(s) · ${artifact.compiledAt ?? "unknown"}`
+          hasArtifact
+            ? `${status?.pageCount ?? "?"} page(s) · compiled ${status?.compiledAt ?? "unknown"}`
             : "export the PDF first"
         }
+        actions={
+          hasArtifact ? (
+            reviewed ? (
+              <span className="flex items-center gap-1.5 rounded-full bg-ok-soft px-2.5 py-1 text-[11px] font-medium text-ok dark:bg-ok/15 dark:text-emerald-300">
+                <Check className="size-3.5" /> Reviewed
+              </span>
+            ) : (
+              <Button size="sm" onClick={() => void markReviewed()} disabled={marking}>
+                {marking ? "Marking…" : "Mark this PDF reviewed"}
+              </Button>
+            )
+          ) : (
+            <Button size="sm" onClick={() => navigate(`/jobs/${jobId}/resume`)}>
+              Open editor
+            </Button>
+          )
+        }
       />
-      {artifact ? (
+
+      {hasArtifact ? (
+        <Card className="p-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Review checklist
+          </p>
+          <ul className="mt-2.5 space-y-1.5">
+            {checks.map((c, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs leading-relaxed">
+                {c.ok ? (
+                  <Check className="mt-0.5 size-3.5 shrink-0 text-ok" />
+                ) : (
+                  <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warn" />
+                )}
+                <span className={c.ok ? "text-muted" : "font-medium text-ink"}>{c.label}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[11px] leading-relaxed text-muted">
+            “Reviewed” refers to this exact file — its hash is recorded. Any new export or draft
+            edit resets it, so a version can only freeze a PDF you actually looked at.
+          </p>
+        </Card>
+      ) : null}
+
+      {hasArtifact ? (
         <Card className="overflow-hidden p-0">
           <PdfViewer jobId={jobId} className="min-h-[500px]" />
         </Card>
@@ -277,6 +414,9 @@ export function ApplicationTab({ job }: { job: Job }) {
   const [applications, setApplications] = useState<Application[] | null>(null);
   const [versions, setVersions] = useState<{ id: number; versionNumber: number }[]>([]);
   const [tracking, setTracking] = useState(false);
+  // The version actually sent is the user's call — never assumed to be the
+  // newest one. Defaults to the newest, but every track names its version.
+  const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -286,8 +426,9 @@ export function ApplicationTab({ job }: { job: Job }) {
           ipc.listResumeVersions(job.id).catch(() => []),
         ]);
         setApplications(apps);
-        // Newest first — the default "sent" version is the latest saved.
-        setVersions([...vers].sort((a, b) => b.versionNumber - a.versionNumber));
+        const sorted = [...vers].sort((a, b) => b.versionNumber - a.versionNumber);
+        setVersions(sorted);
+        setSelectedVersion(sorted[0]?.id ?? null);
       } catch (e) {
         toast.error(String(e));
         setApplications([]);
@@ -341,12 +482,26 @@ export function ApplicationTab({ job }: { job: Job }) {
             </p>
           </div>
           {linked.length === 0 && versions.length > 0 ? (
-            <Button
-              onClick={() => void track(versions[0].id)}
-              disabled={tracking}
-            >
-              {tracking ? "Tracking…" : `Track — sent version ${versions[0].versionNumber}`}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-[11px] text-muted" htmlFor="sent-version">
+                Sent version
+              </label>
+              <select
+                id="sent-version"
+                value={selectedVersion ?? ""}
+                onChange={(e) => setSelectedVersion(Number(e.target.value))}
+                className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-xs text-ink"
+              >
+                {versions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    v{v.versionNumber}
+                  </option>
+                ))}
+              </select>
+              <Button onClick={() => void track(selectedVersion)} disabled={tracking}>
+                {tracking ? "Tracking…" : "Track application"}
+              </Button>
+            </div>
           ) : linked.length === 0 ? (
             <Button onClick={() => void track(null)} disabled={tracking}>
               {tracking ? "Tracking…" : "Track without a version"}
@@ -358,7 +513,7 @@ export function ApplicationTab({ job }: { job: Job }) {
           <p className="mt-4 rounded-lg border border-dashed border-line-strong px-4 py-6 text-center text-xs text-muted">
             {versions.length === 0
               ? "Not tracked yet — save a version in the editor first, then track it here."
-              : `Not tracked yet — the latest saved version (v${versions[0].versionNumber}) will be linked.`}
+              : "Not tracked yet — pick the exact version you sent above; nothing is assumed."}
           </p>
         ) : (
           <ul className="mt-4 space-y-2">

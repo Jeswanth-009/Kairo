@@ -357,6 +357,21 @@ export interface ImportBatchResult {
   skillIds: number[];
 }
 
+// --- Evidence stage decisions ------------------------------------------------
+
+export type EvidenceDecision = "use" | "dismiss";
+
+export interface EvidenceSelection {
+  id: number;
+  jobId: number;
+  requirementId: number;
+  entityType: string;
+  entityId: number;
+  decision: EvidenceDecision;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 // --- Job Workspace (Phase 4) ----------------------------------------------
 
 export type JobRequirementKind = "required_skill" | "preferred_skill" | "responsibility";
@@ -592,6 +607,9 @@ export interface PdfStatusView {
   pageCount: number | null;
   compiledAt: string | null;
   pdfHash: string | null;
+  /** The exact artifact hash the user marked reviewed (Review stage). */
+  reviewedPdfHash: string | null;
+  reviewedAt: string | null;
 }
 
 // --- Versions (Phase 10) -------------------------------------------------------

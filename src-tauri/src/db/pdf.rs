@@ -161,6 +161,9 @@ pub struct PdfStatus {
     pub page_count: Option<i64>,
     pub compiled_at: Option<String>,
     pub pdf_hash: Option<String>,
+    /// The exact artifact hash the user marked reviewed (Review stage).
+    pub reviewed_pdf_hash: Option<String>,
+    pub reviewed_at: Option<String>,
 }
 
 /// The template a compile of `config` would use — the same fallback chain as
@@ -200,9 +203,24 @@ pub fn pdf_status(
         page_count: artifact.as_ref().and_then(|a| a.page_count),
         compiled_at: artifact.as_ref().and_then(|a| a.compiled_at.clone()),
         pdf_hash: artifact.as_ref().and_then(|a| a.pdf_hash.clone()),
+        reviewed_pdf_hash: None,
+        reviewed_at: None,
     };
     let (Some(stored), Some(artifact)) = (stored, artifact) else {
         return Ok(base);
+    };
+    // The review state lives on the plan row, not the artifact row.
+    let (reviewed_pdf_hash, reviewed_at): (Option<String>, Option<String>) =
+        sql_err(conn.query_row(
+            "SELECT reviewed_pdf_hash, reviewed_at FROM resume_plans WHERE job_id = ?1",
+            [job_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ))?;
+
+    let base = PdfStatus {
+        reviewed_pdf_hash,
+        reviewed_at,
+        ..base
     };
 
     // The file must exist where the row says it does — otherwise every other

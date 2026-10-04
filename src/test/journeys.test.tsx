@@ -204,11 +204,18 @@ type PdfModel = {
   planRevision: number;
   artifactRevision: number | null;
   artifact: PdfArtifact | null;
+  /** The artifact hash the user marked reviewed (backend review gate). */
+  reviewedHash: string | null;
 };
 let pdfModel: PdfModel;
 
 function studioMocks(artifact: PdfArtifact | null) {
-  pdfModel = { planRevision: 1, artifactRevision: artifact ? 1 : null, artifact };
+  pdfModel = {
+    planRevision: 1,
+    artifactRevision: artifact ? 1 : null,
+    artifact,
+    reviewedHash: artifact?.pdfHash ?? null,
+  };
   mocks.listJobs = vi.fn().mockResolvedValue([JOB, JOB2]);
   mocks.getPlan = vi.fn().mockResolvedValue({ config: PLAN.config, plan: PLAN });
   mocks.tailorList = vi.fn().mockResolvedValue([]);
@@ -229,6 +236,8 @@ function studioMocks(artifact: PdfArtifact | null) {
     pageCount: pdfModel.artifact?.pageCount ?? null,
     compiledAt: pdfModel.artifact?.compiledAt ?? null,
     pdfHash: pdfModel.artifact?.pdfHash ?? null,
+    reviewedPdfHash: pdfModel.reviewedHash,
+    reviewedAt: pdfModel.reviewedHash ? "2026-10-02 09:30:00" : null,
   }));
   mocks.listResumeVersions = vi.fn().mockResolvedValue([]);
   mocks.getProfile = vi.fn().mockResolvedValue(null);
@@ -250,6 +259,10 @@ function studioMocks(artifact: PdfArtifact | null) {
       return { artifact: pdfModel.artifact, logTail: "ok" };
     },
   );
+  mocks.markArtifactReviewed = vi.fn().mockImplementation(async () => {
+    if (pdfModel.artifact === null) throw new Error("No compiled PDF for this workspace");
+    pdfModel.reviewedHash = pdfModel.artifact?.pdfHash ?? null;
+  });
   mocks.getOnboardingStatus = vi.fn().mockResolvedValue({
     hasProfile: true, projectCount: 1, experienceCount: 1, educationCount: 1, skillCount: 1, jobCount: 1, hasAnyContent: true,
   });
@@ -356,8 +369,14 @@ describe("journey · exporting a PDF", () => {
     // Version 1 is locked behind the final review.
     const saveVersion = screen.getByRole("button", { name: /save version/i }) as HTMLButtonElement;
     expect(saveVersion.disabled).toBe(true);
-    fireEvent.click(screen.getByLabelText(/i've read the actual pdf/i));
-    expect((screen.getByRole("button", { name: /save version/i }) as HTMLButtonElement).disabled).toBe(false);
+    // The backend review gate: mark THIS pdf reviewed, then version 1 unlocks.
+    fireEvent.click(screen.getByRole("button", { name: /mark reviewed/i }));
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /save version/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
   });
 
   it("a failed export keeps the previous PDF and says so", async () => {

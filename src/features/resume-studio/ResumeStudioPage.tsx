@@ -340,8 +340,6 @@ export default function ResumeStudioPage() {
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [savingVersion, setSavingVersion] = useState(false);
   const [previewMode, setPreviewMode] = useState<"pdf" | "plan">("pdf");
-  // First version gate: the user confirms the final PDF before it's frozen.
-  const [finalReviewed, setFinalReviewed] = useState(false);
   // Ephemeral, in-session only: the failed-export overlay. Durable PDF state
   // (stale / template-stale / current) always comes from the backend status.
   const [exportFailed, setExportFailed] = useState(false);
@@ -416,7 +414,6 @@ export default function ResumeStudioPage() {
     // history and export state must never leak across workspaces.
     historyRef.current = [];
     setCanUndo(false);
-    setFinalReviewed(false);
     setExportFailed(false);
     void (async () => {
       try {
@@ -651,7 +648,6 @@ export default function ResumeStudioPage() {
       setPdfStatus(await ipc.getPdfStatus(jobId));
       setPreviewMode("pdf");
       setExportFailed(false);
-      setFinalReviewed(false);
       toast.ok(`PDF compiled — ${result.artifact.pageCount ?? "?"} page(s)`);
     } catch (e) {
       // The staging export never touched the previous good PDF — say so.
@@ -673,6 +669,25 @@ export default function ResumeStudioPage() {
       toast.error(String(e));
     } finally {
       setSavingVersion(false);
+    }
+  };
+
+  // The version gate is the recorded review of THIS artifact — the backend
+  // refuses to freeze an unreviewed PDF, so the button state mirrors it.
+  const reviewed =
+    pdfStatus?.pdfHash != null && pdfStatus.reviewedPdfHash === pdfStatus.pdfHash;
+  const [markingReviewed, setMarkingReviewed] = useState(false);
+  const markReviewed = async () => {
+    if (jobId === null) return;
+    setMarkingReviewed(true);
+    try {
+      await ipc.markArtifactReviewed(jobId);
+      setPdfStatus(await ipc.getPdfStatus(jobId));
+      toast.ok("Marked reviewed — this exact PDF is what you checked.");
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setMarkingReviewed(false);
     }
   };
 
@@ -1537,36 +1552,47 @@ export default function ResumeStudioPage() {
                 size="sm"
                 variant="secondary"
                 onClick={() => void saveVersion()}
-                disabled={savingVersion || !artifact || pdfState !== "current" || (versions.length === 0 && !finalReviewed)}
+                disabled={savingVersion || !artifact || pdfState !== "current" || !reviewed}
                 title={
                   !artifact
                     ? "Export the PDF first"
                     : pdfState !== "current"
                       ? "Save the plan and recompile so the version freezes the current PDF"
-                      : versions.length === 0 && !finalReviewed
-                        ? "Tick the final-review checklist below first"
+                      : !reviewed
+                        ? "Mark this exact PDF reviewed first (below or in the Review stage)"
                         : "Freeze this plan + PDF as a version"
                 }
               >
                 {savingVersion ? "Saving…" : "Save version"}
               </Button>
             </div>
-            {versions.length === 0 && artifact ? (
-              <label className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-accent-soft px-3 py-2.5 text-[11px] leading-relaxed text-muted">
-                <input
-                  type="checkbox"
-                  checked={finalReviewed}
-                  onChange={(e) => setFinalReviewed(e.target.checked)}
-                  className="mt-0.5 accent-kairo-blue"
-                />
-                <span>
-                  <span className="font-medium text-ink">Final review</span> — the PDF shows{" "}
-                  {artifact.pageCount ?? "?"} page(s) for {plan.header.fullName || "you"}; every
-                  included item carries its origin (“Imported from resume”, “Edited by you”,
-                  “Evidence attached” or “Verified by you”). I've read the actual PDF and I'm ready
-                  to freeze version 1.
-                </span>
-              </label>
+            {artifact ? (
+              <div className="mt-3 flex items-start justify-between gap-2 rounded-lg border border-line bg-accent-soft px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+                {reviewed ? (
+                  <span>
+                    <span className="font-medium text-ok">Reviewed</span>
+                    {pdfStatus?.reviewedAt ? ` · ${pdfStatus.reviewedAt}` : ""} — this exact PDF
+                    ({artifact.pageCount ?? "?"} page(s) for {plan.header.fullName || "you"}) was
+                    checked by you. Any new export resets this.
+                  </span>
+                ) : (
+                  <>
+                    <span>
+                      <span className="font-medium text-ink">Not reviewed yet</span> — every
+                      version must freeze a PDF you actually looked at. Read the PDF, then mark it.
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="shrink-0 text-[11px]"
+                      onClick={() => void markReviewed()}
+                      disabled={markingReviewed}
+                    >
+                      {markingReviewed ? "Marking…" : "Mark reviewed"}
+                    </Button>
+                  </>
+                )}
+              </div>
             ) : null}
             {versions.length > 0 ? (
               <ul className="mt-3 space-y-1">
