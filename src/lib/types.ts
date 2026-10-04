@@ -375,6 +375,8 @@ export interface Job {
   rawJd: string;
   seniority: string;
   domain: string;
+  /** "role" (job application) or "general" (no-job resume workspace). */
+  kind?: "role" | "general";
   requirementCount: number;
 }
 

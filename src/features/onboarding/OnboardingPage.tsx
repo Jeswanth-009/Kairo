@@ -3,14 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, FileUp, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { Skeleton } from "../../components/ui/Feedback";
 import { Field, Input, Textarea } from "../../components/ui/inputs";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
-import { enqueuePlanSave } from "../../lib/planAutosave";
+import { enqueuePlanSave, flushPlanSave } from "../../lib/planAutosave";
 import { extractTextFromFile } from "../imports/extractFile";
+import { PdfViewer } from "../resume-studio/PdfViewer";
 import { originBadge, utcNow } from "../../lib/origin";
 import type {
   Job,
+  PdfArtifact,
   JobRequirement,
   MatchReport,
   ResumePlan,
@@ -31,7 +34,7 @@ import { toast } from "../../stores/toastStore";
 /** Mirrors the backend cap in `import_commands.rs`. */
 const MAX_IMPORT_CHARS = 1_000_000;
 
-type Step = "welcome" | "import" | "review" | "role" | "draft";
+type Step = "welcome" | "import" | "review" | "path" | "role" | "draft";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "welcome", label: "Welcome" },
@@ -40,6 +43,23 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "role", label: "Add a role" },
   { id: "draft", label: "First draft" },
 ];
+
+/** The stepper shows five milestones; "path" lives between review and role. */
+const stepperId = (s: Step): Step => (s === "path" ? "role" : s);
+
+/** What survives leaving mid-journey: the reached step, the extracted and
+ *  reviewed draft, and the workspace once created. Persisted via
+ *  get/set_onboarding_state (backend meta storage) and cleared when the
+ *  first PDF exists. */
+interface PersistedOnboarding {
+  step: Step;
+  parsed: ResumeImport | null;
+  jobId: number | null;
+  /** Serialized ReviewGroups state — the user's review decisions. */
+  review?: unknown;
+}
+
+const RESUMABLE_STEPS: Step[] = ["import", "review", "path", "role", "draft"];
 
 /** A review candidate keeps its extracted values plus what the user changed. */
 type Editable<T> = T & { dismissed: boolean; changed: Set<string> };
@@ -50,25 +70,81 @@ function editable<T>(value: T): Editable<T> {
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
+  const createWorkspace = useJobsStore((s) => s.createWorkspace);
   const [step, setStep] = useState<Step>("welcome");
 
   // Import → review state (owned here so Review can render the groups).
   const [parsed, setParsed] = useState<ResumeImport | null>(null);
   // The workspace created in the role step — the draft composes for it.
   const [jobId, setJobId] = useState<number | null>(null);
+  // Review decisions survive leaving: restored into ReviewGroups on return.
+  const [review, setReview] = useState<unknown>(null);
+  const [restored, setRestored] = useState(false);
+
+  // Leave-and-resume: the reached step and the reviewed draft are the user's
+  // work — persist them (a broken snapshot just restarts the journey).
+  useEffect(() => {
+    void (async () => {
+      try {
+        const raw = await ipc.getOnboardingState();
+        if (raw) {
+          const saved = JSON.parse(raw) as PersistedOnboarding;
+          if (saved && RESUMABLE_STEPS.includes(saved.step)) {
+            setStep(saved.step);
+            setParsed(saved.parsed ?? null);
+            setJobId(saved.jobId ?? null);
+            setReview(saved.review ?? null);
+          }
+        }
+      } catch {
+        // No saved state or unreadable JSON — a fresh journey.
+      }
+      setRestored(true);
+    })();
+  }, []);
+
+  const persist = (patch: Partial<PersistedOnboarding>) => {
+    const next: PersistedOnboarding = {
+      step,
+      parsed,
+      jobId,
+      review,
+      ...patch,
+    };
+    try {
+      void Promise.resolve(ipc.setOnboardingState(JSON.stringify(next))).catch(() => {});
+    } catch {
+      // Persistence is best-effort — never break the journey on it.
+    }
+  };
 
   const go = (s: Step) => {
     setStep(s);
+    persist({ step: s });
     window.scrollTo({ top: 0 });
   };
+
+  // Nothing renders until restoration has been attempted — otherwise a
+  // resuming user flashes the welcome screen before their step arrives.
+  if (!restored) {
+    return (
+      <div className="mx-auto max-w-3xl p-8">
+        <Skeleton className="h-9 w-64" />
+        <div className="mt-6 grid gap-5 lg:grid-cols-12">
+          <Skeleton className="h-96 lg:col-span-5" />
+          <Skeleton className="h-96 lg:col-span-7" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-8">
       {/* Stepper */}
       <ol className="flex flex-wrap items-center gap-1.5 text-[11px]">
         {STEPS.map((s, i) => {
-          const active = s.id === step;
-          const done = STEPS.findIndex((x) => x.id === step) > i;
+          const active = stepperId(step) === s.id;
+          const done = STEPS.findIndex((x) => x.id === stepperId(step)) > i;
           return (
             <li key={s.id} className="flex items-center gap-1.5">
               <span
@@ -101,14 +177,49 @@ export default function OnboardingPage() {
       {step === "review" ? (
         <ReviewStep
           parsed={parsed}
-          onDone={() => go("role")}
-          onSkip={() => go("role")}
+          initialReview={review}
+          onReviewChange={setReview}
+          onDone={() => go("path")}
+          onSkip={() => go("path")}
+        />
+      ) : null}
+      {step === "path" ? (
+        <PathStep
+          onGeneral={() => {
+            void (async () => {
+              try {
+                const created = await createWorkspace(
+                  {
+                    id: 0,
+                    company: "",
+                    roleTitle: "General resume",
+                    url: "",
+                    rawJd: "",
+                    seniority: "",
+                    domain: "",
+                    kind: "general",
+                    requirementCount: 0,
+                  },
+                  [],
+                );
+                setJobId(created.job.id);
+                persist({ jobId: created.job.id, step: "draft" });
+                toast.ok("General resume workspace created");
+                setStep("draft");
+              } catch (e) {
+                toast.error(String(e));
+              }
+            })();
+          }}
+          onJob={() => go("role")}
+          onBack={() => go("review")}
         />
       ) : null}
       {step === "role" ? (
         <RoleStep
           onCreated={(id) => {
             setJobId(id);
+            persist({ jobId: id });
             go("draft");
           }}
         />
@@ -120,6 +231,7 @@ export default function OnboardingPage() {
             if (jobId !== null) navigate(`/jobs/${jobId}/resume`);
             else navigate("/jobs");
           }}
+          onComplete={() => void ipc.clearOnboardingState().catch(() => {})}
         />
       ) : null}
 
@@ -286,10 +398,14 @@ interface ReviewOutcome {
 
 function ReviewStep({
   parsed,
+  initialReview,
+  onReviewChange,
   onDone,
   onSkip,
 }: {
   parsed: ResumeImport | null;
+  initialReview: unknown;
+  onReviewChange: (state: unknown) => void;
   onDone: (outcome: ReviewOutcome) => void;
   onSkip: () => void;
 }) {
@@ -329,36 +445,92 @@ function ReviewStep({
       </Card>
     );
   }
-  return <ReviewGroups parsed={parsed} onDone={onDone} onSkip={onSkip} />;
+  return (
+    <ReviewGroups
+      parsed={parsed}
+      initialReview={initialReview}
+      onReviewChange={onReviewChange}
+      onDone={onDone}
+      onSkip={onSkip}
+    />
+  );
 }
 
 function ReviewGroups({
   parsed,
+  initialReview,
+  onReviewChange,
   onDone,
   onSkip,
 }: {
   parsed: ResumeImport;
+  initialReview: unknown;
+  onReviewChange: (state: unknown) => void;
   onDone: (outcome: ReviewOutcome) => void;
   onSkip: () => void;
 }) {
+  // The review decisions persist with the journey: revive what the user left
+  // behind (dismissals, edits, verify ticks) instead of starting over.
+  const saved = (initialReview ?? null) as ReviewSnapshot | null;
   const reloadVault = useVaultStore((s) => s.load);
+  const revive = <T,>(raw: unknown, fallback: Editable<T>): Editable<T> =>
+    raw && typeof raw === "object"
+      ? { ...(raw as object), changed: new Set((raw as { changed?: string[] }).changed ?? []) } as Editable<T>
+      : fallback;
 
-  const [contact, setContact] = useState(() => editable(parsed.profile ?? emptyProfile()));
-  const [experiences, setExperiences] = useState(() => parsed.experiences.map(editable));
-  const [projects, setProjects] = useState(() => parsed.projects.map(editable));
-  const [education, setEducation] = useState(() => parsed.education.map(editable));
-  const [achievements, setAchievements] = useState(() => parsed.achievements.map(editable));
+  const [contact, setContact] = useState(() =>
+    revive(saved?.contact, editable(parsed.profile ?? emptyProfile())),
+  );
+  const [experiences, setExperiences] = useState(() =>
+    parsed.experiences.map((e, i) => revive(saved?.experiences?.[i], editable(e))),
+  );
+  const [projects, setProjects] = useState(() =>
+    parsed.projects.map((p, i) => revive(saved?.projects?.[i], editable(p))),
+  );
+  const [education, setEducation] = useState(() =>
+    parsed.education.map((e, i) => revive(saved?.education?.[i], editable(e))),
+  );
+  const [achievements, setAchievements] = useState(() =>
+    parsed.achievements.map((a, i) => revive(saved?.achievements?.[i], editable(a))),
+  );
   const allSkills = parsed.skills;
-  const [removedSkills, setRemovedSkills] = useState<Set<string>>(new Set());
-  const [skillsDismissed, setSkillsDismissed] = useState(false);
+  const [removedSkills, setRemovedSkills] = useState<Set<string>>(
+    () => new Set(saved?.removedSkills ?? []),
+  );
+  const [skillsDismissed, setSkillsDismissed] = useState(saved?.skillsDismissed ?? false);
   const activeSkills = allSkills.filter((s) => !removedSkills.has(s.name));
-  const [verifyContact, setVerifyContact] = useState(false);
-  const [verifyWork, setVerifyWork] = useState(false);
-  const [verifyProjects, setVerifyProjects] = useState(false);
-  const [verifyEducation, setVerifyEducation] = useState(false);
-  const [verifyAchievements, setVerifyAchievements] = useState(false);
-  const [verifySkills, setVerifySkills] = useState(false);
+  const [verifyContact, setVerifyContact] = useState(saved?.verify?.contact ?? false);
+  const [verifyWork, setVerifyWork] = useState(saved?.verify?.work ?? false);
+  const [verifyProjects, setVerifyProjects] = useState(saved?.verify?.projects ?? false);
+  const [verifyEducation, setVerifyEducation] = useState(saved?.verify?.education ?? false);
+  const [verifyAchievements, setVerifyAchievements] = useState(saved?.verify?.achievements ?? false);
+  const [verifySkills, setVerifySkills] = useState(saved?.verify?.skills ?? false);
   const [saving, setSaving] = useState(false);
+
+  // Persist review decisions as they change (debounced — every keystroke
+  // must not hit the backend).
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onReviewChange({
+        contact: serializeEditable(contact),
+        experiences: experiences.map(serializeEditable),
+        projects: projects.map(serializeEditable),
+        education: education.map(serializeEditable),
+        achievements: achievements.map(serializeEditable),
+        removedSkills: [...removedSkills],
+        skillsDismissed,
+        verify: {
+          contact: verifyContact,
+          work: verifyWork,
+          projects: verifyProjects,
+          education: verifyEducation,
+          achievements: verifyAchievements,
+          skills: verifySkills,
+        },
+      });
+    }, 400);
+    return () => clearTimeout(timer);
+  });
 
   const hasContact = Boolean(
     contact.fullName || contact.email || contact.phone || contact.headline || contact.summary,
@@ -810,6 +982,31 @@ function SourceNote({ snippet }: { snippet?: string | null }) {
   );
 }
 
+/** JSON-safe shape of one reviewed group entry (Set → string[]). */
+function serializeEditable<T>(entry: Editable<T>): Record<string, unknown> {
+  const { changed, ...rest } = entry as Editable<T> & { changed: Set<string> };
+  return { ...(rest as object), changed: [...changed] };
+}
+
+/** The serialized ReviewGroups state that travels through the persistence. */
+interface ReviewSnapshot {
+  contact?: unknown;
+  experiences?: unknown[];
+  projects?: unknown[];
+  education?: unknown[];
+  achievements?: unknown[];
+  removedSkills?: string[];
+  skillsDismissed?: boolean;
+  verify?: {
+    contact?: boolean;
+    work?: boolean;
+    projects?: boolean;
+    education?: boolean;
+    achievements?: boolean;
+    skills?: boolean;
+  };
+}
+
 function emptyProfile() {
   return {
     fullName: "",
@@ -915,6 +1112,57 @@ function SkillChips({
 }
 
 // ---------------------------------------------------------------------------
+// 3.5 · Choose the path — tailor for a job, or a general resume
+// ---------------------------------------------------------------------------
+
+function PathStep({
+  onJob,
+  onGeneral,
+  onBack,
+}: {
+  onJob: () => void;
+  onGeneral: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <Card className="space-y-4 p-6">
+      <div>
+        <h2 className="text-sm font-semibold text-ink">What is this resume for?</h2>
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          Both paths end at a real PDF you can send. You can always add the other kind later —
+          every workspace edits the same Vault.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onJob}
+        className="w-full rounded-xl border border-line bg-card p-5 text-left transition-colors hover:border-kairo-blue/40 hover:bg-accent-soft"
+      >
+        <p className="text-sm font-semibold text-ink">Tailor for a job</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          Paste a job description — Kairo extracts the requirements, matches your records against
+          them, and drafts the resume that fits this role.
+        </p>
+      </button>
+      <button
+        type="button"
+        onClick={onGeneral}
+        className="w-full rounded-xl border border-line bg-card p-5 text-left transition-colors hover:border-kairo-blue/40 hover:bg-accent-soft"
+      >
+        <p className="text-sm font-semibold text-ink">General resume</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          No posting in hand — Kairo composes your strongest records into one clean resume, ready
+          to customize for any role later.
+        </p>
+      </button>
+      <button type="button" className="w-fit text-[11px] text-muted hover:text-ink" onClick={onBack}>
+        Back to the review
+      </button>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 4 · Add a role (paste JD → confirm the important requirements)
 // ---------------------------------------------------------------------------
 
@@ -974,6 +1222,7 @@ function RoleStep({ onCreated }: { onCreated: (jobId: number) => void }) {
         rawJd: jdText,
         seniority: "",
         domain: "",
+        kind: "role",
         requirementCount: 0,
       };
       const created = await createWorkspace(
@@ -1099,14 +1348,38 @@ function RoleStep({ onCreated }: { onCreated: (jobId: number) => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// 5 · First draft (selections + honest explanations + provenance)
+// 5 · First draft (selections + honest explanations + provenance) — and the
+// journey's destination: a real, reviewable first PDF, exported right here.
 // ---------------------------------------------------------------------------
 
-function DraftStep({ jobId, onContinue }: { jobId: number | null; onContinue: () => void }) {
+function DraftStep({
+  jobId,
+  onContinue,
+  onComplete,
+}: {
+  jobId: number | null;
+  onContinue: () => void;
+  /** Fires when the first PDF exists — the journey is done. */
+  onComplete: () => void;
+}) {
   const [plan, setPlan] = useState<ResumePlan | null>(null);
   const [report, setReport] = useState<MatchReport | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  // Honest unresolved-issues list: what the user should still double-check.
+  const vaultProjects = useVaultStore((s) => s.projects);
+  const vaultExperiences = useVaultStore((s) => s.experiences);
+  const vaultEducation = useVaultStore((s) => s.education);
+  const vaultAchievements = useVaultStore((s) => s.achievements);
+  const unverifiedCount = [
+    ...vaultProjects,
+    ...vaultExperiences,
+    ...vaultEducation,
+    ...vaultAchievements,
+  ].filter((r) => r.origin === "imported" && !r.verifiedAt).length;
 
   useEffect(() => {
     let cancelled = false;
@@ -1159,6 +1432,30 @@ function DraftStep({ jobId, onContinue }: { jobId: number | null; onContinue: ()
     enqueuePlanSave(jobId, next);
   };
 
+  /** The destination of the whole journey: compile the first PDF here. The
+   *  flush+revision contract is the same as the Studio's — never compile an
+   *  unsaved draft. */
+  const exportFirstPdf = async () => {
+    if (jobId === null || !plan) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const flush = await flushPlanSave(jobId);
+      if (!flush.ok) {
+        setExportError(flush.error);
+        return;
+      }
+      const result = await ipc.exportPdf(jobId, plan.config.templateId || "jake", flush.revision);
+      setArtifact(result.artifact);
+      onComplete();
+    } catch (e) {
+      // The previous state is untouched — the journey continues right here.
+      setExportError(String(e));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (busy) {
     return (
       <Card className="p-8 text-center">
@@ -1181,13 +1478,69 @@ function DraftStep({ jobId, onContinue }: { jobId: number | null; onContinue: ()
   const items = plan ? [...plan.experience, ...plan.projects] : [];
   const included = items.filter((i) => !i.excluded);
 
+  // The destination: an actual PDF, its honest caveats, and the two ways
+  // forward. A failed compile keeps everything editable right here.
+  if (artifact) {
+    return (
+      <div className="space-y-4">
+        <Card className="p-6">
+          <h2 className="text-sm font-semibold text-ink">Your first PDF is ready</h2>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            Compiled from the draft you just reviewed — {artifact.pageCount ?? "?"} page(s). This
+            exact file is what “Current PDF” means in the editor.
+          </p>
+        </Card>
+        <Card className="overflow-hidden p-4">
+          <PdfViewer jobId={jobId ?? 0} className="min-h-[500px]" />
+        </Card>
+        <Card className="p-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Still worth a look
+          </p>
+          {unverifiedCount > 0 ? (
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              · {unverifiedCount} imported record{unverifiedCount === 1 ? "" : "s"} not yet marked
+              “Verified by you” — check them in My story when you get a chance.
+            </p>
+          ) : null}
+          {(plan?.warnings ?? []).slice(0, 3).map((w, i) => (
+            <p key={i} className="mt-2 text-xs leading-relaxed text-muted">
+              · {w}
+            </p>
+          ))}
+          {unverifiedCount === 0 && (plan?.warnings ?? []).length === 0 ? (
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              · Nothing open — every record is verified and the draft had no warnings.
+            </p>
+          ) : null}
+        </Card>
+        <div className="flex flex-wrap justify-end gap-3">
+          <Button
+            variant="secondary"
+            onClick={() =>
+              void ipc
+                .saveJobPdfToDownloads(jobId ?? 0)
+                .then((p) => toast.ok(`Saved to ${p}`))
+                .catch((e) => toast.error(String(e)))
+            }
+          >
+            Save to Downloads
+          </Button>
+          <Button onClick={onContinue}>
+            Customize in the editor <ArrowRight className="size-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Card className="p-6">
         <h2 className="text-sm font-semibold text-ink">Your first draft</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          Kairo picked the records most relevant to the role and kept each one's provenance. Every
-          selection says why it's here — remove anything you disagree with.
+          Kairo picked the records most relevant and kept each one's provenance. Every selection
+          says why it's here — remove anything you disagree with, then create the PDF.
         </p>
         {plan ? (
           <p className="mt-3 text-xs font-medium text-ink">
@@ -1261,9 +1614,17 @@ function DraftStep({ jobId, onContinue }: { jobId: number | null; onContinue: ()
               </Card>
             );
           })}
-          <div className="flex justify-end">
-            <Button onClick={onContinue}>
-              Continue to the Studio — pick a template and export <ArrowRight className="size-4" />
+          {exportError ? (
+            <p className="rounded-lg bg-bad-soft px-3 py-2 text-xs text-bad dark:bg-bad/10 dark:text-red-300">
+              {exportError}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Button variant="ghost" className="text-xs" onClick={onContinue}>
+              Skip — customize in the Studio first
+            </Button>
+            <Button onClick={() => void exportFirstPdf()} disabled={exporting}>
+              {exporting ? "Compiling your PDF…" : "Create my first PDF"}
             </Button>
           </div>
         </>

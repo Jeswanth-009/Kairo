@@ -89,3 +89,44 @@ pub fn get_home_overview(state: State<'_, DbState>) -> Result<Vec<JobHomeRowView
         })
         .collect())
 }
+
+// ---------------------------------------------------------------------------
+// Onboarding journey state — persisted so leaving mid-flow never loses the
+// draft (the reviewed import and the reached step are the user's work).
+// ---------------------------------------------------------------------------
+
+/// Raw JSON under a dedicated meta key: the shape belongs to the frontend
+/// (steps and review state evolve with the UI), the backend only stores it.
+const ONBOARDING_STATE_KEY: &str = "onboarding_state";
+use rusqlite::OptionalExtension;
+
+#[tauri::command]
+pub fn get_onboarding_state(state: State<'_, DbState>) -> Result<Option<String>, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    conn.query_row(
+        "SELECT value FROM meta WHERE key = ?1",
+        [ONBOARDING_STATE_KEY],
+        |r| r.get::<_, String>(0),
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_onboarding_state(state: State<'_, DbState>, value: String) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES (?1, ?2)          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![ONBOARDING_STATE_KEY, value],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn clear_onboarding_state(state: State<'_, DbState>) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    conn.execute("DELETE FROM meta WHERE key = ?1", [ONBOARDING_STATE_KEY])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}

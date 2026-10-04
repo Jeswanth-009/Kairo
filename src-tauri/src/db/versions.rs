@@ -71,6 +71,7 @@ fn hydrate(row: &rusqlite::Row) -> rusqlite::Result<ResumeVersion> {
                 raw_jd: String::new(),
                 seniority: String::new(),
                 domain: String::new(),
+                kind: "role".to_string(),
                 requirement_count: 0,
             },
             requirements: vec![],

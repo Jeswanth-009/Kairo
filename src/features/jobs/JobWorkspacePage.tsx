@@ -95,6 +95,10 @@ export default function JobWorkspacePage() {
     responsibility: requirements.filter((r) => r.kind === "responsibility").length,
   };
 
+  // A general resume has no posting — the posting-centric stages don't exist.
+  const isGeneral = job.kind === "general";
+  const tabs = TAB_META.filter((t) => !(isGeneral && t.key === "evidence"));
+
   return (
     <div className="mx-auto max-w-5xl p-8">
       <div className="mb-5 flex items-start justify-between gap-4">
@@ -104,11 +108,14 @@ export default function JobWorkspacePage() {
             {job.company ? <span className="text-muted"> · {job.company}</span> : null}
           </h2>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {isGeneral ? <Badge tone="violet">General resume</Badge> : null}
             {job.seniority ? <Badge tone="violet">{job.seniority}</Badge> : null}
             {job.domain ? <Badge tone="sky">{job.domain}</Badge> : null}
-            <Badge tone={job.requirementCount > 0 ? "green" : "amber"}>
-              {job.requirementCount} requirements reviewed
-            </Badge>
+            {!isGeneral ? (
+              <Badge tone={job.requirementCount > 0 ? "green" : "amber"}>
+                {job.requirementCount} requirements reviewed
+              </Badge>
+            ) : null}
           </div>
         </div>
         <Button variant="secondary" size="sm" onClick={() => navigate("/jobs")}>
@@ -118,23 +125,25 @@ export default function JobWorkspacePage() {
 
       <div className="mb-2">
         <StepNav
-          steps={TAB_META.map((t) => ({ key: t.key, label: t.label }))}
+          steps={tabs.map((t) => ({ key: t.key, label: t.label }))}
           active={tab}
           onChange={(key) => {
             setTab(key as WorkspaceTab);
             // Stage bodies differ wildly in height — never land mid-page.
             scrollMainToTop();
           }}
-          hint={TAB_META.find((t) => t.key === tab)?.hint}
+          hint={tabs.find((t) => t.key === tab)?.hint}
         />
       </div>
 
       {tab === "role" ? (
         <>
           <OverviewTab job={job} counts={counts} />
-          <div className="mt-6">
-            <RequirementsTab job={job} />
-          </div>
+          {!isGeneral ? (
+            <div className="mt-6">
+              <RequirementsTab job={job} />
+            </div>
+          ) : null}
         </>
       ) : null}
       {tab === "evidence" ? <MatchTab jobId={job.id} domain={job.domain} /> : null}
@@ -203,6 +212,7 @@ function OverviewTab({
   counts: Record<JobRequirementKind, number>;
 }) {
   const [showRaw, setShowRaw] = useState(false);
+  const isGeneral = job.kind === "general";
   return (
     <div className="space-y-5">
       <Card className="p-6">
@@ -227,40 +237,49 @@ function OverviewTab({
         </dl>
       </Card>
 
-      <Card className="p-6">
-        <CardTitle>Requirement model</CardTitle>
-        <p className="mt-2 text-xs text-muted">
-          Matching runs against this reviewed set — correct anything before Phase 5.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {KIND_ORDER.map((kind) => (
-            <span
-              key={kind}
-              className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs text-ink"
-            >
-              {KIND_LABELS[kind]}: <strong>{counts[kind]}</strong>
-            </span>
-          ))}
-        </div>
-      </Card>
+      {!isGeneral ? (
+        <>
+          <Card className="p-6">
+            <CardTitle>Requirement model</CardTitle>
+            <p className="mt-2 text-xs text-muted">
+              Matching runs against this reviewed set — correct anything before Phase 5.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {KIND_ORDER.map((kind) => (
+                <span
+                  key={kind}
+                  className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs text-ink"
+                >
+                  {KIND_LABELS[kind]}: <strong>{counts[kind]}</strong>
+                </span>
+              ))}
+            </div>
+          </Card>
 
-      <Card className="p-6">
-        <div className="flex items-center justify-between">
-          <CardTitle>Raw job description</CardTitle>
-          <Button size="sm" variant="secondary" onClick={() => setShowRaw(!showRaw)}>
-            {showRaw ? "Hide" : "Show"}
-          </Button>
-        </div>
-        <p className="mt-2 text-xs text-muted">
-          Stored verbatim at workspace creation — this is the exact text the requirement model was
-          extracted from.
-        </p>
-        {showRaw ? (
-          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-accent-soft p-3 font-mono text-[11px] leading-relaxed text-muted">
-            {job.rawJd}
-          </pre>
-        ) : null}
-      </Card>
+          <Card className="p-6">
+            <div className="flex items-center justify-between">
+              <CardTitle>Raw job description</CardTitle>
+              <Button size="sm" variant="secondary" onClick={() => setShowRaw(!showRaw)}>
+                {showRaw ? "Hide" : "Show"}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              Stored verbatim at workspace creation — this is the exact text the requirement model
+              was extracted from.
+            </p>
+            {showRaw ? (
+              <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-accent-soft p-3 font-mono text-[11px] leading-relaxed text-muted">
+                {job.rawJd}
+              </pre>
+            ) : null}
+          </Card>
+        </>
+      ) : (
+        <Card className="p-6 text-sm leading-relaxed text-muted">
+          This workspace holds a general resume — no posting, no requirement matching. Compose and
+          export from the Resume stage; tailor it per job any time by creating a role workspace.
+        </Card>
+      )}
     </div>
   );
 }

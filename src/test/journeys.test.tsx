@@ -79,6 +79,8 @@ describe("journey · importing a resume", () => {
     // The journey never requires Settings.
     expect(screen.queryByRole("button", { name: /configure ai provider/i })).toBeNull();
 
+    // The persisted-step restore runs before the welcome card appears.
+    await screen.findByRole("button", { name: /bring an existing resume/i });
     fireEvent.click(screen.getByRole("button", { name: /bring an existing resume/i }));
     fireEvent.change(screen.getByPlaceholderText(/paste the full text/i), {
       target: { value: "Ada Lovelace — resume text …" },

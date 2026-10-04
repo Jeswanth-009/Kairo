@@ -22,9 +22,17 @@ pub struct Job {
     pub raw_jd: String,
     pub seniority: String,
     pub domain: String,
+    /// "role" (a job application workspace) or "general" (a no-job resume
+    /// workspace — no JD, no requirements; the same editor flows through).
+    #[serde(default = "default_job_kind")]
+    pub kind: String,
     /// Enriched on read: number of reviewed requirements.
     #[serde(default)]
     pub requirement_count: i64,
+}
+
+fn default_job_kind() -> String {
+    "role".to_string()
 }
 
 impl VaultEntity for Job {
@@ -38,6 +46,7 @@ impl VaultEntity for Job {
         "raw_jd",
         "seniority",
         "domain",
+        "kind",
     ];
 
     fn id(&self) -> i64 {
@@ -53,6 +62,7 @@ impl VaultEntity for Job {
             raw_jd: row.get(4)?,
             seniority: row.get(5)?,
             domain: row.get(6)?,
+            kind: row.get(7)?,
             requirement_count: 0,
         })
     }
@@ -65,22 +75,34 @@ impl VaultEntity for Job {
             FieldVal::Text(self.raw_jd.clone()),
             FieldVal::Text(self.seniority.clone()),
             FieldVal::Text(self.domain.clone()),
+            FieldVal::Text(if self.kind.is_empty() {
+                "role".to_string()
+            } else {
+                self.kind.clone()
+            }),
         ]
     }
 
     fn validate(&self) -> Result<(), String> {
-        if self.raw_jd.trim().len() < 30 {
-            return Err(
-                "The job description text looks too short — paste the full posting".to_string(),
-            );
+        if self.kind != "general" {
+            // Only a general resume (no posting at all) may skip the JD.
+            if self.raw_jd.trim().len() < 30 {
+                return Err(
+                    "The job description text looks too short — paste the full posting".to_string(),
+                );
+            }
+            if !self.url.trim().is_empty()
+                && !self.url.starts_with("http://")
+                && !self.url.starts_with("https://")
+            {
+                return Err("URL must start with http:// or https://".to_string());
+            }
         }
-        if !self.url.trim().is_empty()
-            && !self.url.starts_with("http://")
-            && !self.url.starts_with("https://")
-        {
-            return Err("URL must start with http:// or https://".to_string());
+        if self.kind.is_empty() || self.kind == "general" || self.kind == "role" {
+            Ok(())
+        } else {
+            Err(format!("Unknown workspace kind '{}'", self.kind))
         }
-        Ok(())
     }
 
     fn enrich(conn: &Connection, rows: &mut [Self]) -> rusqlite::Result<()> {
@@ -334,6 +356,7 @@ mod tests {
                 .to_string(),
             seniority: "Senior".to_string(),
             domain: "Fintech".to_string(),
+            kind: "role".to_string(),
             requirement_count: 0,
         }
     }
@@ -403,6 +426,37 @@ mod tests {
         let mut bad = req_fixture(0, "required_skill", "X");
         bad.importance = 1.5;
         assert!(create_job_with_requirements(&conn, &job, &[bad]).is_err());
+    }
+
+    /// A general (no-job) resume workspace is a first-class job: no JD, no
+    /// requirements, kind=general. Role workspaces still demand the posting.
+    #[test]
+    fn general_jobs_skip_the_jd_requirement() {
+        let conn = mem_db();
+        let general = Job {
+            id: 0,
+            company: String::new(),
+            role_title: "General resume".to_string(),
+            url: String::new(),
+            raw_jd: String::new(),
+            seniority: String::new(),
+            domain: String::new(),
+            kind: "general".to_string(),
+            requirement_count: 0,
+        };
+        let created = create_job_with_requirements(&conn, &general, &[]).unwrap();
+        assert_eq!(created.job.kind, "general");
+        assert_eq!(created.requirements.len(), 0);
+
+        // Role workspaces keep the guard.
+        let mut thin = job_fixture();
+        thin.raw_jd = "too short".to_string();
+        assert!(create_job_with_requirements(&conn, &thin, &[]).is_err());
+
+        // An unknown kind is refused.
+        let mut weird = job_fixture();
+        weird.kind = "secret".to_string();
+        assert!(create_job_with_requirements(&conn, &weird, &[]).is_err());
     }
 
     #[test]

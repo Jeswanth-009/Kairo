@@ -290,6 +290,9 @@ export const ipc = {
     invoke<void>("mark_verified", { entityType, entityId }),
   unmarkVerified: (entityType: string, entityId: number): Promise<void> =>
     invoke<void>("unmark_verified", { entityType, entityId }),
+  getOnboardingState: (): Promise<string | null> => invoke<string | null>("get_onboarding_state"),
+  setOnboardingState: (value: string): Promise<void> => invoke<void>("set_onboarding_state", { value }),
+  clearOnboardingState: (): Promise<void> => invoke<void>("clear_onboarding_state"),
   getOnboardingStatus: (): Promise<OnboardingStatus> =>
     invoke<OnboardingStatus>("get_onboarding_status"),
   getHomeOverview: (): Promise<JobHomeRow[]> => invoke<JobHomeRow[]>("get_home_overview"),

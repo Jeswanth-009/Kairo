@@ -44,6 +44,7 @@ fn seed_job_with_requirements(conn: &Connection) -> i64 {
             .to_string(),
         seniority: "Mid".to_string(),
         domain: "Backend".to_string(),
+        kind: "role".to_string(),
         requirement_count: 0,
     };
     let requirements = vec![

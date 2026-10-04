@@ -26,6 +26,7 @@ const profile = structuredClone(mockProfile);
 const plan = structuredClone(mockPlan);
 const suggestions = structuredClone(mockSuggestions);
 const versions = structuredClone(mockVersions);
+let onboardingState: string | null = null;
 
 // Education has no fixture import — one seeded row the batch can append to.
 const educations = [
@@ -423,6 +424,15 @@ const handlers: Record<string, Handler> = {
 
   // Provenance + first-run — the demo vault already has content.
   mark_verified: () => undefined,
+  get_onboarding_state: () => onboardingState,
+  set_onboarding_state: (a) => {
+    onboardingState = String(a.value ?? "");
+    return { ok: true };
+  },
+  clear_onboarding_state: () => {
+    onboardingState = null;
+    return { ok: true };
+  },
   unmark_verified: () => undefined,
   get_onboarding_status: () => ({
     hasProfile: true,

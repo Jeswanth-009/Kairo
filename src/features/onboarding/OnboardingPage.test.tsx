@@ -18,6 +18,14 @@ vi.mock("../../lib/ipc", () => ({
     markVerified: vi.fn(),
     unmarkVerified: vi.fn(),
     getOnboardingStatus: vi.fn(),
+    getOnboardingState: vi.fn().mockResolvedValue(null),
+    setOnboardingState: vi.fn().mockResolvedValue(undefined),
+    clearOnboardingState: vi.fn().mockResolvedValue(undefined),
+    saveJobPdfToDownloads: vi.fn(),
+    getPdfArtifact: vi.fn(),
+    getPdfStatus: vi.fn(),
+    exportPdf: vi.fn(),
+    listResumeVersions: vi.fn().mockResolvedValue([]),
     estimatePlanLines: vi.fn(),
     savePlan: vi.fn(),
   },
@@ -105,8 +113,12 @@ describe("OnboardingPage — guided first run", () => {
       </MemoryRouter>,
     );
 
-    // Welcome: primary action is bringing a resume, secondary is manual.
-    expect(screen.getByText("Turn your existing resume into your first application")).toBeTruthy();
+    // The journey state restores before anything renders.
+    await waitFor(() =>
+      expect(
+        screen.getByText("Turn your existing resume into your first application"),
+      ).toBeTruthy(),
+    );
     fireEvent.click(screen.getByRole("button", { name: /bring an existing resume/i }));
 
     // Import: paste text and extract.
@@ -155,13 +167,13 @@ describe("OnboardingPage — guided first run", () => {
     expect(markVerified.mock.calls).toEqual([["experience", 21]]);
   });
 
-  it("offers Start manually as the secondary path", () => {
+  it("offers Start manually as the secondary path", async () => {
     render(
       <MemoryRouter>
         <OnboardingPage />
       </MemoryRouter>,
     );
-    const manual = screen.getByRole("button", { name: /start manually instead/i });
+    const manual = await screen.findByRole("button", { name: /start manually instead/i });
     expect(manual).toBeTruthy();
     fireEvent.click(manual);
     expect(screen.getByText("Add a role")).toBeTruthy();
