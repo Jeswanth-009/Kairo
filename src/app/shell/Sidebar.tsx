@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Archive, Briefcase, ClipboardCheck, FileText, Home, Settings } from "lucide-react";
+import { Archive, Briefcase, ClipboardCheck, Home, Settings } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { BrandMark } from "../../components/BrandMark";
 import { useAppStore } from "../../stores/appStore";
@@ -16,7 +16,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Home", icon: Home, end: true },
   { to: "/story", label: "My story", icon: Archive },
   { to: "/jobs", label: "Jobs", icon: Briefcase },
-  { to: "/resume-studio", label: "Resume Studio", icon: FileText },
   { to: "/applications", label: "Applications", icon: ClipboardCheck },
 ];
 

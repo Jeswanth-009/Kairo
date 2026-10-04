@@ -293,7 +293,7 @@ function AttentionRow({
     items.push({
       label: `PDF needs update — ${job.roleTitle || "Untitled role"}`,
       detail: "Changed after the last export",
-      to: "/resume-studio",
+      to: `/jobs/${job.jobId}/resume`,
       tone: "warn",
     });
   }
@@ -465,7 +465,7 @@ export default function DashboardPage() {
       iconClass: "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400",
     },
     {
-      to: "/resume-studio",
+      to: "/jobs",
       value: counts.resumeVersions,
       label: "Resume versions",
       sub: counts.pdfsCompiled > 0 ? `${counts.pdfsCompiled} ${counts.pdfsCompiled === 1 ? "PDF compiled" : "PDFs compiled"}` : "export to create",

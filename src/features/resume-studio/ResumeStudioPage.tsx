@@ -51,6 +51,7 @@ import type {
   TailorSuggestion,
 } from "../../lib/types";
 import { toast } from "../../stores/toastStore";
+import { useTopBarStore } from "../../stores/topBarStore";
 
 /** Rough per-template line capacity of one page (mirrors LaTeX layout). */
 const CAPACITY: Record<ResumeTemplateId | string, number> = {
@@ -320,10 +321,14 @@ export default function ResumeStudioPage() {
   // Job-scoped routing: the editor always belongs to the job in the URL.
   // No param is treated as a navigation mistake — never silently open the
   // first job in the list (that is how users edit the wrong resume).
+  // The URL is the single source of job identity: the visible job, the saved
+  // plan, undo history, and the export target are all this one id, and the
+  // picker below navigates instead of mutating local state.
   const params = useParams();
   const routeJobId = params.jobId ? Number(params.jobId) : null;
+  const jobId = routeJobId;
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [jobId, setJobId] = useState<number | null>(routeJobId);
+  const [jobMissing, setJobMissing] = useState(false);
   const [plan, setPlan] = useState<ResumePlan | null>(null);
   const [suggestions, setSuggestions] = useState<TailorSuggestion[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -384,8 +389,9 @@ export default function ResumeStudioPage() {
           return;
         }
         if (!list.some((j) => j.id === routeJobId)) {
-          toast.error("That job workspace no longer exists.");
-          navigate("/jobs");
+          // A deleted or bad id: a recovery screen, not a silent redirect —
+          // the user should know why they landed nowhere.
+          setJobMissing(true);
         }
       } catch (e) {
         toast.error(String(e));
@@ -670,6 +676,29 @@ export default function ResumeStudioPage() {
     }
   };
 
+  // The shell's TopBar mirrors this workspace: location trail, save state,
+  // and the single primary action. exportPdf is read through a ref so the
+  // published action always runs the latest closure.
+  const exportPdfRef = useRef(exportPdf);
+  exportPdfRef.current = exportPdf;
+  const jobTitle = jobs.find((j) => j.id === jobId)?.roleTitle || "Workspace";
+  useEffect(() => {
+    if (jobId === null) return;
+    useTopBarStore.getState().set({
+      crumbs: [
+        { label: "Jobs", to: "/jobs" },
+        { label: jobTitle, to: `/jobs/${jobId}` },
+        { label: "Resume" },
+      ],
+      saveState: saveStatus === "idle" ? "saved" : saveStatus,
+      primaryAction: {
+        label: exporting ? "Compiling…" : "Export PDF",
+        onClick: () => void exportPdfRef.current(),
+        disabled: exporting,
+      },
+    });
+  }, [jobId, saveStatus, exporting, jobTitle]);
+
   // ---------------------------------------------------------------------------
   // Computed
   // ---------------------------------------------------------------------------
@@ -736,6 +765,24 @@ export default function ResumeStudioPage() {
     );
   }
 
+  if (jobMissing) {
+    return (
+      <div className="mx-auto max-w-3xl p-8">
+        <Card className="p-8 text-center">
+          <p className="text-sm font-semibold text-ink">This workspace no longer exists</p>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
+            The job at <code className="rounded bg-accent-soft px-1.5 py-0.5">/jobs/{jobId}/resume</code> was
+            deleted or the link is stale. Your other workspaces are on the Jobs page.
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <Button onClick={() => navigate("/jobs")}>Go to Jobs</Button>
+            <Button variant="secondary" onClick={() => navigate("/applications")}>Applications</Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   if (!plan) {
     return (
       <div className="mx-auto max-w-3xl p-8">
@@ -748,8 +795,16 @@ export default function ResumeStudioPage() {
                   ? void (async () => {
                       try {
                         const fresh = await ipc.runComposer(jobId);
+                        // The empty state bypasses mutatePlan, so wire the
+                        // composed plan into the same session state every
+                        // edit path relies on — otherwise the first click
+                        // after composing silently no-ops.
+                        historyRef.current = [];
+                        setCanUndo(false);
+                        planRef.current = fresh;
                         setPlan(fresh);
                         setEstimatedLines(await ipc.estimatePlanLines(fresh));
+                        enqueuePlanSave(jobId, fresh);
                         toast.ok("Plan composed from the Vault");
                       } catch (e) {
                         toast.error(String(e));
@@ -790,8 +845,9 @@ export default function ResumeStudioPage() {
             <SaveStatusChip jobId={jobId} />
             <Select
               value={jobId ?? undefined}
-              onChange={(e) => setJobId(Number(e.target.value))}
+              onChange={(e) => navigate(`/jobs/${Number(e.target.value)}/resume`)}
               className="w-60"
+              title="Switch workspace — the editor follows the URL"
             >
               {jobs.map((job) => (
                 <option key={job.id} value={job.id}>
