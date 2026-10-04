@@ -339,7 +339,7 @@ export default function ResumeStudioPage() {
   const pdfProgress = usePdfProgress(exporting);
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [savingVersion, setSavingVersion] = useState(false);
-  const [previewMode, setPreviewMode] = useState<"pdf" | "plan">("pdf");
+  const [previewMode, setPreviewMode] = useState<"pdf" | "plan" | "design">("pdf");
   // Ephemeral, in-session only: the failed-export overlay. Durable PDF state
   // (stale / template-stale / current) always comes from the backend status.
   const [exportFailed, setExportFailed] = useState(false);
@@ -919,7 +919,7 @@ export default function ResumeStudioPage() {
         </span>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-[minmax(0,1fr)_minmax(0,auto)] xl:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,3fr)] xl:grid-rows-[minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-[minmax(0,1fr)_minmax(0,auto)] xl:grid-cols-[minmax(0,3fr)_minmax(0,5fr)_minmax(0,3fr)] xl:grid-rows-[minmax(0,1fr)]">
         {/* ------------------------------------------------------------- */}
         {/* LEFT — Content curation                                        */}
         {/* ------------------------------------------------------------- */}
@@ -1305,7 +1305,7 @@ export default function ResumeStudioPage() {
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* CENTER — Preview                                               */}
+        {/* CENTER — Preview (the PDF is the point of this screen)         */}
         {/* ------------------------------------------------------------- */}
         <div className="flex min-h-0 flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
@@ -1323,9 +1323,10 @@ export default function ResumeStudioPage() {
                 tabs={[
                   { id: "pdf", label: "PDF" },
                   { id: "plan", label: "Plan layout" },
+                  { id: "design", label: "Design" },
                 ]}
                 active={previewMode}
-                onChange={(id) => setPreviewMode(id as "pdf" | "plan")}
+                onChange={(id) => setPreviewMode(id as "pdf" | "plan" | "design")}
               />
             ) : null}
           </div>
@@ -1343,7 +1344,70 @@ export default function ResumeStudioPage() {
             </div>
           ) : null}
 
-          {previewMode === "pdf" && artifact && jobId !== null ? (
+          {previewMode === "design" ? (
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto rounded-xl bg-accent-soft p-4 ring-1 ring-line">
+              {/* Secondary Design area: template controls live here, so the
+                  PDF — not the template picker — leads the screen. */}
+              <div className="rounded-xl border border-line bg-card p-4">
+                <p className="text-sm font-semibold text-ink">Template</p>
+                <div className="mt-3 flex flex-col gap-2">
+                  {TEMPLATES.map((t) => {
+                    const active = templateId === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => mutatePlan((p) => { p.config.templateId = t.id; })}
+                        className={cn(
+                          "flex items-center gap-3 rounded-xl border p-2.5 text-left transition-all",
+                          active
+                            ? "border-kairo-blue/60 bg-kairo-blue/5 ring-1 ring-kairo-blue/40 dark:bg-kairo-blue/10"
+                            : "border-line bg-card hover:border-line-strong hover:shadow-sm",
+                        )}
+                      >
+                        <TemplateThumb id={t.id} active={active} />
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+                            {t.name}
+                            {active ? <Badge tone="blue">selected</Badge> : null}
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-tight text-muted">{t.desc}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 space-y-2 border-t border-line pt-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-muted">Paper</span>
+                    <Select
+                      value={paper}
+                      onChange={(e) => mutatePlan((p) => { p.config.paper = e.target.value; })}
+                      className="w-24 py-1 text-xs"
+                    >
+                      <option value="letter">Letter</option>
+                      <option value="a4">A4</option>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-muted">Target pages</span>
+                    <Select
+                      value={String(pages)}
+                      onChange={(e) => mutatePlan((p) => { p.config.targetPages = Number(e.target.value); })}
+                      className="w-24 py-1 text-xs"
+                    >
+                      <option value="1">1 page</option>
+                      <option value="2">2 pages</option>
+                      <option value="3">3 pages</option>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              <p className="text-center text-xs text-muted">
+                Changes save with the draft — switch back to PDF and export to see them compiled.
+              </p>
+            </div>
+          ) : previewMode === "pdf" && artifact && jobId !== null ? (
             <PdfViewer
               key={artifact.pdfHash ?? artifact.compiledAt ?? artifact.pdfPath}
               jobId={jobId}
@@ -1370,74 +1434,6 @@ export default function ResumeStudioPage() {
         {/* RIGHT — Template & export rail                                 */}
         {/* ------------------------------------------------------------- */}
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pl-0 lg:col-start-2 xl:col-start-3 xl:row-start-1 lg:pr-1">
-          {/* Template picker — collapsed so content and preview lead. */}
-          <Card className="p-4">
-            <details>
-              <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold text-ink">
-                <span>
-                  Template{" "}
-                  <span className="ml-1 text-xs font-normal text-muted">
-                    {TEMPLATES.find((t) => t.id === templateId)?.name ?? "jake"} ·{" "}
-                    {paper === "a4" ? "A4" : "Letter"} · {pages} page{pages === 1 ? "" : "s"}
-                  </span>
-                </span>
-              </summary>
-              <div className="mt-3 flex flex-col gap-2">
-              {TEMPLATES.map((t) => {
-                const active = templateId === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => mutatePlan((p) => { p.config.templateId = t.id; })}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl border p-2.5 text-left transition-all",
-                      active
-                        ? "border-kairo-blue/60 bg-kairo-blue/5 ring-1 ring-kairo-blue/40 dark:bg-kairo-blue/10"
-                        : "border-line bg-card hover:border-line-strong hover:shadow-sm",
-                    )}
-                  >
-                    <TemplateThumb id={t.id} active={active} />
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-1.5 text-xs font-semibold text-ink">
-                        {t.name}
-                        {active ? <Badge tone="blue">selected</Badge> : null}
-                      </span>
-                      <span className="mt-0.5 block text-xs leading-tight text-muted">{t.desc}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-3 space-y-2 border-t border-line pt-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-muted">Paper</span>
-                <Select
-                  value={paper}
-                  onChange={(e) => mutatePlan((p) => { p.config.paper = e.target.value; })}
-                  className="w-24 py-1 text-xs"
-                >
-                  <option value="letter">Letter</option>
-                  <option value="a4">A4</option>
-                </Select>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-muted">Target pages</span>
-                <Select
-                  value={String(pages)}
-                  onChange={(e) => mutatePlan((p) => { p.config.targetPages = Number(e.target.value); })}
-                  className="w-24 py-1 text-xs"
-                >
-                  <option value="1">1 page</option>
-                  <option value="2">2 pages</option>
-                  <option value="3">3 pages</option>
-                </Select>
-              </div>
-            </div>
-            </details>
-          </Card>
-
           {/* Export */}
           <Card className="p-4">
             <CardTitle>Export</CardTitle>
