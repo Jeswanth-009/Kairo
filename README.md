@@ -21,14 +21,22 @@ Kairo keeps your career history — projects, experience, education, skills, ach
 job you target, it builds a tailored resume from those facts:
 
 1. **Import** an existing resume (PDF / DOCX / pasted text) — extracted facts are grouped for
-   your review; nothing is trusted automatically.
-2. **Add a role** — paste the job description; confirm the requirements that matter.
+   your review; the accepted set saves in one transaction (an interrupted import leaves zero
+   partial records). Nothing is trusted automatically.
+2. **Choose the shape** — tailor for a specific job (paste the description, confirm the
+   requirements that matter) or compose a general resume with no posting at all.
 3. **See the evidence** — Kairo matches your confirmed history against each requirement and
-   explains *why* a record was selected, with clear / partial / missing support — never a
+   explains *why* a record was selected, with clear / partial / missing support. You decide per
+   record: use it, dismiss it, edit the fact, or find another example. Never a
    hiring-probability score.
-4. **Review the exact PDF** — the compiled document is shown with a checklist; saving a
-   version requires you to have reviewed that specific revision.
-5. **Track the application** — which version you sent, when, and what happened next.
+4. **Review the exact PDF** — the compiled document is shown with a checklist; "reviewed" is
+   recorded against that file's hash, and saving a version requires you to have reviewed that
+   specific revision.
+5. **Track the application** — which version you actually sent, when, and what happened next.
+
+The first run ends at a real PDF: the guided flow composes and exports it inline, shows the
+still-unverified records, and offers *Save to Downloads* or *Customize in the editor*. Leaving
+mid-flow resumes where you stopped — the step, the reviewed draft and the workspace persist.
 
 The interface is organised around these goals:
 
@@ -53,8 +61,9 @@ Interview prep lives inside each job workspace, because its questions depend on 
   requirement, the source record, and the strength of support.
 - **Local-first.** Your data stays in a local SQLite database. AI is optional and
   clearly separated; without a provider, everything except wording suggestions works.
-- **Reviewable PDFs.** Export is revision-checked: the PDF matches a specific saved draft,
-  and edits after the export make the PDF visibly out of date.
+- **Reviewable PDFs.** Export is revision-checked end to end: the PDF records the saved-draft
+  revision it was compiled from, edits after the export make the PDF visibly out of date, and
+  overlapping exports of one workspace are serialized.
 
 ## Supported platforms
 
@@ -64,11 +73,12 @@ Interview prep lives inside each job workspace, because its questions depend on 
 
 ## Getting started (5 minutes)
 
-1. Install Node.js **20+** and Rust (stable, MSVC toolchain on Windows).
+1. Install Node.js **20+** and Rust (stable; on Windows the repo builds with the
+   GNU toolchain by default — see `~/.cargo/config.toml` notes — while CI uses MSVC).
 2. `npm install`
 3. `npm run tauri dev` — the app launches; a blank slate opens the guided first-run flow:
-   bring an existing resume, confirm the extracted facts, paste one job description, and
-   get a reviewable PDF in one sitting.
+   bring an existing resume, review and accept the extracted facts, choose *tailor for a job*
+   or *general resume*, and export the first PDF without ever opening the advanced editor.
 4. For production builds: `npm run tauri build` (requires the Tectonic sidecar —
    `npm run ensure-tectonic` fetches it, or the build script does automatically).
 
@@ -79,21 +89,40 @@ npm install
 npm run dev          # frontend only (browser, with mock data)
 npm run tauri dev    # full desktop app
 
-npm run verify       # lint + test + build — the pre-push gate
+npm run verify       # lint + test + build — the recommended local gate
 npm test             # vitest only
-cargo test           # Rust tests (in src-tauri; needs the MSVC environment on Windows)
+cargo test           # Rust tests (in src-tauri)
 cargo clippy --all-targets -- -D warnings
 ```
 
-On Windows, `scripts/dev-env.sh` (bash) or `dev.ps1` sets up a portable MSVC toolchain for
-the bundled SQLite build. CI runs the same checks on Windows, macOS and Linux.
+`npm run verify` is the check to run before pushing; CI enforces the same plus the full Rust
+suite on three platforms. On Windows the local Rust test binary needs a comctl32 v6 manifest
+(see `src-tauri/etc/` — without it `cargo test` exes fail to load with
+`STATUS_ENTRYPOINT_NOT_FOUND`); run the suite locally with:
+
+```bash
+RUSTFLAGS="-C link-arg=<repo>/src-tauri/etc/tests-manifest.o" cargo test --lib
+```
+
+CI additionally runs the integration tests (`tests/pdf_pipeline.rs`, `tests/versions_flow.rs`),
+which skip automatically when Tectonic is unavailable.
+
+## What AI gets (and what works without it)
+
+Everything except wording suggestions works with **no AI provider configured** — import,
+matching, composition, export, versions, applications and backups are all local and
+deterministic. When you configure an OpenAI-compatible provider (OpenAI, Groq, a local
+Ollama server), Kairo sends only the requirement text and the exact resume bullet you ask it
+to rewrite, plus the evidence excerpts those bullets cite — never your whole database, never
+contact details, and nothing leaves the machine unless a tailor suggestion is requested. The
+API key is stored in the OS credential store, not the database.
 
 ### Architecture (short version)
 
 - **Frontend:** React 18 + TypeScript + Tailwind v4 + Vite; zustand stores; Tauri IPC.
 - **Backend:** Rust (Tauri 2) with a domain-module layout — matching, composer, tailor,
-  imports — over a 15-migration SQLite schema (WAL, foreign keys, soft-delete trash,
-  artifact fingerprints, record provenance).
+  imports — over a 16-migration SQLite schema (WAL, foreign keys, soft-delete trash,
+  artifact fingerprints, plan revisions, record provenance, evidence decisions).
 - **PDF:** headless Tectonic (LaTeX) compilation in a staging directory with atomic
   promotion — an interrupted export leaves the previous PDF intact.
 - **Trust model:** every record carries origin/edited/verified provenance; evidence links
@@ -103,9 +132,10 @@ the bundled SQLite build. CI runs the same checks on Windows, macOS and Linux.
 ## Honest limitations
 
 - Windows-first packaging; macOS/Linux are buildable but not installer-ready.
-- Resume PDF extraction handles text-based PDFs; scanned/image exports need pasted text.
-- Correction history per record and automatic stale-PDF marking on fact changes are
-  planned but not implemented — records show `edited` timestamps and usage counts instead.
+- Resume PDF extraction handles text-based PDFs; scanned/image exports need pasted text
+  (onboarding keeps the manual-entry path open in every failure case).
+- "Where is this fact used?" counts in My Story show evidence coverage and provenance; a
+  per-job usage index ("which resumes include this record") is planned.
 - AI features require an OpenAI-compatible provider (OpenAI, Groq, a local Ollama server);
   Kairo works fully without them.
 
