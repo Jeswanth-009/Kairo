@@ -134,7 +134,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
 
             {busy ? (
               <div className="rounded-lg border border-line bg-accent-soft p-3">
-                <p className="text-[11px] leading-relaxed text-muted">
+                <p className="text-xs leading-relaxed text-muted">
                   {progress.waiting
                     ? "Starting the compiler… the very first run also downloads the TeX bundle, which can take a few minutes."
                     : "Compiler output — first run downloads the TeX bundle and can take a few minutes."}
@@ -187,14 +187,14 @@ export function ResumeTab({ jobId }: { jobId: number }) {
                       .then((p) => toast.ok(`Saved to Downloads: ${p}`))
                       .catch((e) => toast.error(String(e)))
                   }
-                  className="flex flex-1 items-center justify-center gap-1 rounded border border-line bg-accent-soft py-1 text-[11px] font-medium text-ink hover:bg-accent-soft/80"
+                  className="flex flex-1 items-center justify-center gap-1 rounded border border-line bg-accent-soft py-1 text-xs font-medium text-ink hover:bg-accent-soft/80"
                 >
                   <HardDriveDownload className="size-3.5" /> Downloads
                 </button>
                 <button
                   type="button"
                   onClick={() => void ipc.revealJobPdf(jobId).catch((e) => toast.error(String(e)))}
-                  className="flex flex-1 items-center justify-center gap-1 rounded border border-line bg-accent-soft py-1 text-[11px] font-medium text-ink hover:bg-accent-soft/80"
+                  className="flex flex-1 items-center justify-center gap-1 rounded border border-line bg-accent-soft py-1 text-xs font-medium text-ink hover:bg-accent-soft/80"
                 >
                   <FolderOpen className="size-3.5" /> Folder
                 </button>

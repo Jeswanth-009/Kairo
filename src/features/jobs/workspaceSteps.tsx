@@ -201,7 +201,7 @@ export function ReviewStage({ jobId }: { jobId: number }) {
         actions={
           hasArtifact ? (
             reviewed ? (
-              <span className="flex items-center gap-1.5 rounded-full bg-ok-soft px-2.5 py-1 text-[11px] font-medium text-ok dark:bg-ok/15 dark:text-emerald-300">
+              <span className="flex items-center gap-1.5 rounded-full bg-ok-soft px-2.5 py-1 text-xs font-medium text-ok dark:bg-ok/15 dark:text-emerald-300">
                 <Check className="size-3.5" /> Reviewed
               </span>
             ) : (
@@ -234,7 +234,7 @@ export function ReviewStage({ jobId }: { jobId: number }) {
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-[11px] leading-relaxed text-muted">
+          <p className="mt-3 text-xs leading-relaxed text-muted">
             “Reviewed” refers to this exact file — its hash is recorded. Any new export or draft
             edit resets it, so a version can only freeze a PDF you actually looked at.
           </p>
@@ -383,7 +383,7 @@ export function InterviewTab({ jobId }: { jobId: number }) {
             {group.items.map((q, i) => (
               <Card key={i} className="p-4">
                 <p className="text-sm leading-relaxed text-ink">{q.question}</p>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-muted/90">
+                <p className="mt-1.5 text-xs leading-relaxed text-muted/90">
                   <span className="font-medium text-muted">Why asked:</span> {q.why}
                 </p>
                 {q.evidenceRefs.length > 0 ? (
@@ -482,7 +482,7 @@ export function ApplicationTab({ job }: { job: Job }) {
           </div>
           {linked.length === 0 && versions.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
-              <label className="text-[11px] text-muted" htmlFor="sent-version">
+              <label className="text-xs text-muted" htmlFor="sent-version">
                 Sent version
               </label>
               <select

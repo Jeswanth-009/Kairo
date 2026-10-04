@@ -23,7 +23,7 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-ink">{item.title}</p>
-          <p className="mt-0.5 text-[11px] text-muted">
+          <p className="mt-0.5 text-xs text-muted">
             {[
               item.subtitle,
               fmtRange({ startDate: item.startDate, endDate: item.endDate, isCurrent: item.isCurrent }),
@@ -33,7 +33,7 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
           </p>
         </div>
         <span
-          className="shrink-0 rounded-full bg-kairo-blue/10 px-2 py-0.5 text-[11px] font-medium text-kairo-blue"
+          className="shrink-0 rounded-full bg-kairo-blue/10 px-2 py-0.5 text-xs font-medium text-kairo-blue"
           title="Relevance from the match report"
         >
           rel {item.relevance.toFixed(2)}
@@ -76,7 +76,7 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
           })}
         </ul>
       ) : (
-        <p className="mt-2 text-[11px] text-warn">
+        <p className="mt-2 text-xs text-warn">
           No approved resume points — approve some in the record inspector.
         </p>
       )}
@@ -202,7 +202,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle>Resume plan · engine v{plan.composerVersion}</CardTitle>
               <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                   plan.fitsOnePage
                     ? "bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300"
                     : "bg-warn-soft text-warn dark:bg-warn/15 dark:text-kairo-dawn"
@@ -232,7 +232,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
               {plan.header.headline ? (
                 <p className="text-xs text-muted">{plan.header.headline}</p>
               ) : null}
-              <p className="text-[11px] text-muted">
+              <p className="text-xs text-muted">
                 {[
                   plan.header.email,
                   plan.header.phone,
@@ -257,7 +257,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
                     <span className="ml-2 text-xs text-muted">
                       {[e.degree, e.fieldOfStudy].filter(Boolean).join(" · ")}
                     </span>
-                    <span className="ml-2 text-[11px] text-muted">
+                    <span className="ml-2 text-xs text-muted">
                       {fmtRange({ startDate: e.startDate, endDate: e.endDate, isCurrent: e.isCurrent })}
                     </span>
                   </li>
@@ -285,7 +285,7 @@ export function PlanTab({ jobId }: { jobId: number }) {
           {plan.skills.length > 0 ? (
             <Card className="p-6">
               <CardTitle>Skills</CardTitle>
-              <p className="mt-1 text-[11px] text-muted">
+              <p className="mt-1 text-xs text-muted">
                 Linked to selected records; skills named in the job requirements come first.
               </p>
               <div className="mt-3 flex flex-wrap gap-1.5">

@@ -123,11 +123,11 @@ export function RecordInspector({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-accent-soft px-3 py-2.5">
           <div className="flex items-center gap-2">
             {badge ? (
-              <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
+              <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${badge.className}`}>
                 {badge.label}
               </span>
             ) : null}
-            <span className="text-[11px] text-muted">
+            <span className="text-xs text-muted">
               {isVerified
                 ? "You've personally checked these facts."
                 : "Only mark verified if you have checked these facts yourself."}
@@ -210,7 +210,7 @@ function OverviewTab({
 
       {skills.length > 0 ? (
         <div className="mt-4">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted">Skills</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Skills</h4>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {skills.map((ref) => (
               <span
@@ -286,7 +286,7 @@ function EvidenceTab({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         KIND_COLORS[item.kind] ?? KIND_COLORS.other
                       }`}
                     >
@@ -294,11 +294,11 @@ function EvidenceTab({
                     </span>
                     <span className="text-sm font-medium text-ink">{item.title}</span>
                     {item.verified ? (
-                      <span className="rounded-full bg-ok-soft px-2 py-0.5 text-[11px] font-medium text-ok">
+                      <span className="rounded-full bg-ok-soft px-2 py-0.5 text-xs font-medium text-ok">
                         ✓ Verified
                       </span>
                     ) : (
-                      <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn">
+                      <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn">
                         Unverified
                       </span>
                     )}
@@ -557,11 +557,11 @@ function BulletsTab({
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm leading-relaxed text-ink">{bullet.text}</p>
                 {bullet.approved ? (
-                  <span className="shrink-0 rounded-full bg-ok-soft px-2 py-0.5 text-[11px] font-medium text-ok">
+                  <span className="shrink-0 rounded-full bg-ok-soft px-2 py-0.5 text-xs font-medium text-ok">
                     ✓ Approved
                   </span>
                 ) : (
-                  <span className="shrink-0 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn">
+                  <span className="shrink-0 rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn">
                     Draft
                   </span>
                 )}
@@ -572,7 +572,7 @@ function BulletsTab({
                     <span
                       key={ref.id}
                       title={`${ref.kind}${ref.verified ? " · verified" : " · unverified"}`}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                         ref.verified ? "bg-kairo-blue/10 text-kairo-blue" : "bg-warn-soft text-warn"
                       }`}
                     >
@@ -581,7 +581,7 @@ function BulletsTab({
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-[11px] text-warn">
+                <p className="mt-2 text-xs text-warn">
                   No evidence linked — approve only what you can support.
                 </p>
               )}
@@ -772,7 +772,7 @@ function BulletDialog({
                     className="h-4 w-4 rounded border-line-strong accent-kairo-blue"
                   />
                   <span className={e.verified ? "" : "text-muted"}>{e.title}</span>
-                  <span className="text-[11px] text-muted">{e.kind}</span>
+                  <span className="text-xs text-muted">{e.kind}</span>
                 </label>
               ))}
             </div>
@@ -832,7 +832,7 @@ function RulesTab({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                     rule.ruleType === "forbidden_claim"
                       ? "bg-bad-soft text-bad"
                       : "bg-kairo-blue/10 text-kairo-blue"
@@ -876,7 +876,7 @@ function RulesTab({
         </Button>
       </div>
 
-      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
         For this record
       </h4>
       {list(
@@ -884,7 +884,7 @@ function RulesTab({
         "No rules for this record yet. Example: forbid “production-scale distributed system”.",
       )}
 
-      <h4 className="mb-2 mt-5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+      <h4 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-muted">
         Global (apply to everything)
       </h4>
       {list(global, "No global rules yet.")}

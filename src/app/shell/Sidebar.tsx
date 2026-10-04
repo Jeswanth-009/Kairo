@@ -63,7 +63,7 @@ export function Sidebar() {
           <div className="text-[15px] leading-tight font-semibold tracking-tight text-white">
             Kairo
           </div>
-          <div className="truncate text-[11px] leading-tight text-muted">
+          <div className="truncate text-xs leading-tight text-muted">
             Your career. A brighter next step.
           </div>
         </div>
@@ -82,7 +82,7 @@ export function Sidebar() {
 
       <div className="relative border-t border-white/[0.06] px-3 py-3">
         <NavItemLink item={{ to: "/settings", label: "Settings", icon: Settings }} />
-        <div className="px-3 pt-2.5 text-[11px] text-muted">
+        <div className="px-3 pt-2.5 text-xs text-muted">
           {appVersion ? `v${appVersion}` : "Kairo"} · Local-first
         </div>
       </div>

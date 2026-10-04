@@ -32,7 +32,7 @@ export function Splash() {
         draggable={false}
         className="glow-pulse w-64 rounded-3xl shadow-float select-none"
       />
-      <div className="mt-7 text-[11px] font-medium tracking-[0.32em] text-kairo-sky/70 uppercase">
+      <div className="mt-7 text-xs font-medium tracking-[0.32em] text-kairo-sky/70 uppercase">
         Progress builds possibilities
       </div>
     </div>

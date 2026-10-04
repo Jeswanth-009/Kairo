@@ -184,7 +184,7 @@ export function PdfViewer({ jobId, candidateName, className }: PdfViewerProps) {
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-card px-3 py-2 text-xs">
         <div className="flex items-center gap-1.5">
           {numPages > 1 ? (
-            <span className="mr-1 rounded-md bg-accent-soft px-2 py-1 text-[11px] font-medium text-muted">
+            <span className="mr-1 rounded-md bg-accent-soft px-2 py-1 text-xs font-medium text-muted">
               Page {currentPage} / {numPages}
             </span>
           ) : null}
@@ -203,7 +203,7 @@ export function PdfViewer({ jobId, candidateName, className }: PdfViewerProps) {
                 setFitWidth(false);
                 setScale((s) => s ?? 1);
               }}
-              className="w-12 text-[11px] font-semibold text-muted hover:text-kairo-blue"
+              className="w-12 text-xs font-semibold text-muted hover:text-kairo-blue"
               title="Reset zoom"
             >
               {Math.round((scale ?? 1) * 100)}%
@@ -236,7 +236,7 @@ export function PdfViewer({ jobId, candidateName, className }: PdfViewerProps) {
             type="button"
             onClick={() => void handleSaveToDownloads()}
             disabled={savingDownload}
-            className="flex items-center gap-1.5 rounded-md border border-line bg-card px-2 py-1.5 text-[11px] font-medium text-ink hover:bg-accent-soft disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md border border-line bg-card px-2 py-1.5 text-xs font-medium text-ink hover:bg-accent-soft disabled:opacity-50"
             title="Save a copy directly into your Downloads folder"
           >
             <HardDriveDownload className="size-3.5" />
@@ -281,7 +281,7 @@ export function PdfViewer({ jobId, candidateName, className }: PdfViewerProps) {
         {error ? (
           <div className="m-auto max-w-md rounded-xl border border-bad/25 bg-bad-soft p-5 text-center dark:border-red-500/30 dark:bg-bad/10">
             <p className="text-sm font-semibold text-bad dark:text-red-300">Unable to render PDF in-app</p>
-            <p className="mt-1 font-mono text-[11px] break-all text-bad dark:text-red-400/80">{error}</p>
+            <p className="mt-1 font-mono text-xs break-all text-bad dark:text-red-400/80">{error}</p>
             <div className="mt-4 flex justify-center gap-2">
               <button
                 type="button"

@@ -15,7 +15,7 @@ export function StatCard({ label, value, hint, icon, onClick, className }: StatC
   const content = (
     <>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+        <span className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">
           {label}
         </span>
         {icon ? <span className="text-kairo-blue/70">{icon}</span> : null}

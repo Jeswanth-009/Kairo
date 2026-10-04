@@ -184,12 +184,12 @@ function PlanPreview({
           <div key={`${item.entityType}-${item.id}`} className="mb-3">
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-[13px] font-semibold text-neutral-900">{org}</span>
-              <span className="shrink-0 text-[11px] text-neutral-500">
+              <span className="shrink-0 text-xs text-neutral-500">
                 {fmtRange({ startDate: item.startDate, endDate: item.endDate, isCurrent: item.isCurrent })}
               </span>
             </div>
             {role || location ? (
-              <p className="text-[11px] text-neutral-500">
+              <p className="text-xs text-neutral-500">
                 {role}{role && location ? " · " : ""}{location}
               </p>
             ) : null}
@@ -217,7 +217,7 @@ function PlanPreview({
         {plan.header.headline ? (
           <p className="mt-0.5 text-[12px] italic text-neutral-600">{plan.header.headline}</p>
         ) : null}
-        <p className="mt-1 text-[11px] text-neutral-500">
+        <p className="mt-1 text-xs text-neutral-500">
           {[
             plan.header.phone,
             plan.header.email,
@@ -240,11 +240,11 @@ function PlanPreview({
             <div key={e.id} className="mb-1">
               <div className="flex items-baseline justify-between">
                 <span className="text-[13px] font-semibold">{e.institution}</span>
-                <span className="text-[11px] text-neutral-500">
+                <span className="text-xs text-neutral-500">
                   {fmtRange({ startDate: e.startDate, endDate: e.endDate, isCurrent: e.isCurrent })}
                 </span>
               </div>
-              <span className="text-[11px] text-neutral-600">
+              <span className="text-xs text-neutral-600">
                 {[e.degree, e.fieldOfStudy].filter(Boolean).join(", ")}
               </span>
             </div>
@@ -278,7 +278,7 @@ function PlanPreview({
               <div key={a.id} className="mb-2">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-[13px] font-semibold text-neutral-900">{a.title}</span>
-                  <span className="shrink-0 text-[11px] text-neutral-500">
+                  <span className="shrink-0 text-xs text-neutral-500">
                     {[a.issuer, fmtRange({ startDate: a.achievedOn, endDate: null, isCurrent: false })]
                       .filter(Boolean)
                       .join(" · ")}
@@ -952,7 +952,7 @@ export default function ResumeStudioPage() {
                 {plan.header.headline ? (
                   <p className="mt-0.5 line-clamp-2 text-xs italic text-muted">{plan.header.headline}</p>
                 ) : null}
-                <p className="mt-1 truncate text-[11px] text-muted/80">
+                <p className="mt-1 truncate text-xs text-muted/80">
                   {[plan.header.email, plan.header.phone, plan.header.location].filter(Boolean).join(" · ") || "no contact details"}
                 </p>
               </div>
@@ -1001,7 +1001,7 @@ export default function ResumeStudioPage() {
                             <p className={cn("truncate text-xs font-semibold", item.excluded ? "text-muted/70 line-through" : "text-ink")}>
                               {item.title}
                             </p>
-                            <p className="truncate text-[11px] text-muted">
+                            <p className="truncate text-xs text-muted">
                               {item.subtitle ? `${item.subtitle} · ` : ""}
                               {fmtRange({ startDate: item.startDate, endDate: item.endDate, isCurrent: item.isCurrent })}
                             </p>
@@ -1055,7 +1055,7 @@ export default function ResumeStudioPage() {
                                     <span className="min-w-0 flex-1">
                                       <span
                                         className={cn(
-                                          "block text-[11px] leading-relaxed",
+                                          "block text-xs leading-relaxed",
                                           bullet.excluded ? "text-muted/60 line-through" : "text-muted",
                                         )}
                                       >
@@ -1120,11 +1120,11 @@ export default function ResumeStudioPage() {
                         <p className={cn("truncate text-xs font-semibold", ach.excluded ? "text-muted/70 line-through" : "text-ink")}>
                           {ach.title}
                         </p>
-                        <p className="truncate text-[11px] text-muted">
+                        <p className="truncate text-xs text-muted">
                           {[ach.issuer, ach.achievedOn].filter(Boolean).join(" · ")}
                         </p>
                         {ach.description ? (
-                          <p className={cn("mt-1 text-[11px]", ach.excluded ? "text-muted/60 line-through" : "text-muted")}>
+                          <p className={cn("mt-1 text-xs", ach.excluded ? "text-muted/60 line-through" : "text-muted")}>
                             {ach.description}
                           </p>
                         ) : null}
@@ -1269,7 +1269,7 @@ export default function ResumeStudioPage() {
             </form>
 
             {plan.skills.length === 0 ? (
-              <p className="text-[11px] text-muted/80">
+              <p className="text-xs text-muted/80">
                 No skills yet — add one above, or link skills to records in the Vault.
               </p>
             ) : (
@@ -1283,7 +1283,7 @@ export default function ResumeStudioPage() {
                       onClick={() => toggleSkill(skill)}
                       title={excluded ? "Click to include" : "Click to exclude"}
                       className={cn(
-                        "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                        "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
                         excluded
                           ? "border-line bg-accent-soft text-muted/70 line-through"
                           : "border-kairo-blue/30 bg-kairo-blue/5 text-kairo-blue hover:bg-kairo-blue/10 dark:bg-kairo-blue/15",
@@ -1298,7 +1298,7 @@ export default function ResumeStudioPage() {
           </Card>
 
           {excludedCount > 0 ? (
-            <p className="px-1 pb-1 text-[11px] text-muted/80">
+            <p className="px-1 pb-1 text-xs text-muted/80">
               {excludedCount} item(s) excluded — they won't appear in the PDF.
             </p>
           ) : null}
@@ -1354,11 +1354,11 @@ export default function ResumeStudioPage() {
             <div className="min-h-0 flex-1 overflow-y-auto rounded-xl bg-accent-soft p-4 ring-1 ring-line">
               <PlanPreview plan={plan} suggestions={suggestions} />
               {artifact ? (
-                <p className="mt-3 text-center text-[11px] text-muted">
+                <p className="mt-3 text-center text-xs text-muted">
                   The compiled PDF reflects the plan at export time — re-export after edits.
                 </p>
               ) : (
-                <p className="mt-3 text-center text-[11px] text-muted">
+                <p className="mt-3 text-center text-xs text-muted">
                   Export the PDF to see the real compiled output.
                 </p>
               )}
@@ -1376,7 +1376,7 @@ export default function ResumeStudioPage() {
               <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-semibold text-ink">
                 <span>
                   Template{" "}
-                  <span className="ml-1 text-[11px] font-normal text-muted">
+                  <span className="ml-1 text-xs font-normal text-muted">
                     {TEMPLATES.find((t) => t.id === templateId)?.name ?? "jake"} ·{" "}
                     {paper === "a4" ? "A4" : "Letter"} · {pages} page{pages === 1 ? "" : "s"}
                   </span>
@@ -1403,7 +1403,7 @@ export default function ResumeStudioPage() {
                         {t.name}
                         {active ? <Badge tone="blue">selected</Badge> : null}
                       </span>
-                      <span className="mt-0.5 block text-[11px] leading-tight text-muted">{t.desc}</span>
+                      <span className="mt-0.5 block text-xs leading-tight text-muted">{t.desc}</span>
                     </span>
                   </button>
                 );
@@ -1457,7 +1457,7 @@ export default function ResumeStudioPage() {
             </Button>
             {exporting ? (
               <div className="mt-3 rounded-lg border border-line bg-accent-soft p-3">
-                <p className="text-[11px] leading-relaxed text-muted">
+                <p className="text-xs leading-relaxed text-muted">
                   {pdfProgress.waiting
                     ? "Starting the compiler… the very first run also downloads the TeX bundle, which can take a few minutes."
                     : "Compiler output — first run downloads the TeX bundle and can take a few minutes."}
@@ -1474,7 +1474,7 @@ export default function ResumeStudioPage() {
               </div>
             ) : null}
             {overflows ? (
-              <p className="mt-2 text-[11px] leading-relaxed text-warn dark:text-amber-400">
+              <p className="mt-2 text-xs leading-relaxed text-warn dark:text-amber-400">
                 Estimate exceeds {pages} page{pages > 1 ? "s" : ""} for this template — raise "Target pages" or trim content, and check the page count after export.
               </p>
             ) : null}
@@ -1482,13 +1482,13 @@ export default function ResumeStudioPage() {
             {artifact ? (
               <div className="mt-3 rounded-lg border border-ok/30 bg-ok-soft/70 p-3 dark:border-emerald-500/30 dark:bg-ok/10">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">Compiled</span>
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Compiled</span>
                   {artifact.pageCount ? (
-                    <span className="text-[11px] text-ok dark:text-emerald-400">
+                    <span className="text-xs text-ok dark:text-emerald-400">
                       · {artifact.pageCount} page(s)
                     </span>
                   ) : null}
-                  <span className="text-[11px] text-ok/80 dark:text-emerald-400/70">
+                  <span className="text-xs text-ok/80 dark:text-emerald-400/70">
                     · {fmtAgo(artifact.compiledAt)}
                   </span>
                 </div>
@@ -1499,7 +1499,7 @@ export default function ResumeStudioPage() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    className="h-7 text-[11px]"
+                    className="h-7 text-xs"
                     onClick={() =>
                       void ipc
                         .saveJobPdfToDownloads(
@@ -1515,7 +1515,7 @@ export default function ResumeStudioPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-[11px]"
+                    className="h-7 text-xs"
                     onClick={() => void ipc.revealJobPdf(jobId).catch((e) => toast.error(String(e)))}
                   >
                     <FolderOpen className="size-3.5" /> Reveal
@@ -1523,7 +1523,7 @@ export default function ResumeStudioPage() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-[11px]"
+                    className="h-7 text-xs"
                     onClick={() => void ipc.openJobPdf(jobId).catch((e) => toast.error(String(e)))}
                   >
                     <ExternalLink className="size-3.5" /> Open
@@ -1569,7 +1569,7 @@ export default function ResumeStudioPage() {
               </Button>
             </div>
             {artifact ? (
-              <div className="mt-3 flex items-start justify-between gap-2 rounded-lg border border-line bg-accent-soft px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+              <div className="mt-3 flex items-start justify-between gap-2 rounded-lg border border-line bg-accent-soft px-3 py-2.5 text-xs leading-relaxed text-muted">
                 {reviewed ? (
                   <span>
                     <span className="font-medium text-ok">Reviewed</span>
@@ -1586,7 +1586,7 @@ export default function ResumeStudioPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      className="shrink-0 text-[11px]"
+                      className="shrink-0 text-xs"
                       onClick={() => void markReviewed()}
                       disabled={markingReviewed}
                     >
@@ -1601,7 +1601,7 @@ export default function ResumeStudioPage() {
                 {versions.map((v) => (
                   <li
                     key={v.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-[11px]"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-xs"
                   >
                     <span className="font-medium text-ink">v{v.versionNumber}</span>
                     <span className="text-muted">{fmtAgo(v.createdAt)}</span>
@@ -1616,7 +1616,7 @@ export default function ResumeStudioPage() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-[11px] text-muted/80">No versions saved yet.</p>
+              <p className="mt-2 text-xs text-muted/80">No versions saved yet.</p>
             )}
           </Card>
         </div>

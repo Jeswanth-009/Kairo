@@ -205,7 +205,7 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
                   Requirements ({requirements.length})
                 </h4>
                 {requirements.length > 0 ? (
-                  <span className="text-[11px] text-muted">
+                  <span className="text-xs text-muted">
                     · {requirements.filter((r) => r.kind === "required_skill").length} required
                     · {requirements.filter((r) => r.kind === "responsibility").length} responsibilities
                     {requirements.filter((r) => r.kind === "preferred_skill").length > 0 ? (

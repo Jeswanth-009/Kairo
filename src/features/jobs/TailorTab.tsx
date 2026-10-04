@@ -245,7 +245,7 @@ export function TailorTab({
             <div className="flex items-center justify-between">
               <CardTitle>
                 {item.title}
-                <span className="ml-2 text-[11px] font-normal text-muted">
+                <span className="ml-2 text-xs font-normal text-muted">
                   {fmtRange({ startDate: item.startDate, endDate: item.endDate, isCurrent: item.isCurrent })}
                 </span>
               </CardTitle>
@@ -275,11 +275,11 @@ export function TailorTab({
                     {suggestion ? (
                       <div className="mt-3 rounded-lg bg-surface p-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[11px] font-medium text-muted">
+                          <span className="text-xs font-medium text-muted">
                             AI wording{suggestion.model ? ` · ${suggestion.model}` : ""}
                           </span>
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                               suggestion.validation.ok
                                 ? STATUS_META[suggestion.status].badge
                                 : "bg-bad-soft text-bad"
@@ -325,7 +325,7 @@ export function TailorTab({
                         {suggestion.validation.violations.length > 0 ? (
                           <ul className="mt-2 space-y-0.5">
                             {suggestion.validation.violations.map((violation, i) => (
-                              <li key={i} className="text-[11px] text-bad">
+                              <li key={i} className="text-xs text-bad">
                                 ✕ {violation}
                               </li>
                             ))}

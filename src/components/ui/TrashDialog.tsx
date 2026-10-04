@@ -96,7 +96,7 @@ export function TrashDialog({ open, onClose }: { open: boolean; onClose: () => v
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm text-ink">{item.label || "Untitled"}</p>
-                    <p className="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
+                    <p className="mt-0.5 flex items-center gap-2 text-xs text-muted">
                       <Badge tone="neutral">{TRASH_ENTITY_LABELS[item.entityType as TrashEntityType] ?? item.entityType}</Badge>
                       deleted {item.deletedAt ? fmtAgo(item.deletedAt) : "recently"}
                     </p>

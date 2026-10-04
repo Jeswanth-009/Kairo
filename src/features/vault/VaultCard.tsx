@@ -73,7 +73,7 @@ export function VaultCard({
             <span
               key={ref.skillId}
               title={`${CONFIDENCE_LEVELS[ref.confidence] ?? "Confidence " + ref.confidence} (level ${ref.confidence})`}
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                 ref.confidence >= 3
                   ? "bg-kairo-blue/10 text-kairo-blue"
                   : "bg-accent-soft text-muted"
@@ -93,7 +93,7 @@ export function VaultCard({
                 ? `${evidenceCount} proof record${evidenceCount === 1 ? "" : "s"} attached`
                 : "No proof attached yet — open the record to add proof"
             }
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
               evidenceCount > 0 ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn"
             }`}
           >
@@ -102,7 +102,7 @@ export function VaultCard({
           {badge ? (
             <span
               title="Where this record came from and how far you've confirmed it"
-              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${badge.className}`}
             >
               {badge.label}
             </span>

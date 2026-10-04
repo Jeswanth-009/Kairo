@@ -312,7 +312,7 @@ export default function ApplicationsPage() {
                   {app.nextAction ? (
                     <p className="mt-1 text-xs text-muted">Next: {app.nextAction}</p>
                   ) : null}
-                  {app.notes ? <p className="mt-0.5 text-[11px] text-muted/80">{app.notes}</p> : null}
+                  {app.notes ? <p className="mt-0.5 text-xs text-muted/80">{app.notes}</p> : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Select

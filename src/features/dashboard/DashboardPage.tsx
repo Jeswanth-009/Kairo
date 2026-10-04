@@ -76,7 +76,7 @@ function StatTile({ tile }: { tile: Tile }) {
         {tile.value}
       </div>
       <div className="mt-1.5 text-xs font-medium text-ink">{tile.label}</div>
-      {tile.sub ? <div className={`mt-0.5 text-[11px] ${tile.subClass ?? "text-muted"}`}>{tile.sub}</div> : null}
+      {tile.sub ? <div className={`mt-0.5 text-xs ${tile.subClass ?? "text-muted"}`}>{tile.sub}</div> : null}
     </Link>
   );
 }
@@ -103,7 +103,7 @@ function EvidenceRow({ item }: { item: EvidenceReviewItem }) {
           <span className="truncate text-muted">{item.entityLabel}</span>
         </span>
       </span>
-      <span className="shrink-0 text-[11px] text-muted">{fmtAgo(item.createdAt)}</span>
+      <span className="shrink-0 text-xs text-muted">{fmtAgo(item.createdAt)}</span>
       <ArrowUpRight className="size-3 shrink-0 text-muted/50 transition-colors duration-200 group-hover:text-kairo-blue" />
     </Link>
   );
@@ -126,7 +126,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
         <span className="block truncate text-sm font-medium text-ink">{item.label}</span>
         <span className="mt-0.5 block truncate text-xs text-muted">{item.detail}</span>
       </span>
-      <span className="shrink-0 text-[11px] text-muted">{fmtAgo(item.at)}</span>
+      <span className="shrink-0 text-xs text-muted">{fmtAgo(item.at)}</span>
     </Link>
   );
 }
@@ -321,7 +321,7 @@ function AttentionRow({
         >
           <span className="min-w-0">
             <span className="block truncate text-xs font-semibold text-ink">{item.label}</span>
-            <span className="text-[11px] text-muted">{item.detail}</span>
+            <span className="text-xs text-muted">{item.detail}</span>
           </span>
           <ArrowUpRight className="size-3.5 shrink-0 text-muted" />
         </button>

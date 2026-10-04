@@ -277,14 +277,14 @@ function RequirementSupport({
 }) {
   if (!support) {
     return (
-      <p className="mt-1 text-[11px] text-muted/80">
+      <p className="mt-1 text-xs text-muted/80">
         No match computed yet — run step 3 to see which records support this.
       </p>
     );
   }
   if (support.entityRefs.length === 0) {
     return (
-      <p className="mt-1 text-[11px] text-muted/80">
+      <p className="mt-1 text-xs text-muted/80">
         {support.coverage === "missing"
           ? "Nothing in your Vault supports this yet — no fabrication; close the gap or address it in interviews."
           : support.explanation}
@@ -294,7 +294,7 @@ function RequirementSupport({
   return (
     <div className="mt-1.5 space-y-0.5">
       {support.entityRefs.slice(0, 2).map((ref, i) => (
-        <p key={i} className="text-[11px] text-muted/90">
+        <p key={i} className="text-xs text-muted/90">
           <span className="font-medium text-ink/80">{ref.title}</span> — {ref.contribution}
         </p>
       ))}
@@ -366,7 +366,7 @@ function OverviewTab({
               was extracted from.
             </p>
             {showRaw ? (
-              <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-accent-soft p-3 font-mono text-[11px] leading-relaxed text-muted">
+              <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-accent-soft p-3 font-mono text-xs leading-relaxed text-muted">
                 {job.rawJd}
               </pre>
             ) : null}
@@ -509,7 +509,7 @@ function RequirementsTab({ job }: { job: Job }) {
                         <p className="text-sm text-ink">
                           {req.rawText || <span className="text-bad">empty requirement</span>}
                         </p>
-                        <p className="mt-0.5 text-[11px] text-muted/90">
+                        <p className="mt-0.5 text-xs text-muted/90">
                           importance {Math.round(req.importance * 100)}%
                           {req.userConfirmed ? " · user-confirmed" : " · unconfirmed"}
                         </p>

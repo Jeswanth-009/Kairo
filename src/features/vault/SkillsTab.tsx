@@ -134,7 +134,7 @@ function SkillCard({
           ) : null}
           <div>
             <h3 className="text-sm font-semibold text-ink">{skill.canonicalName}</h3>
-            <span className="mt-1 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-muted">
+            <span className="mt-1 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-muted">
               {categoryLabel}
             </span>
           </div>
@@ -155,7 +155,7 @@ function SkillCard({
       </div>
 
       <div className="mt-3">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
           Aliases <span className="font-normal normal-case">(used for matching)</span>
         </h4>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">

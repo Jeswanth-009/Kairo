@@ -9,6 +9,7 @@ import { ipc } from "../../lib/ipc";
 import { APP_VERSION } from "../../lib/version";
 import type { BackupInfo } from "../../lib/types";
 import { useAppStore } from "../../stores/appStore";
+import { Link } from "react-router-dom";
 import { useThemeStore } from "../../stores/themeStore";
 import { toast } from "../../stores/toastStore";
 
@@ -126,6 +127,12 @@ function AboutCard({ version }: { version?: string }) {
           <p className="mt-1 text-xs text-muted">
             No fabrication, ever — every resume line traces back to verified evidence.
           </p>
+          <p className="mt-2 text-xs">
+            <Link to="/design" className="text-kairo-blue hover:underline">
+              Design system &amp; state gallery
+            </Link>
+            <span className="text-muted"> — every primitive and screen state at a glance.</span>
+          </p>
         </div>
       </div>
     </Card>
@@ -229,7 +236,7 @@ function BackupsCard() {
             <li key={backup.fileName} className="flex items-center justify-between gap-3 py-2">
               <div className="min-w-0">
                 <p className="truncate font-mono text-xs text-ink">{backup.fileName}</p>
-                <p className="text-[11px] text-muted">
+                <p className="text-xs text-muted">
                   {fmtStamp(backup.createdAt)} · {fmtBytes(backup.bytes)}
                   {backup.kind === "archive"
                     ? ` · ${backup.jobCount ?? "?"} job(s), ${backup.versionCount ?? "?"} version(s)`
@@ -354,7 +361,7 @@ function AiProviderCard() {
               title={preset.hint}
               onClick={() => setBaseUrl(preset.baseUrl)}
               className={cn(
-                "rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
+                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                 baseUrl === preset.baseUrl
                   ? "border-kairo-blue/50 bg-kairo-blue/10 text-kairo-blue"
                   : "border-line bg-card text-muted hover:bg-accent-soft hover:text-ink",
@@ -397,7 +404,7 @@ function AiProviderCard() {
             />
           </Field>
         </div>
-        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => void fetchModels()} disabled={loadingModels || !baseUrl.trim()}>
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => void fetchModels()} disabled={loadingModels || !baseUrl.trim()}>
           {loadingModels ? "Fetching…" : "Fetch model list from provider"}
         </Button>
         <div className="flex items-center gap-3">

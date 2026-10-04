@@ -16,16 +16,10 @@ import { EmptyState } from "../../components/ui/EmptyState";
  * they are rebuilt — the clickable prototype for the visual system.
  */
 
-const DEMO_STEPS = [
-  { key: "role", label: "Role" },
-  { key: "evidence", label: "Evidence" },
-  { key: "resume", label: "Resume" },
-  { key: "review", label: "Review" },
-  { key: "applied", label: "Applied" },
-] as const;
+type DemoStepKey = "role" | "evidence" | "resume" | "review" | "applied";
 
 export default function DesignPage() {
-  const [step, setStep] = useState<(typeof DEMO_STEPS)[number]["key"]>("resume");
+  const [step, setStep] = useState<DemoStepKey>("resume");
   const [docState, setDocState] = useState<DocState>("needs-update");
 
   return (
@@ -39,11 +33,15 @@ export default function DesignPage() {
       </div>
 
       <Section title="Brand" description="Simplified glyph for small sizes; full logo for splash and about.">
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-6">
           <BrandGlyph size={16} />
           <BrandGlyph size={20} />
           <BrandGlyph size={24} />
-          <span className="text-sm text-muted">16 · 20 · 24 px</span>
+          <span className="text-sm text-muted">color · 16 / 20 / 24 px</span>
+          <BrandGlyph size={24} variant="on-light" />
+          <span className="text-sm text-muted">on-light</span>
+          <BrandGlyph size={20} variant="mono" className="text-ink" />
+          <span className="text-sm text-muted">one-color (currentColor)</span>
         </div>
       </Section>
 
@@ -108,7 +106,7 @@ export default function DesignPage() {
                   )
                 }
               />
-              <code className="w-28 shrink-0 text-[11px] text-muted">{state}</code>
+              <code className="w-28 shrink-0 text-xs text-muted">{state}</code>
             </div>
           ))}
           <button
@@ -134,7 +132,21 @@ export default function DesignPage() {
 
       <Section title="Step navigation" description="Guided sequence, backward-free; reached stages stay reachable.">
         <Card className="p-5">
-          <StepNav steps={[...DEMO_STEPS]} active={step} onChange={setStep} />
+          <StepNav
+            steps={[
+              { key: "role", label: "Role", status: "complete" as const },
+              { key: "evidence", label: "Evidence", status: "needs-attention" as const, action: "Requirements or facts changed — re-run the match" },
+              { key: "resume", label: "Resume", status: "complete" as const },
+              { key: "review", label: "Review", status: "in-progress" as const, action: "Look through the PDF, then mark it reviewed" },
+              { key: "applied", label: "Applied", status: "not-started" as const },
+            ]}
+            active={step}
+            onChange={setStep}
+            hint={"Next: Look through the PDF, then mark it reviewed"}
+          />
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            Statuses come from saved state — visiting a stage never completes it (§ stage progress).
+          </p>
           <p className="mt-3 text-[13px] text-muted">
             Active: <strong>{step}</strong> — done stages keep their checkmark; later stages stay
             clickable but muted.

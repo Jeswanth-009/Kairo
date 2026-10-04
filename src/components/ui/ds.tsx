@@ -225,7 +225,41 @@ export function StepNav<T extends string>({
  * Simplified brand glyph for 16–24 px contexts — the full gradient logo
  * merges into mush at that size, so navigation and inline spots use this.
  */
-export function BrandGlyph({ size = 20, className }: { size?: number; className?: string }) {
+export function BrandGlyph({
+  size = 20,
+  className,
+  variant = "color",
+}: {
+  size?: number;
+  className?: string;
+  /**
+   * "color" — the deep-navy tile with the luminous mark (dark and default).
+   * "on-light" — light-background counterpart (inverted tile, deeper mark).
+   * "mono" — one-color currentColor, for inline text and print.
+   */
+  variant?: "color" | "on-light" | "mono";
+}) {
+  if (variant === "mono") {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        role="img"
+        aria-label="Kairo"
+        className={cn("shrink-0", className)}
+      >
+        <path
+          d="M7 17V7h6.2a3.4 3.4 0 0 1 0 6.8H9.8"
+          className="stroke-current"
+          strokeWidth="2.2"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <circle cx="16.4" cy="16.4" r="2.1" className="fill-current" />
+      </svg>
+    );
+  }
   return (
     <svg
       width={size}
@@ -235,9 +269,27 @@ export function BrandGlyph({ size = 20, className }: { size?: number; className?
       aria-label="Kairo"
       className={cn("shrink-0", className)}
     >
-      <rect x="1" y="1" width="22" height="22" rx="6" className="fill-kairo-midnight" />
-      <path d="M7 17V7h6.2a3.4 3.4 0 0 1 0 6.8H9.8" className="stroke-kairo-sky" strokeWidth="2.2" fill="none" strokeLinecap="round" />
-      <circle cx="16.4" cy="16.4" r="2.1" className="fill-kairo-dawn" />
+      <rect
+        x="1"
+        y="1"
+        width="22"
+        height="22"
+        rx="6"
+        className={variant === "on-light" ? "fill-slate-100" : "fill-kairo-midnight"}
+      />
+      <path
+        d="M7 17V7h6.2a3.4 3.4 0 0 1 0 6.8H9.8"
+        className={variant === "on-light" ? "stroke-kairo-midnight" : "stroke-kairo-sky"}
+        strokeWidth="2.2"
+        fill="none"
+        strokeLinecap="round"
+      />
+      <circle
+        cx="16.4"
+        cy="16.4"
+        r="2.1"
+        className={variant === "on-light" ? "fill-kairo-violet" : "fill-kairo-dawn"}
+      />
     </svg>
   );
 }

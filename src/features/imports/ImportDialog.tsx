@@ -75,7 +75,7 @@ export function ImportDialog({
       {tab === "github" ? <GithubImportTab onDone={onClose} /> : null}
       {tab === "certificate" ? <CertificateImportTab onDone={onClose} /> : null}
 
-      <p className="mt-5 border-t border-line pt-3 text-[11px] leading-relaxed text-muted">
+      <p className="mt-5 border-t border-line pt-3 text-xs leading-relaxed text-muted">
         Imported data is never trusted automatically: candidates stay out of the Vault until you
         press Accept. Every candidate shows its source so you can verify before approving.
       </p>
@@ -113,7 +113,7 @@ function CandidateShell({
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between">
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badgeColor}`}>{badge}</span>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeColor}`}>{badge}</span>
         <div className="flex items-center gap-1">
           {editing ? (
             <Button size="sm" onClick={onAccept} disabled={saving}>
@@ -137,10 +137,10 @@ function CandidateShell({
       <div className="mt-2.5">{children}</div>
       {source ? (
         <details className="mt-3">
-          <summary className="cursor-pointer select-none text-[11px] font-medium text-muted hover:text-ink">
+          <summary className="cursor-pointer select-none text-xs font-medium text-muted hover:text-ink">
             Source preview
           </summary>
-          <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-accent-soft p-2.5 font-mono text-[11px] leading-relaxed text-muted">
+          <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-accent-soft p-2.5 font-mono text-xs leading-relaxed text-muted">
             {source}
           </pre>
         </details>
@@ -684,7 +684,7 @@ function ProjectCandidate({
             <span
               key={s}
               title={existing(s) ? "Links to an existing Vault skill" : "Will be created on accept"}
-              className={`rounded-full px-2 py-0.5 text-[11px] ${
+              className={`rounded-full px-2 py-0.5 text-xs ${
                 existing(s) ? "bg-kairo-blue/10 text-kairo-blue" : "bg-accent-soft text-muted"
               }`}
             >
@@ -992,7 +992,7 @@ function SkillsCandidate({
     <Card className="p-4">
       <div className="flex items-center justify-between border-b border-line pb-3">
         <div>
-          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-muted">
+          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-muted">
             Skills by Category
           </span>
           <span className="ml-2 text-xs text-muted">
@@ -1022,12 +1022,12 @@ function SkillsCandidate({
                 >
                   <span className={`inline-block h-2 w-2 rounded-full ${allCatSelected ? "bg-kairo-blue" : "bg-slate-300"}`} />
                   <span>{meta.label}</span>
-                  <span className="text-[11px] font-normal text-muted">({catSkills.length})</span>
+                  <span className="text-xs font-normal text-muted">({catSkills.length})</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => toggleCategory(category)}
-                  className="text-[11px] text-muted hover:text-ink cursor-pointer"
+                  className="text-xs text-muted hover:text-ink cursor-pointer"
                 >
                   {allCatSelected ? "Deselect all" : "Select all"}
                 </button>
@@ -1187,7 +1187,7 @@ function GithubCandidateCard({
         <div className="text-sm">
           <p className="font-medium text-ink">{title}</p>
           <p className="mt-0.5 text-xs text-muted">{description || "no description"}</p>
-          <p className="mt-1 break-all text-[11px] text-muted">
+          <p className="mt-1 break-all text-xs text-muted">
             {[candidate.repoUrl, candidate.url !== candidate.repoUrl ? candidate.url : "", candidate.startDate ? `started ${candidate.startDate}` : ""]
               .filter(Boolean)
               .join(" · ")}
@@ -1200,7 +1200,7 @@ function GithubCandidateCard({
             <span
               key={s}
               title={existing(s) ? "Links to an existing Vault skill" : "Will be created on accept"}
-              className={`rounded-full px-2 py-0.5 text-[11px] ${
+              className={`rounded-full px-2 py-0.5 text-xs ${
                 existing(s) ? "bg-kairo-blue/10 text-kairo-blue" : "bg-accent-soft text-muted"
               }`}
             >
@@ -1331,7 +1331,7 @@ function CertificateCandidateCard({
             {[issuer, candidate.issueDate ? `issued ${candidate.issueDate}` : ""].filter(Boolean).join(" · ") ||
               "no issuer/date recognized"}
           </p>
-          {candidate.email ? <p className="mt-0.5 text-[11px] text-muted">{candidate.email}</p> : null}
+          {candidate.email ? <p className="mt-0.5 text-xs text-muted">{candidate.email}</p> : null}
         </div>
       )}
     </CandidateShell>

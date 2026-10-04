@@ -141,7 +141,7 @@ export default function OnboardingPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-8">
       {/* Stepper */}
-      <ol className="flex flex-wrap items-center gap-1.5 text-[11px]">
+      <ol className="flex flex-wrap items-center gap-1.5 text-xs">
         {STEPS.map((s, i) => {
           const active = stepperId(step) === s.id;
           const done = STEPS.findIndex((x) => x.id === stepperId(step)) > i;
@@ -235,7 +235,7 @@ export default function OnboardingPage() {
         />
       ) : null}
 
-      <p className="border-t border-line pt-3 text-[11px] leading-relaxed text-muted">
+      <p className="border-t border-line pt-3 text-xs leading-relaxed text-muted">
         Kairo never calls imported text “verified evidence”. Every record shows where it came
         from — <span className="font-medium">Imported from resume</span>,{" "}
         <span className="font-medium">Edited by you</span>,{" "}
@@ -352,7 +352,7 @@ function ImportStep({ onParsed }: { onParsed: (r: ResumeImport) => void }) {
         <span className="text-sm font-medium text-ink">
           {fileBusy ? "Extracting text…" : "Choose a resume file"}
         </span>
-        <span className="text-[11px] text-muted">PDF, DOCX or plain text — parsed on your machine, never uploaded</span>
+        <span className="text-xs text-muted">PDF, DOCX or plain text — parsed on your machine, never uploaded</span>
       </button>
       {fileName ? (
         <p className="text-xs text-ok">Loaded {fileName} — check the text below, then analyze.</p>
@@ -378,7 +378,7 @@ function ImportStep({ onParsed }: { onParsed: (r: ResumeImport) => void }) {
       ) : null}
       <div className="flex items-center justify-end gap-3">
         {text.trim().length > 0 && !tooLarge ? (
-          <span className="text-[11px] text-muted">{text.length.toLocaleString()} characters ready</span>
+          <span className="text-xs text-muted">{text.length.toLocaleString()} characters ready</span>
         ) : null}
         <Button onClick={() => void analyze()} disabled={busy || text.trim().length < 10 || tooLarge}>
           {busy ? "Extracting…" : "Extract my facts"}
@@ -842,7 +842,7 @@ function ReviewGroups({
             {proj.skills.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {proj.skills.map((s) => (
-                  <span key={s} className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] text-muted">
+                  <span key={s} className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-muted">
                     {s}
                   </span>
                 ))}
@@ -950,7 +950,7 @@ function ReviewGroups({
           {removedSkills.size > 0 ? (
             <button
               type="button"
-              className="mt-2 text-[11px] text-muted hover:text-ink"
+              className="mt-2 text-xs text-muted hover:text-ink"
               onClick={() => setRemovedSkills(new Set())}
             >
               Restore removed skills ({removedSkills.size})
@@ -975,7 +975,7 @@ function ReviewGroups({
 function SourceNote({ snippet }: { snippet?: string | null }) {
   if (!snippet) return null;
   return (
-    <p className="mt-2 rounded-lg bg-accent-soft px-3 py-2 text-[11px] leading-relaxed text-muted">
+    <p className="mt-2 rounded-lg bg-accent-soft px-3 py-2 text-xs leading-relaxed text-muted">
       <span className="font-semibold text-ink">From your resume: </span>
       {snippet}
     </p>
@@ -1058,19 +1058,19 @@ function GroupCard({
         <button
           type="button"
           onClick={() => setDismissed(!dismissed)}
-          className="text-[11px] text-muted hover:text-bad"
+          className="text-xs text-muted hover:text-bad"
         >
           {dismissed ? "Restore" : "Don't import this"}
         </button>
       </div>
       {dismissed ? (
-        <p className="mt-3 rounded-lg bg-accent-soft px-3 py-2 text-[11px] text-muted">
+        <p className="mt-3 rounded-lg bg-accent-soft px-3 py-2 text-xs text-muted">
           Dismissed — it won't be saved.
         </p>
       ) : (
         <>
           <div className="mt-3">{children}</div>
-          <label className="mt-3 flex items-center gap-1.5 text-[11px] text-muted">
+          <label className="mt-3 flex items-center gap-1.5 text-xs text-muted">
             <input
               type="checkbox"
               checked={verify}
@@ -1155,7 +1155,7 @@ function PathStep({
           to customize for any role later.
         </p>
       </button>
-      <button type="button" className="w-fit text-[11px] text-muted hover:text-ink" onClick={onBack}>
+      <button type="button" className="w-fit text-xs text-muted hover:text-ink" onClick={onBack}>
         Back to the review
       </button>
     </Card>
@@ -1306,7 +1306,7 @@ function RoleStep({ onCreated }: { onCreated: (jobId: number) => void }) {
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block text-ink">{req.rawText}</span>
-                  <span className="text-[11px] text-muted">
+                  <span className="text-xs text-muted">
                     {req.kind === "required_skill"
                       ? "Required skill"
                       : req.kind === "preferred_skill"
@@ -1318,7 +1318,7 @@ function RoleStep({ onCreated }: { onCreated: (jobId: number) => void }) {
               </label>
             ))}
           </div>
-          <p className="text-[11px] text-muted">
+          <p className="text-xs text-muted">
             {keptCount} of {requirements.length} requirements kept.
           </p>
           {error ? (
@@ -1337,7 +1337,7 @@ function RoleStep({ onCreated }: { onCreated: (jobId: number) => void }) {
       {step === "paste" ? (
         <button
           type="button"
-          className="w-fit text-[11px] text-muted hover:text-ink"
+          className="w-fit text-xs text-muted hover:text-ink"
           onClick={() => navigate("/jobs")}
         >
           Skip for now — I'll add a role from the Jobs page later
@@ -1586,26 +1586,26 @@ function DraftStep({
                   <Button
                     size="sm"
                     variant={item.excluded ? "secondary" : "ghost"}
-                    className="text-[11px]"
+                    className="text-xs"
                     onClick={() => toggle(item)}
                   >
                     {item.excluded ? "Include" : "Remove"}
                   </Button>
                 </div>
                 <div className="mt-3 rounded-lg bg-accent-soft px-3 py-2.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
                     Why it's here
                   </p>
                   {reasons.length > 0 ? (
                     <ul className="mt-1 space-y-0.5">
                       {reasons.slice(0, 3).map((reason, i) => (
-                        <li key={i} className="text-[11px] leading-relaxed text-muted">
+                        <li key={i} className="text-xs leading-relaxed text-muted">
                           · {reason}
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                    <p className="mt-1 text-xs leading-relaxed text-muted">
                       Included from your Vault — the posting didn't mention it directly, but it
                       rounds out the page.
                     </p>

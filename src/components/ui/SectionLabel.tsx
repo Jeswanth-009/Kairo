@@ -11,7 +11,7 @@ export function SectionLabel({
 }) {
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
         {children}
       </span>
       <span className="h-px flex-1 bg-line" />
