@@ -29,6 +29,7 @@ import type {
   TailorBatchReport,
   TailorSuggestion,
   PdfArtifact,
+  PdfStatusView,
   ResumeVersion,
   InterviewPrep,
   ValidationResult,
@@ -215,16 +216,21 @@ export const ipc = {
   openBackupsDir: (): Promise<void> => invoke<void>("open_backups_dir"),
 
   // PDF (Phase 9; artifact-scoped — paths are resolved from app records by ID)
+  /** Exports the job's PDF. Pass the flushed plan revision (null when this
+   *  session never saved — displayed plan then IS the stored one); the
+   *  backend refuses a revision that no longer matches. */
   exportPdf: (
     jobId: number,
-    templateId: string = "classic",
-    expectedRevision?: number,
+    templateId: string,
+    expectedRevision: number | null,
   ): Promise<{ artifact: PdfArtifact; logTail: string }> =>
     invoke<{ artifact: PdfArtifact; logTail: string }>("export_pdf", {
       jobId,
       templateId,
       expectedRevision,
     }),
+  getPdfStatus: (jobId: number): Promise<PdfStatusView> =>
+    invoke<PdfStatusView>("get_pdf_status", { jobId }),
   getPdfArtifact: (jobId: number): Promise<PdfArtifact | null> =>
     invoke<PdfArtifact | null>("get_pdf_artifact", { jobId }),
   openJobPdf: (jobId: number): Promise<void> => invoke<void>("open_job_pdf", { jobId }),

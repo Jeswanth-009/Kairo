@@ -29,6 +29,9 @@ sha2 = "0.10"
 # Backup archives: portable zip with deflate; manifest + hashes live inside.
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
 
+# Per-job export locks: an async mutex held across the (blocking) compile.
+tokio = { version = "1", default-features = false, features = ["sync"] }
+
 # Per-OS credential stores — same keyring API on every platform.
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

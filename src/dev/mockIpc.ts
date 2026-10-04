@@ -218,6 +218,18 @@ const handlers: Record<string, Handler> = {
     fingerprint: null,
     pdfHash: null,
   }),
+  get_pdf_status: () => ({
+    state: "current",
+    planRevision: 1,
+    artifactPlanRevision: 1,
+    templateId: "jake",
+    artifactTemplateId: "jake",
+    paper: "letter",
+    artifactPaper: "letter",
+    pageCount: 1,
+    compiledAt: "2026-09-17T20:12:00",
+    pdfHash: "mock-hash",
+  }),
   read_job_pdf_bytes: async () => {
     const res = await fetch("sample-resume.pdf");
     const buf = await res.arrayBuffer();

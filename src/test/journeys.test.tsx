@@ -196,16 +196,58 @@ const ARTIFACT: PdfArtifact = {
   pdfHash: "hash",
 };
 
+/** The revision model behind the mock IPC: status flips come from the
+ *  saved-vs-artifact relationship, exactly like the real backend. */
+type PdfModel = {
+  planRevision: number;
+  artifactRevision: number | null;
+  artifact: PdfArtifact | null;
+};
+let pdfModel: PdfModel;
+
 function studioMocks(artifact: PdfArtifact | null) {
+  pdfModel = { planRevision: 1, artifactRevision: artifact ? 1 : null, artifact };
   mocks.listJobs = vi.fn().mockResolvedValue([JOB, JOB2]);
   mocks.getPlan = vi.fn().mockResolvedValue({ config: PLAN.config, plan: PLAN });
   mocks.tailorList = vi.fn().mockResolvedValue([]);
-  mocks.getPdfArtifact = vi.fn().mockResolvedValue(artifact);
+  mocks.getPdfArtifact = vi.fn().mockImplementation(async () => pdfModel.artifact);
+  mocks.getPdfStatus = vi.fn().mockImplementation(async () => ({
+    state:
+      pdfModel.artifact === null
+        ? "none"
+        : pdfModel.artifactRevision !== pdfModel.planRevision
+          ? "stale"
+          : "current",
+    planRevision: pdfModel.planRevision,
+    artifactPlanRevision: pdfModel.artifactRevision,
+    templateId: "jake",
+    artifactTemplateId: pdfModel.artifact?.templateId ?? null,
+    paper: "letter",
+    artifactPaper: pdfModel.artifact?.paper ?? null,
+    pageCount: pdfModel.artifact?.pageCount ?? null,
+    compiledAt: pdfModel.artifact?.compiledAt ?? null,
+    pdfHash: pdfModel.artifact?.pdfHash ?? null,
+  }));
   mocks.listResumeVersions = vi.fn().mockResolvedValue([]);
   mocks.getProfile = vi.fn().mockResolvedValue(null);
   mocks.listSkills = vi.fn().mockResolvedValue([]);
   mocks.estimatePlanLines = vi.fn().mockResolvedValue(10);
-  mocks.savePlan = vi.fn().mockResolvedValue({ ok: true, revision: 1 });
+  mocks.savePlan = vi.fn().mockImplementation(async () => {
+    pdfModel.planRevision += 1;
+    return { ok: true, revision: pdfModel.planRevision };
+  });
+  // The backend contract: exports pass the flushed revision; a stale one is
+  // refused, a matching one compiles and re-records the artifact.
+  mocks.exportPdf = vi.fn().mockImplementation(
+    async (_jobId: number, _templateId: string, expectedRevision: number | null) => {
+      if (expectedRevision !== null && expectedRevision !== pdfModel.planRevision) {
+        throw new Error("Your edits saved after this export request — review the updated PDF instead");
+      }
+      pdfModel.artifact = { ...ARTIFACT, jobId: JOB.id, compiledAt: "2026-10-02 09:00:00" };
+      pdfModel.artifactRevision = pdfModel.planRevision;
+      return { artifact: pdfModel.artifact, logTail: "ok" };
+    },
+  );
   mocks.getOnboardingStatus = vi.fn().mockResolvedValue({
     hasProfile: true, projectCount: 1, experienceCount: 1, educationCount: 1, skillCount: 1, jobCount: 1, hasAnyContent: true,
   });
@@ -238,7 +280,6 @@ async function renderStudio() {
 describe("journey · editing a bullet", () => {
   it("exclude → undo restores, and every change persists through the autosave queue", async () => {
     studioMocks(ARTIFACT);
-    mocks.exportPdf = vi.fn();
     await renderStudio();
 
     // The bullet reveals its source and evidence honestly.
@@ -299,7 +340,6 @@ describe("journey · editing a bullet", () => {
 describe("journey · exporting a PDF", () => {
   it("Draft → Current PDF with a real page count, and the final review gates version 1", async () => {
     studioMocks(null);
-    mocks.exportPdf = vi.fn().mockResolvedValue({ artifact: { ...ARTIFACT, compiledAt: "2026-10-02 09:00:00" }, logTail: "ok" });
     await renderStudio();
 
     // No artifact yet: the status is Draft and export is the next action.

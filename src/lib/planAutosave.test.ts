@@ -146,4 +146,48 @@ describe("planAutosave", () => {
     expect(planSaveStatus(42)).toBe("idle");
     expect(planSaveStatus(null)).toBe("idle");
   });
+
+  it("flush resolves ok with the persisted revision for an unknown job", async () => {
+    await expect(flushPlanSave(42)).resolves.toEqual({ ok: true, revision: null });
+  });
+
+  it("flush actively saves a queued snapshot and reports ok", async () => {
+    savePlan.mockResolvedValue({ ok: true, revision: 7 });
+    enqueuePlanSave(9, plan(["queued"]));
+    const result = await flushPlanSave(9);
+    expect(result).toEqual({ ok: true, revision: 7 });
+    expect(planSaveStatus(9)).toBe("saved");
+  });
+
+  it("flush refuses to hand out a revision after a failed save", async () => {
+    const calls = deferredCalls();
+    enqueuePlanSave(4, plan(["doomed"]));
+    await Promise.resolve();
+    calls[0].reject(new Error("disk full"));
+    const result = await flushPlanSave(4);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("could not be saved");
+      expect(result.revision).toBeNull();
+    }
+    expect(planSaveStatus(4)).toBe("error");
+    // The failed snapshot is still queued for a real retry — flush itself
+    // must not spin on it.
+    expect(savePlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("flush waits out an in-flight save, including its scheduled follow-up", async () => {
+    const calls = deferredCalls();
+    enqueuePlanSave(6, plan(["v1"]));
+    await Promise.resolve();
+    enqueuePlanSave(6, plan(["v2"]));
+    savePlan.mockResolvedValue({ ok: true, revision: 3 });
+
+    const flushed = flushPlanSave(6);
+    calls[0].resolve(); // save #1 lands; the follow-up save for v2 pumps
+    const result = await flushed;
+
+    expect(result).toEqual({ ok: true, revision: 3 });
+    expect(savePlan).toHaveBeenLastCalledWith(6, plan(["v2"]));
+  });
 });

@@ -65,7 +65,7 @@ export function ResumeTab({ jobId }: { jobId: number }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await ipc.exportPdf(jobId, templateId);
+      const res = await ipc.exportPdf(jobId, templateId, null);
       setArtifact(res.artifact);
       toast.ok("Resume compiled successfully");
     } catch (e) {

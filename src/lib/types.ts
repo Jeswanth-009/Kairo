@@ -572,6 +572,24 @@ export interface PdfArtifact {
   fingerprint?: string | null;
   /** SHA-256 of the generated PDF file at export time. */
   pdfHash?: string | null;
+  /** Saved plan revision this PDF was compiled from (null for pre-15 rows). */
+  artifactPlanRevision?: number | null;
+}
+
+/** The saved plan vs the recorded artifact — the one truth for PDF labels. */
+export type PdfState = "none" | "missing-file" | "stale" | "template-stale" | "current";
+
+export interface PdfStatusView {
+  state: PdfState;
+  planRevision: number | null;
+  artifactPlanRevision: number | null;
+  templateId: string | null;
+  artifactTemplateId: string | null;
+  paper: string | null;
+  artifactPaper: string | null;
+  pageCount: number | null;
+  compiledAt: string | null;
+  pdfHash: string | null;
 }
 
 // --- Versions (Phase 10) -------------------------------------------------------

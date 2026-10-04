@@ -74,25 +74,167 @@ pub fn get_artifact(conn: &Connection, job_id: i64) -> Result<Option<PdfArtifact
     }
 }
 
-pub fn save_artifact(conn: &Connection, artifact: &PdfArtifact) -> Result<(), String> {
-    sql_err(conn.execute(
+pub fn save_artifact(
+    conn: &Connection,
+    artifact: &PdfArtifact,
+    expect_revision: Option<i64>,
+) -> Result<(), String> {
+    // The revision condition makes the persist a compare-and-set: a plan save
+    // that landed while the PDF compiled must never be overwritten by an
+    // artifact describing the older content. 0 rows = the plan changed or was
+    // deleted mid-compile — the caller refuses instead of recording a stale
+    // artifact row.
+    let sql = if expect_revision.is_some() {
         "UPDATE resume_plans SET pdf_path = ?1, tex_path = ?2, page_count = ?3, \
            artifact_template_id = ?4, artifact_paper = ?5, \
            compiled_fingerprint = ?6, pdf_hash = ?7, artifact_plan_revision = ?8, \
-           compiled_at = datetime('now') WHERE job_id = ?9",
-        params![
-            artifact.pdf_path,
-            artifact.tex_path,
-            artifact.page_count,
-            artifact.template_id,
-            artifact.paper,
-            artifact.fingerprint,
-            artifact.pdf_hash,
-            artifact.artifact_plan_revision,
-            artifact.job_id
-        ],
-    ))?;
+           compiled_at = datetime('now') WHERE job_id = ?9 AND plan_revision = ?10"
+    } else {
+        "UPDATE resume_plans SET pdf_path = ?1, tex_path = ?2, page_count = ?3, \
+           artifact_template_id = ?4, artifact_paper = ?5, \
+           compiled_fingerprint = ?6, pdf_hash = ?7, artifact_plan_revision = ?8, \
+           compiled_at = datetime('now') WHERE job_id = ?9"
+    };
+    let changed = if let Some(expected) = expect_revision {
+        sql_err(conn.execute(
+            sql,
+            params![
+                artifact.pdf_path,
+                artifact.tex_path,
+                artifact.page_count,
+                artifact.template_id,
+                artifact.paper,
+                artifact.fingerprint,
+                artifact.pdf_hash,
+                artifact.artifact_plan_revision,
+                artifact.job_id,
+                expected
+            ],
+        ))
+    } else {
+        sql_err(conn.execute(
+            sql,
+            params![
+                artifact.pdf_path,
+                artifact.tex_path,
+                artifact.page_count,
+                artifact.template_id,
+                artifact.paper,
+                artifact.fingerprint,
+                artifact.pdf_hash,
+                artifact.artifact_plan_revision,
+                artifact.job_id
+            ],
+        ))
+    }?;
+    if changed == 0 {
+        return Err(
+            "This workspace's plan changed or was removed while the PDF compiled — \
+             the previous good PDF is untouched; review the draft and export again."
+                .to_string(),
+        );
+    }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Saved-vs-artifact status: the one source of truth for "is this PDF current"
+// ---------------------------------------------------------------------------
+
+/// What the saved plan and the recorded artifact say about the current PDF.
+/// Every UI label ("Draft", "PDF needs update", "Current PDF") must derive
+/// from here — never from timestamps or local flags.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfStatus {
+    /// "none" (no plan or never compiled) · "missing-file" (artifact row but
+    /// the PDF file is gone) · "stale" (plan edited after this compile) ·
+    /// "template-stale" (template/paper changed after this compile) ·
+    /// "current".
+    pub state: String,
+    pub plan_revision: Option<i64>,
+    pub artifact_plan_revision: Option<i64>,
+    pub template_id: Option<String>,
+    pub artifact_template_id: Option<String>,
+    pub paper: Option<String>,
+    pub artifact_paper: Option<String>,
+    pub page_count: Option<i64>,
+    pub compiled_at: Option<String>,
+    pub pdf_hash: Option<String>,
+}
+
+/// The template a compile of `config` would use — the same fallback chain as
+/// `export_pdf` ("" defers to "jake") so comparisons never false-positive.
+fn effective_template(config_template: &str) -> String {
+    let trimmed = config_template.trim();
+    if trimmed.is_empty() {
+        "jake".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+pub fn pdf_status(
+    conn: &Connection,
+    job_id: i64,
+    app_data_dir: &Path,
+) -> Result<PdfStatus, String> {
+    let stored = super::composer::get_plan(conn, job_id)?;
+    let artifact = get_artifact(conn, job_id)?;
+    let (plan_revision, template_id, paper) = match &stored {
+        Some(plan) => (
+            Some(plan.plan_revision),
+            Some(effective_template(&plan.config.template_id)),
+            Some(plan.config.paper.clone()),
+        ),
+        None => (None, None, None),
+    };
+    let base = PdfStatus {
+        state: "none".to_string(),
+        plan_revision,
+        artifact_plan_revision: artifact.as_ref().and_then(|a| a.artifact_plan_revision),
+        template_id,
+        artifact_template_id: artifact.as_ref().map(|a| a.template_id.clone()),
+        paper,
+        artifact_paper: artifact.as_ref().map(|a| a.paper.clone()),
+        page_count: artifact.as_ref().and_then(|a| a.page_count),
+        compiled_at: artifact.as_ref().and_then(|a| a.compiled_at.clone()),
+        pdf_hash: artifact.as_ref().and_then(|a| a.pdf_hash.clone()),
+    };
+    let (Some(stored), Some(artifact)) = (stored, artifact) else {
+        return Ok(base);
+    };
+
+    // The file must exist where the row says it does — otherwise every other
+    // state is a lie.
+    let pdf_file = resolve_artifact_path(app_data_dir, &artifact.pdf_path);
+    if !pdf_file.is_file() {
+        return Ok(PdfStatus {
+            state: "missing-file".to_string(),
+            ..base
+        });
+    }
+
+    if artifact.artifact_plan_revision != Some(stored.plan_revision) {
+        return Ok(PdfStatus {
+            state: "stale".to_string(),
+            ..base
+        });
+    }
+
+    if artifact.template_id != effective_template(&stored.config.template_id)
+        || (artifact.paper != stored.config.paper)
+    {
+        return Ok(PdfStatus {
+            state: "template-stale".to_string(),
+            ..base
+        });
+    }
+
+    Ok(PdfStatus {
+        state: "current".to_string(),
+        ..base
+    })
 }
 
 /// Platform-correct Tectonic binary name (`tectonic.exe` only on Windows).
@@ -214,54 +356,107 @@ pub struct CompileOutput {
     pub log_tail: String,
 }
 
-/// Outputs a compile closure produces inside its staging dir, relative to it.
-/// Everything else the caller needs (log tail, page count) travels through
-/// `stage_and_promote`'s payload.
-pub struct StagedOutput {
-    pub pdf_name: String,
-    pub tex_name: String,
+/// Per-process counter making concurrent staging dirs unique — two exports
+/// for the same job must never share (and clobber) one `.staging` dir.
+fn staging_seq() -> u128 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, Ordering::Relaxed) as u128;
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() * 1000 + n)
+        .unwrap_or(n)
 }
 
-/// Runs `compile` inside a fresh `.staging` directory under `out_dir` and
-/// only on success promotes its outputs into `out_dir` via atomic renames.
-/// The previous PDF in `out_dir` is never touched until the new one is
-/// complete and validated — an interrupted export leaves the last good
-/// artifact in place. The staging dir is removed on every path.
-///
-/// The pdf file is hashed while promoting, so the caller can persist the
-/// fingerprint of what was actually written. `compile` may hand any extra
-/// payload through (`T`), e.g. the page count parsed from the compile log.
-pub fn stage_and_promote<T>(
-    out_dir: &Path,
-    compile: impl FnOnce(&Path) -> Result<(StagedOutput, T), String>,
-) -> Result<(PathBuf, PathBuf, String, T), String> {
-    let staging = out_dir.join(".staging");
-    let _ = std::fs::remove_dir_all(&staging);
-    std::fs::create_dir_all(&staging).map_err(|e| format!("could not create build dir: {e}"))?;
+/// A compile that finished inside its staging dir and is ready to promote.
+/// Nothing under the live artifact location has been touched yet — the
+/// caller gets the chance to re-check the plan revision (an edit may have
+/// landed during the compile) before promoting.
+pub struct StagedCompile {
+    staging_dir: PathBuf,
+    out_dir: PathBuf,
+    staged_pdf: PathBuf,
+    staged_tex: PathBuf,
+    pub pdf_hash: String,
+    pub log_tail: String,
+    pub page_count: Option<i64>,
+    /// Paths the artifact row will record, relative to the app data dir
+    /// (portable across machines and restores).
+    pub pdf_rel_path: String,
+    pub tex_rel_path: String,
+}
 
-    let result = compile(&staging).and_then(|(out, payload)| {
-        let staged_pdf = staging.join(&out.pdf_name);
-        let staged_tex = staging.join(&out.tex_name);
-        // The hash is taken before the renames: it must describe the bytes
-        // that land in the artifact, not whatever a later run would produce.
+impl Drop for StagedCompile {
+    fn drop(&mut self) {
+        // An unpromoted staged compile (refused export, failed promote)
+        // leaves nothing behind. A promoted one no longer has the dir.
+        let _ = std::fs::remove_dir_all(&self.staging_dir);
+    }
+}
+
+/// Compiles into a private staging dir under `pdf/job_{id}` without touching
+/// the live artifact. Caller must NOT hold the DB lock (first run downloads
+/// the TeX bundle) — serialize same-job compiles with the export lock instead.
+pub fn compile_staged(
+    plan: &ResumePlan,
+    job_id: i64,
+    template_id: &str,
+    tectonic: &Path,
+    app_data_dir: &Path,
+    on_line: &dyn Fn(&str),
+) -> Result<StagedCompile, String> {
+    let tex = crate::latex::render_plan(plan, template_id);
+
+    let out_dir = app_data_dir.join("pdf").join(format!("job_{job_id}"));
+    std::fs::create_dir_all(&out_dir).map_err(|e| format!("could not create build dir: {e}"))?;
+
+    let staging = out_dir.join(format!(".staging-{}", staging_seq()));
+    let run = (|| -> Result<StagedCompile, String> {
+        let staged_tex = staging.join("resume.tex");
+        std::fs::write(&staged_tex, &tex).map_err(|e| format!("could not write .tex: {e}"))?;
+        let (log_tail, page_count) = run_tectonic(tectonic, &staging, on_line)?;
+        let staged_pdf = staging.join("resume.pdf");
         let pdf_hash = super::fingerprint::file_sha256(&staged_pdf)?;
-        let final_pdf = out_dir.join(&out.pdf_name);
-        let final_tex = out_dir.join(&out.tex_name);
-        std::fs::rename(&staged_pdf, &final_pdf)
-            .map_err(|e| format!("could not promote the compiled PDF: {e}"))?;
-        std::fs::rename(&staged_tex, &final_tex)
-            .map_err(|e| format!("could not promote the .tex: {e}"))?;
-        Ok((final_pdf, final_tex, pdf_hash, payload))
-    });
-    let _ = std::fs::remove_dir_all(&staging);
-    result
+        Ok(StagedCompile {
+            staging_dir: staging.clone(),
+            out_dir,
+            staged_pdf,
+            staged_tex,
+            pdf_hash,
+            log_tail,
+            page_count,
+            pdf_rel_path: format!("pdf/job_{job_id}/resume.pdf"),
+            tex_rel_path: format!("pdf/job_{job_id}/resume.tex"),
+        })
+    })();
+    match run {
+        Ok(staged) => Ok(staged),
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&staging);
+            Err(e)
+        }
+    }
+}
+
+/// Promotes a staged compile into the live artifact location via atomic
+/// renames (PDF first, then the .tex; a failed .tex rename removes the
+/// promoted PDF again). Hold the job's export lock so no other compile can
+/// race the renames.
+pub fn promote_staged(staged: StagedCompile) -> Result<(PathBuf, PathBuf), String> {
+    let final_pdf = staged.out_dir.join("resume.pdf");
+    let final_tex = staged.out_dir.join("resume.tex");
+    std::fs::rename(&staged.staged_pdf, &final_pdf)
+        .map_err(|e| format!("could not promote the compiled PDF: {e}"))?;
+    if let Err(e) = std::fs::rename(&staged.staged_tex, &final_tex) {
+        let _ = std::fs::remove_file(&final_pdf);
+        return Err(format!("could not promote the .tex: {e}"));
+    }
+    Ok((final_pdf, final_tex))
 }
 
 /// Writes the .tex, runs Tectonic in a staging dir, validates the PDF, and
-/// atomically promotes it into the artifact location. Caller must NOT hold
-/// the DB lock (first run downloads the TeX bundle). `on_line` receives each
-/// compiler output line as it arrives so the UI can show live progress
-/// instead of a frozen spinner during long first compiles.
+/// atomically promotes it into the artifact location in one go. Kept for
+/// callers that don't need a revision re-check between the two (tests).
 pub fn compile_locked(
     plan: ResumePlan,
     job_id: i64,
@@ -271,37 +466,17 @@ pub fn compile_locked(
     plan_revision: Option<i64>,
     on_line: &dyn Fn(&str),
 ) -> Result<CompileOutput, String> {
-    let tex = crate::latex::render_plan(&plan, template_id);
     let paper = plan.config.paper.clone();
-
-    let out_dir = app_data_dir.join("pdf").join(format!("job_{job_id}"));
-    std::fs::create_dir_all(&out_dir).map_err(|e| format!("could not create build dir: {e}"))?;
-
-    let (pdf_path, tex_path, pdf_hash, (log_tail, page_count)) =
-        stage_and_promote(&out_dir, |staging| {
-            let tex_path = staging.join("resume.tex");
-            std::fs::write(&tex_path, &tex).map_err(|e| format!("could not write .tex: {e}"))?;
-            let (log_tail, page_count) = run_tectonic(tectonic, staging, on_line)?;
-            Ok((
-                StagedOutput {
-                    pdf_name: "resume.pdf".to_string(),
-                    tex_name: "resume.tex".to_string(),
-                },
-                (log_tail, page_count),
-            ))
-        })?;
-
-    // Store paths relative to the app data dir so backups restore portable.
-    let relativize = |p: &Path| -> String {
-        p.strip_prefix(app_data_dir)
-            .map(|r| r.to_string_lossy().to_string())
-            .unwrap_or_else(|_| p.to_string_lossy().to_string())
-    };
+    let staged = compile_staged(&plan, job_id, template_id, tectonic, app_data_dir, on_line)?;
+    let log_tail = staged.log_tail.clone();
+    let page_count = staged.page_count;
+    let pdf_hash = staged.pdf_hash.clone();
+    let (final_pdf, final_tex) = promote_staged(staged)?;
     Ok(CompileOutput {
         artifact: PdfArtifact {
             job_id,
-            tex_path: relativize(&tex_path),
-            pdf_path: relativize(&pdf_path),
+            tex_path: relativize_or(&final_tex, app_data_dir),
+            pdf_path: relativize_or(&final_pdf, app_data_dir),
             page_count,
             compiled_at: None,
             template_id: template_id.to_string(),
@@ -312,6 +487,12 @@ pub fn compile_locked(
         },
         log_tail,
     })
+}
+
+fn relativize_or(p: &Path, app_data_dir: &Path) -> String {
+    p.strip_prefix(app_data_dir)
+        .map(|r| r.to_string_lossy().to_string())
+        .unwrap_or_else(|_| p.to_string_lossy().to_string())
 }
 
 /// Runs Tectonic inside `dir` (which must already hold `resume.tex`), drains
@@ -425,4 +606,182 @@ fn run_tectonic(
 #[allow(dead_code)]
 pub fn plan_lines(plan: &ResumePlan) -> u32 {
     estimate_plan_lines(plan)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::apply_migrations;
+    use rusqlite::Connection;
+
+    fn mem_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_migrations(&conn).unwrap();
+        conn
+    }
+
+    fn plan_config(template: &str, paper: &str) -> crate::composer::ComposerConfig {
+        crate::composer::ComposerConfig {
+            target_pages: 1,
+            max_projects: 4,
+            max_experience_items: 3,
+            max_bullets_per_item: 4,
+            min_font_size_pt: 9.0,
+            template_id: template.to_string(),
+            paper: paper.to_string(),
+        }
+    }
+
+    fn plan_json(config: &crate::composer::ComposerConfig) -> String {
+        serde_json::json!({
+            "composerVersion": 1,
+            "config": config,
+            "header": {
+                "fullName": "Ada", "headline": "", "email": "", "phone": "",
+                "location": "", "website": "", "github": "", "linkedin": ""
+            },
+            "education": [],
+            "experience": [],
+            "projects": [],
+            "skills": [],
+            "estimatedLines": 10,
+            "fitsOnePage": true,
+            "warnings": []
+        })
+        .to_string()
+    }
+
+    fn seed_plan(conn: &Connection, revision: i64, template: &str, paper: &str) -> i64 {
+        conn.execute(
+            "INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Acme', 'Dev', 'jd')",
+            [],
+        )
+        .unwrap();
+        let job_id = conn.last_insert_rowid();
+        let config = plan_config(template, paper);
+        conn.execute(
+            "INSERT INTO resume_plans (job_id, config_json, plan_json, composer_version, plan_revision) \
+             VALUES (?1, ?2, ?3, 'test', ?4)",
+            rusqlite::params![
+                job_id,
+                serde_json::to_string(&config).unwrap(),
+                plan_json(&config),
+                revision
+            ],
+        )
+        .unwrap();
+        job_id
+    }
+
+    fn sample_artifact(job_id: i64, revision: i64, template: &str, paper: &str) -> PdfArtifact {
+        PdfArtifact {
+            job_id,
+            tex_path: format!("pdf/job_{job_id}/resume.tex"),
+            pdf_path: format!("pdf/job_{job_id}/resume.pdf"),
+            page_count: Some(1),
+            compiled_at: None,
+            template_id: template.to_string(),
+            paper: paper.to_string(),
+            fingerprint: Some("fp".to_string()),
+            pdf_hash: Some("hash".to_string()),
+            artifact_plan_revision: Some(revision),
+        }
+    }
+
+    /// The artifact persist is a compare-and-set on the plan revision: a save
+    /// that landed while the PDF compiled must never be overwritten by an
+    /// artifact describing the older content.
+    #[test]
+    fn save_artifact_is_conditional_on_the_plan_revision() {
+        let conn = mem_db();
+        let job_id = seed_plan(&conn, 1, "jake", "letter");
+
+        // Matching revision — the row is written.
+        save_artifact(
+            &conn,
+            &sample_artifact(job_id, 1, "jake", "letter"),
+            Some(1),
+        )
+        .unwrap();
+        let stored = get_artifact(&conn, job_id).unwrap().unwrap();
+        assert_eq!(stored.artifact_plan_revision, Some(1));
+        assert_eq!(stored.pdf_hash.as_deref(), Some("hash"));
+
+        // An edit landed (revision bumped): the older export must be refused
+        // and the row must keep describing the newer compile.
+        conn.execute(
+            "UPDATE resume_plans SET plan_revision = 2 WHERE job_id = ?1",
+            [job_id],
+        )
+        .unwrap();
+        let err = save_artifact(
+            &conn,
+            &sample_artifact(job_id, 1, "jake", "letter"),
+            Some(1),
+        )
+        .unwrap_err();
+        assert!(err.contains("plan changed"), "{err}");
+        let stored = get_artifact(&conn, job_id).unwrap().unwrap();
+        assert_eq!(stored.artifact_plan_revision, Some(1), "row untouched");
+        assert_eq!(stored.pdf_hash.as_deref(), Some("hash"), "row untouched");
+    }
+
+    #[test]
+    fn pdf_status_derives_from_saved_and_artifact_state() {
+        let conn = mem_db();
+        let dir = std::env::temp_dir().join(format!("kairo-pdf-status-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // No plan at all.
+        assert_eq!(pdf_status(&conn, 999, &dir).unwrap().state, "none");
+
+        let job_id = seed_plan(&conn, 1, "jake", "letter");
+        assert_eq!(pdf_status(&conn, job_id, &dir).unwrap().state, "none");
+
+        // Plan + artifact row + file on disk → current.
+        let pdf_file = dir
+            .join("pdf")
+            .join(format!("job_{job_id}"))
+            .join("resume.pdf");
+        std::fs::create_dir_all(pdf_file.parent().unwrap()).unwrap();
+        std::fs::write(&pdf_file, b"%PDF-1.4 fake").unwrap();
+        save_artifact(
+            &conn,
+            &sample_artifact(job_id, 1, "jake", "letter"),
+            Some(1),
+        )
+        .unwrap();
+        assert_eq!(pdf_status(&conn, job_id, &dir).unwrap().state, "current");
+
+        // An edit after the compile → stale.
+        conn.execute(
+            "UPDATE resume_plans SET plan_revision = 2 WHERE job_id = ?1",
+            [job_id],
+        )
+        .unwrap();
+        assert_eq!(pdf_status(&conn, job_id, &dir).unwrap().state, "stale");
+
+        // Same revision but a different template → template-stale.
+        conn.execute(
+            "UPDATE resume_plans SET plan_revision = 1, config_json = ?2 WHERE job_id = ?1",
+            rusqlite::params![
+                job_id,
+                serde_json::to_string(&plan_config("expressive", "letter")).unwrap()
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            pdf_status(&conn, job_id, &dir).unwrap().state,
+            "template-stale"
+        );
+
+        // File deleted → missing-file beats every other state.
+        std::fs::remove_file(&pdf_file).unwrap();
+        assert_eq!(
+            pdf_status(&conn, job_id, &dir).unwrap().state,
+            "missing-file"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -98,15 +98,53 @@ export function retryPlanSave(jobId: number): void {
   if (queue?.dirty) pump(jobId);
 }
 
+/** What a flush reports: a flush that could not persist everything refuses
+ *  to hand out a revision — an export built on it would silently lie. */
+export type PlanFlushResult =
+  | { ok: true; revision: number | null }
+  | { ok: false; revision: number | null; error: string };
+
+const FLUSH_ERROR =
+  "The plan could not be saved — retry the save (or re-check your connection) before exporting.";
+
 /**
- * Resolves once nothing is queued or in flight for `jobId`, returning the
- * persisted revision the flow can pass to the exporter. Used by flows that
- * must observe a persisted plan (Sync from Vault, PDF export).
+ * Persists everything queued for `jobId`, waiting until no save is dirty or
+ * in flight, and reports honestly whether the saved state is usable. Resolves
+ * with `{ ok: false }` instead of a stale revision when the last save failed —
+ * the caller (PDF export, Sync from Vault) must refuse to continue rather
+ * than build on unknown content.
  */
-export async function flushPlanSave(jobId: number): Promise<{ revision: number | null }> {
+export async function flushPlanSave(jobId: number): Promise<PlanFlushResult> {
   const queue = queues.get(jobId);
-  if (queue) await queue.chain;
-  return { revision: queue?.revision ?? null };
+  if (!queue) return { ok: true, revision: null };
+  // A failed save stays dirty with status "error" — do not re-pump it here
+  // (an explicit retry or the next edit owns that); anything else still
+  // queued is flushed actively.
+  for (let guard = 0; guard < 200; guard++) {
+    if (queue.inFlight) {
+      await queue.chain;
+      continue;
+    }
+    if (queue.dirty && statusFor(jobId) !== "error") {
+      pump(jobId);
+      await queue.chain;
+      continue;
+    }
+    break;
+  }
+  if (statusFor(jobId) === "error") {
+    return { ok: false, revision: queue.revision, error: FLUSH_ERROR };
+  }
+  if (queue.dirty) {
+    // Still saving after the guard (edits kept landing mid-flush) — unknown
+    // state is not good enough to export from.
+    return {
+      ok: false,
+      revision: queue.revision,
+      error: "The plan is still saving — try the export again in a moment.",
+    };
+  }
+  return { ok: true, revision: queue.revision };
 }
 
 export function planSaveStatus(jobId: number | null): PlanSaveStatus {

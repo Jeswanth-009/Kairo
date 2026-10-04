@@ -60,6 +60,7 @@ pub fn run() {
             );
             app.manage(db::DbState(Mutex::new(conn)));
             app.manage(commands::pdf_commands::AppDataDir(data_dir));
+            app.manage(commands::pdf_commands::ExportLocks::default());
             app.manage(commands::ai_commands::TailorCancel(std::sync::Arc::new(
                 std::sync::atomic::AtomicBool::new(false),
             )));
@@ -142,6 +143,7 @@ pub fn run() {
             commands::ai_commands::tailor_save_manual_edit,
             commands::pdf_commands::export_pdf,
             commands::pdf_commands::get_pdf_artifact,
+            commands::pdf_commands::get_pdf_status,
             commands::version_commands::save_resume_version,
             commands::version_commands::list_resume_versions,
             commands::version_commands::get_resume_version,

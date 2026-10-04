@@ -2,12 +2,27 @@
 
 use crate::db::{fingerprint, pdf, versions, DbState};
 use serde::Serialize;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tauri::{Emitter, State};
 
 const DB_LOCK: &str = "database lock poisoned";
 /// Live compile progress channel: the backend streams Tectonic output lines
 /// here; the Studio/Resume UI renders them instead of a frozen spinner.
 const PDF_PROGRESS_EVENT: &str = "pdf://progress";
+
+/// One compile lock per job: overlapping exports of the same job would race
+/// the staging dirs and the final renames, leaving artifact row and file
+/// disagreeing. Different jobs compile fully in parallel.
+#[derive(Default)]
+pub struct ExportLocks(Mutex<HashMap<i64, Arc<tokio::sync::Mutex<()>>>>);
+
+impl ExportLocks {
+    fn lock_for(&self, job_id: i64) -> Arc<tokio::sync::Mutex<()>> {
+        let mut map = self.0.lock().expect("export locks poisoned");
+        map.entry(job_id).or_default().clone()
+    }
+}
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -36,8 +51,13 @@ pub async fn export_pdf(
     // refused instead of silently producing an older document.
     expected_revision: Option<i64>,
     app_data_dir: State<'_, AppDataDir>,
+    locks: State<'_, ExportLocks>,
 ) -> Result<ExportResult, String> {
     let started = std::time::Instant::now();
+    // Serialize same-job exports for the whole compile+persist window.
+    let job_lock = locks.lock_for(job_id);
+    let _job_lock = job_lock.lock().await;
+
     // 1. Lock: load the plan, overlay accepted tailor suggestions, locate the
     //    compiler. The overlay keeps the PDF in sync with what the Studio
     //    preview shows for accepted AI tailoring.
@@ -74,10 +94,8 @@ pub async fn export_pdf(
     // matches — the plan must not drift from the exported PDF unnoticed.
     let fingerprint = fingerprint::render_fingerprint(&plan, &template_id, &plan.config.paper);
 
-    // 2. Write .tex + run Tectonic (no lock held), streaming each compiler
-    //    line to the webview so long first compiles visibly progress. The
-    //    compile happens in a staging dir; the previous good PDF in
-    //    `pdf/job_{id}/` is only replaced once the new one is complete.
+    // 2. Compile into a private staging dir (no DB lock held, streaming each
+    //    compiler line to the webview). Nothing live is touched yet.
     let on_line = |line: &str| {
         let _ = app.emit(
             PDF_PROGRESS_EVENT,
@@ -87,16 +105,15 @@ pub async fn export_pdf(
             },
         );
     };
-    let mut out = match pdf::compile_locked(
-        plan,
+    let staged = match pdf::compile_staged(
+        &plan,
         job_id,
         &template_id,
         &tectonic,
         &app_data_dir.0,
-        Some(stored_revision),
         &on_line,
     ) {
-        Ok(out) => out,
+        Ok(staged) => staged,
         Err(e) => {
             crate::logging::log_event(
                 "error",
@@ -110,26 +127,79 @@ pub async fn export_pdf(
             return Err(e);
         }
     };
-    out.artifact.fingerprint = Some(fingerprint);
 
-    // 3. Re-lock: persist the artifact (now pointing at the promoted file).
+    // 3. Re-check before promoting: an edit that saved during the compile
+    //    means this PDF describes stale content. The staged output is dropped
+    //    (staging dir removed) and the previous good PDF — file and artifact
+    //    row — stays exactly as it was.
     {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-        pdf::save_artifact(&conn, &out.artifact)?;
+        let stored = crate::db::composer::get_plan(&conn, job_id)?;
+        if stored.map(|p| p.plan_revision) != Some(stored_revision) {
+            crate::logging::log_event(
+                "warn",
+                "pdf_export_superseded",
+                &[
+                    ("job_id", job_id.to_string()),
+                    ("duration_ms", started.elapsed().as_millis().to_string()),
+                ],
+            );
+            return Err(
+                "Your edits saved while the PDF was compiling — the previous PDF is still \
+                 current. Review the updated draft and export again."
+                    .to_string(),
+            );
+        }
+
+        // 4. Promote + record inside one lock scope; the conditional UPDATE
+        //    (compare-and-set on plan_revision) backs the check above even
+        //    against commands from other threads.
+        let page_count = staged.page_count;
+        let pdf_hash = staged.pdf_hash.clone();
+        let log_tail = staged.log_tail.clone();
+        let pdf_rel = staged.pdf_rel_path.clone();
+        let tex_rel = staged.tex_rel_path.clone();
+        pdf::promote_staged(staged)?;
+        let artifact = pdf::PdfArtifact {
+            job_id,
+            tex_path: tex_rel,
+            pdf_path: pdf_rel,
+            page_count,
+            compiled_at: None,
+            template_id: template_id.clone(),
+            paper: plan.config.paper.clone(),
+            fingerprint: Some(fingerprint),
+            pdf_hash: Some(pdf_hash),
+            artifact_plan_revision: Some(stored_revision),
+        };
+        pdf::save_artifact(&conn, &artifact, Some(stored_revision))?;
+        // Re-read so the caller gets the persisted truth (compiled_at et al),
+        // not the pre-persist guess.
+        let artifact = pdf::get_artifact(&conn, job_id)?
+            .ok_or_else(|| "artifact row vanished right after export".to_string())?;
+        crate::logging::log_event(
+            "info",
+            "pdf_exported",
+            &[
+                ("job_id", job_id.to_string()),
+                ("pages", artifact.page_count.unwrap_or(0).to_string()),
+                ("duration_ms", started.elapsed().as_millis().to_string()),
+            ],
+        );
+        Ok(ExportResult { artifact, log_tail })
     }
-    crate::logging::log_event(
-        "info",
-        "pdf_exported",
-        &[
-            ("job_id", job_id.to_string()),
-            ("pages", out.artifact.page_count.unwrap_or(0).to_string()),
-            ("duration_ms", started.elapsed().as_millis().to_string()),
-        ],
-    );
-    Ok(ExportResult {
-        artifact: out.artifact,
-        log_tail: out.log_tail,
-    })
+}
+
+/// Saved-vs-artifact truth for the workspace's PDF. The UI's "current" label
+/// must come from here, not from timestamps or local flags.
+#[tauri::command]
+pub fn get_pdf_status(
+    state: State<'_, DbState>,
+    job_id: i64,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<pdf::PdfStatus, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    pdf::pdf_status(&conn, job_id, &app_data_dir.0)
 }
 
 #[tauri::command]
@@ -143,6 +213,34 @@ pub fn get_pdf_artifact(
 
 /// Managed state carrying the app data dir into commands (Tauri provides it).
 pub struct AppDataDir(pub std::path::PathBuf);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Two exports for one job must serialize: the second lock attempt fails
+    /// while the first is held, and a different job locks independently.
+    #[test]
+    fn export_locks_serialize_same_job_only() {
+        let locks = ExportLocks::default();
+
+        let job1_a = locks.lock_for(1);
+        let guard = job1_a.try_lock().expect("first acquire succeeds");
+        assert!(
+            locks.lock_for(1).try_lock().is_err(),
+            "the same job's second export must wait"
+        );
+        assert!(
+            locks.lock_for(2).try_lock().is_ok(),
+            "a different job must not be blocked"
+        );
+        drop(guard);
+        assert!(
+            locks.lock_for(1).try_lock().is_ok(),
+            "the lock frees after the export completes"
+        );
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Artifact-scoped file access

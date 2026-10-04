@@ -41,6 +41,7 @@ import { SaveStatusChip } from "./SaveStatusChip";
 import type {
   Job,
   PdfArtifact,
+  PdfStatusView,
   PlanItem,
   Profile,
   ResumePlan,
@@ -328,6 +329,7 @@ export default function ResumeStudioPage() {
   const [loaded, setLoaded] = useState(false);
   const [estimatedLines, setEstimatedLines] = useState<number | null>(null);
   const [artifact, setArtifact] = useState<PdfArtifact | null>(null);
+  const [pdfStatus, setPdfStatus] = useState<PdfStatusView | null>(null);
   const [exporting, setExporting] = useState(false);
   const pdfProgress = usePdfProgress(exporting);
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
@@ -335,11 +337,9 @@ export default function ResumeStudioPage() {
   const [previewMode, setPreviewMode] = useState<"pdf" | "plan">("pdf");
   // First version gate: the user confirms the final PDF before it's frozen.
   const [finalReviewed, setFinalReviewed] = useState(false);
-  // Strong status inputs: failed export (in-session), content edited after
-  // the last compile, and the autosave state.
+  // Ephemeral, in-session only: the failed-export overlay. Durable PDF state
+  // (stale / template-stale / current) always comes from the backend status.
   const [exportFailed, setExportFailed] = useState(false);
-  const [editedSinceExport, setEditedSinceExport] = useState(false);
-  const [planUpdatedAt, setPlanUpdatedAt] = useState<string | null>(null);
 
   const historyRef = useRef<ResumePlan[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -411,7 +411,6 @@ export default function ResumeStudioPage() {
     historyRef.current = [];
     setCanUndo(false);
     setFinalReviewed(false);
-    setEditedSinceExport(false);
     setExportFailed(false);
     void (async () => {
       try {
@@ -419,14 +418,17 @@ export default function ResumeStudioPage() {
         if (seq !== loadSeq.current) return;
         planRef.current = stored?.plan ?? null;
         setPlan(stored?.plan ?? null);
-        setPlanUpdatedAt(stored?.updatedAt ?? null);
         const suggestions = await ipc.tailorList(jobId);
         if (seq !== loadSeq.current) return;
         setSuggestions(suggestions);
         setEstimatedLines(stored?.plan ? await ipc.estimatePlanLines(stored.plan) : null);
-        const artifact = await ipc.getPdfArtifact(jobId);
+        const [artifact, status] = await Promise.all([
+          ipc.getPdfArtifact(jobId),
+          ipc.getPdfStatus(jobId),
+        ]);
         if (seq !== loadSeq.current) return;
         setArtifact(artifact);
+        setPdfStatus(status);
         setPreviewMode("pdf");
         const versions = await ipc.listResumeVersions(jobId);
         if (seq !== loadSeq.current) return;
@@ -436,6 +438,23 @@ export default function ResumeStudioPage() {
       }
     })();
   }, [jobId]);
+
+  // Every save that lands changes the saved-vs-artifact relationship —
+  // refresh the authoritative status when the queue goes quiet.
+  useEffect(() => {
+    if (jobId === null) return;
+    if (saveStatus !== "saved") return;
+    let alive = true;
+    ipc
+      .getPdfStatus(jobId)
+      .then((s) => {
+        if (alive) setPdfStatus(s);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [jobId, saveStatus]);
 
   // ---------------------------------------------------------------------------
   // Plan mutations — auto-save on every change through the shared serialized
@@ -451,7 +470,6 @@ export default function ResumeStudioPage() {
     historyRef.current.push(current);
     if (historyRef.current.length > 10) historyRef.current.shift();
     setCanUndo(true);
-    setEditedSinceExport(true);
     const copy: ResumePlan = structuredClone(current);
     mutator(copy);
     planRef.current = copy;
@@ -514,7 +532,11 @@ export default function ResumeStudioPage() {
       setPlan(merged);
       enqueuePlanSave(jobId, merged);
       // The toast should only promise a synced Vault once the plan is on disk.
-      await flushPlanSave(jobId);
+      const flush = await flushPlanSave(jobId);
+      if (!flush.ok) {
+        toast.error(flush.error);
+        return;
+      }
       setEstimatedLines(await ipc.estimatePlanLines(merged));
       toast.ok(
         `Synced from Vault — ${merged.skills.length} skills, ${merged.achievements?.length ?? 0} achievements, ${merged.experience.length + merged.projects.length} records`,
@@ -611,12 +633,18 @@ export default function ResumeStudioPage() {
     try {
       // Export must describe the SAVED draft: flush the queue first, then
       // pass the persisted revision so the backend refuses a stale compile.
-      const { revision } = await flushPlanSave(jobId);
-      const result = await ipc.exportPdf(jobId, templateId, revision ?? undefined);
+      // A flush that could not persist everything refuses to hand out a
+      // revision — exporting then would silently build on unknown content.
+      const flush = await flushPlanSave(jobId);
+      if (!flush.ok) {
+        toast.error(flush.error);
+        return;
+      }
+      const result = await ipc.exportPdf(jobId, templateId, flush.revision);
       setArtifact(result.artifact);
+      setPdfStatus(await ipc.getPdfStatus(jobId));
       setPreviewMode("pdf");
       setExportFailed(false);
-      setEditedSinceExport(false);
       setFinalReviewed(false);
       toast.ok(`PDF compiled — ${result.artifact.pageCount ?? "?"} page(s)`);
     } catch (e) {
@@ -649,30 +677,26 @@ export default function ResumeStudioPage() {
   const pages = Math.min(3, Math.max(1, plan?.config.targetPages ?? 1));
   const capacity = (CAPACITY[templateId] ?? 56) * pages;
   const overflows = estimatedLines !== null && estimatedLines > capacity;
-  // The compiled PDF can lag behind the current picks (same file path, older
-  // template/paper) — surface that instead of silently showing stale output.
-  const artifactStale =
-    artifact != null &&
-    ((artifact.templateId != null && artifact.templateId !== "" && artifact.templateId !== templateId) ||
-      (artifact.paper != null && artifact.paper !== "" && artifact.paper !== paper));
+  // Durable PDF truth: derived by the backend from the saved revision vs the
+  // artifact revision (plus template/paper and file existence).
+  const pdfState = pdfStatus?.state ?? "none";
+  const artifactStale = pdfState === "template-stale";
 
   // The one status the whole page agrees on. Order matters: a failed export
   // (previous PDF still shown) outranks a draft, which outranks saving.
-  const contentStale = editedSinceExport ||
-    (planUpdatedAt !== null &&
-      artifact?.compiledAt != null &&
-      planUpdatedAt > artifact.compiledAt);
   const studioStatus: { label: string; tone: string } = exportFailed
     ? { label: "Export failed — showing the previous good PDF", tone: "bad" }
-    : artifact === null
+    : pdfState === "none"
       ? { label: "Draft — no PDF yet", tone: "neutral" }
       : saveStatus === "saving"
         ? { label: "Saving…", tone: "muted" }
         : saveStatus === "error"
           ? { label: "Couldn't save — retry from the chip", tone: "bad" }
-          : contentStale || artifactStale
-            ? { label: "PDF needs update — your changes came after the export", tone: "warn" }
-            : { label: "Current PDF", tone: "ok" };
+          : pdfState === "missing-file"
+            ? { label: "PDF file is missing — export to recreate it", tone: "bad" }
+            : pdfState === "stale" || pdfState === "template-stale"
+              ? { label: "PDF needs update — your changes came after the export", tone: "warn" }
+              : { label: "Current PDF", tone: "ok" };
 
   const excludedCount = useMemo(
     () =>
@@ -1457,12 +1481,12 @@ export default function ResumeStudioPage() {
                 size="sm"
                 variant="secondary"
                 onClick={() => void saveVersion()}
-                disabled={savingVersion || !artifact || artifactStale || (versions.length === 0 && !finalReviewed)}
+                disabled={savingVersion || !artifact || pdfState !== "current" || (versions.length === 0 && !finalReviewed)}
                 title={
                   !artifact
                     ? "Export the PDF first"
-                    : artifactStale
-                      ? "Your template/paper picks changed — recompile, then save the version"
+                    : pdfState !== "current"
+                      ? "Save the plan and recompile so the version freezes the current PDF"
                       : versions.length === 0 && !finalReviewed
                         ? "Tick the final-review checklist below first"
                         : "Freeze this plan + PDF as a version"
