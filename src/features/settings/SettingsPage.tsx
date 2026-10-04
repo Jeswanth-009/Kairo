@@ -155,6 +155,7 @@ function BackupsCard() {
   const [loaded, setLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState<BackupInfo | null>(null);
+  const [restoreResult, setRestoreResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refresh = async () => {
@@ -190,12 +191,22 @@ function BackupsCard() {
       const report = await ipc.restoreBackup(backup.fileName);
       const files =
         report.filesRestored > 0 ? `, ${report.filesRestored} PDF file(s)` : "";
-      toast.ok(
-        `Restored from ${backup.fileName} (schema at ${report.appliedMigrations} migrations${files}). Reloading…`,
-      );
-      setTimeout(() => window.location.reload(), 1200);
+      setRestoreResult({
+        ok: true,
+        detail: `Restored from ${backup.fileName} — schema at ${report.appliedMigrations} migration(s)${files}. Reloading…`,
+      });
+      setTimeout(() => window.location.reload(), 1600);
     } catch (e) {
-      toast.error(String(e));
+      // The restore pipeline rolls the previous database and PDFs back on
+      // failure; say so, and name the recovery action for the rare case the
+      // rollback itself could not finish.
+      const message = String(e);
+      setRestoreResult({
+        ok: false,
+        detail: message.includes("rollback")
+          ? message
+          : `Restore failed — nothing was changed. Your current data and PDFs are untouched. (${message})`,
+      });
       setBusy(false);
     }
   };
@@ -226,6 +237,18 @@ function BackupsCard() {
         a new machine) and it appears here. Older backups are upgraded to the current schema
         automatically.
       </p>
+      {restoreResult ? (
+        <div
+          className={`mt-3 rounded-lg px-3 py-2.5 text-xs leading-relaxed ${
+            restoreResult.ok
+              ? "bg-ok-soft text-ok dark:bg-ok/10 dark:text-emerald-300"
+              : "bg-bad-soft text-bad dark:bg-bad/10 dark:text-red-300"
+          }`}
+          role="status"
+        >
+          {restoreResult.detail}
+        </div>
+      ) : null}
       {loaded && backups.length === 0 ? (
         <p className="mt-3 rounded-lg bg-accent-soft px-3 py-2 text-xs text-muted">
           No backups yet — create one before importing data you care about.

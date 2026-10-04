@@ -202,12 +202,32 @@ export default function ApplicationsPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Application | null>(null);
   const [deleting, setDeleting] = useState<Application | null>(null);
+  // resumeVersionId → "v3": resolved once so every card can name the exact
+  // PDF that was sent.
+  const [versionLabels, setVersionLabels] = useState<Record<number, string>>({});
 
   useEffect(() => {
     ipc.listJobs().then(setJobs).catch(() => setJobs([]));
     void (async () => {
       try {
-        setApps(await ipc.listApplications());
+        const list = await ipc.listApplications();
+        setApps(list);
+        // Resolve the sent-version labels for every linked version.
+        const jobIds = [
+          ...new Set(
+            list
+              .map((a) => a.jobId)
+              .filter((id): id is number => typeof id === "number" && id > 0),
+          ),
+        ];
+        const labels: Record<number, string> = {};
+        await Promise.all(
+          jobIds.map(async (jobId) => {
+            const versions = await ipc.listResumeVersions(jobId).catch(() => []);
+            for (const v of versions) labels[v.id] = `v${v.versionNumber}`;
+          }),
+        );
+        setVersionLabels(labels);
       } catch (e) {
         toast.error(String(e));
       } finally {
@@ -309,6 +329,15 @@ export default function ApplicationsPage() {
                     <span className="text-sm font-medium text-ink">{app.company}</span>
                     <span className="text-xs text-muted">· {app.role}</span>
                   </div>
+                  <p className="mt-1 text-xs text-muted">
+                    {app.appliedDate ? `Applied ${app.appliedDate}` : "No date recorded"}
+                    {app.resumeVersionId != null && versionLabels[app.resumeVersionId] ? (
+                      <span className="font-medium text-ink/80">
+                        {" "}
+                        · sent {versionLabels[app.resumeVersionId]}
+                      </span>
+                    ) : null}
+                  </p>
                   {app.nextAction ? (
                     <p className="mt-1 text-xs text-muted">Next: {app.nextAction}</p>
                   ) : null}
