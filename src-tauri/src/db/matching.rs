@@ -7,6 +7,7 @@ use crate::matching::{
     MatchEntity, MatchInput, MatchReport, MatchRequirement, MatchSkill, MATCHING_VERSION,
 };
 use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 
 pub fn load_match_input(conn: &Connection, job_id: i64) -> Result<MatchInput, String> {
     let job = super::jobs::get_job_enriched(conn, job_id)?;
@@ -261,5 +262,250 @@ pub fn get_report(conn: &Connection, job_id: i64) -> Result<Option<MatchReport>,
             .map_err(|e| e.to_string()),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Evidence stage: the user's Use/Dismiss decisions per (requirement, record),
+// plus staleness — a report computed before the last requirement or Vault
+// change describes a world that no longer exists.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvidenceSelection {
+    pub id: i64,
+    pub job_id: i64,
+    pub requirement_id: i64,
+    pub entity_type: String,
+    pub entity_id: i64,
+    pub decision: String, // "use" | "dismiss"
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+pub fn list_evidence_selections(
+    conn: &Connection,
+    job_id: i64,
+) -> Result<Vec<EvidenceSelection>, String> {
+    let mut stmt = sql_err(conn.prepare(
+        "SELECT id, job_id, requirement_id, entity_type, entity_id, decision, created_at, updated_at \
+         FROM evidence_selections WHERE job_id = ?1 ORDER BY id",
+    ))?;
+    let rows = stmt
+        .query_map([job_id], |r| {
+            Ok(EvidenceSelection {
+                id: r.get(0)?,
+                job_id: r.get(1)?,
+                requirement_id: r.get(2)?,
+                entity_type: r.get(3)?,
+                entity_id: r.get(4)?,
+                decision: r.get(5)?,
+                created_at: r.get(6)?,
+                updated_at: r.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+/// Upsert one decision. The (requirement, record) pair is unique — switching
+/// a decision updates the existing row rather than stacking a second one.
+pub fn set_evidence_selection(
+    conn: &Connection,
+    job_id: i64,
+    requirement_id: i64,
+    entity_type: &str,
+    entity_id: i64,
+    decision: &str,
+) -> Result<EvidenceSelection, String> {
+    if decision != "use" && decision != "dismiss" {
+        return Err(format!("unknown evidence decision '{decision}'"));
+    }
+    if super::trust::EntityKind::parse(entity_type).is_err() {
+        return Err(format!("unknown entity type '{entity_type}'"));
+    }
+    sql_err(conn.execute(
+        "INSERT INTO evidence_selections (job_id, requirement_id, entity_type, entity_id, decision) \
+         VALUES (?1, ?2, ?3, ?4, ?5) \
+         ON CONFLICT(requirement_id, entity_type, entity_id) \
+         DO UPDATE SET decision = excluded.decision, updated_at = datetime('now')",
+        params![job_id, requirement_id, entity_type, entity_id, decision],
+    ))?;
+    let mut stmt = sql_err(conn.prepare(
+        "SELECT id, job_id, requirement_id, entity_type, entity_id, decision, created_at, updated_at \
+         FROM evidence_selections WHERE requirement_id = ?1 AND entity_type = ?2 AND entity_id = ?3",
+    ))?;
+    stmt.query_row(params![requirement_id, entity_type, entity_id], |r| {
+        Ok(EvidenceSelection {
+            id: r.get(0)?,
+            job_id: r.get(1)?,
+            requirement_id: r.get(2)?,
+            entity_type: r.get(3)?,
+            entity_id: r.get(4)?,
+            decision: r.get(5)?,
+            created_at: r.get(6)?,
+            updated_at: r.get(7)?,
+        })
+    })
+    .map_err(|e| e.to_string())
+}
+
+pub fn delete_evidence_selection(
+    conn: &Connection,
+    requirement_id: i64,
+    entity_type: &str,
+    entity_id: i64,
+) -> Result<(), String> {
+    sql_err(conn.execute(
+        "DELETE FROM evidence_selections WHERE requirement_id = ?1 AND entity_type = ?2 AND entity_id = ?3",
+        params![requirement_id, entity_type, entity_id],
+    ))?;
+    Ok(())
+}
+
+/// True when the stored report was computed before the last change to this
+/// job's requirements or to any Vault record the matcher reads. Timestamps
+/// are SQLite "YYYY-MM-DD HH:MM:SS" — lexicographic compare is correct.
+pub fn is_match_stale(conn: &Connection, job_id: i64) -> Result<bool, String> {
+    let row = sql_err(conn.query_row(
+        "SELECT \
+           (SELECT computed_at FROM match_reports WHERE job_id = ?1), \
+           (SELECT MAX(updated_at) FROM job_requirements WHERE job_id = ?1), \
+           (SELECT MAX(updated_at) FROM projects WHERE deleted_at IS NULL), \
+           (SELECT MAX(updated_at) FROM experiences WHERE deleted_at IS NULL), \
+           (SELECT MAX(updated_at) FROM education WHERE deleted_at IS NULL), \
+           (SELECT MAX(updated_at) FROM certifications WHERE deleted_at IS NULL), \
+           (SELECT MAX(updated_at) FROM achievements WHERE deleted_at IS NULL), \
+           (SELECT MAX(updated_at) FROM skills)",
+        [job_id],
+        |r| {
+            Ok((
+                r.get::<_, Option<String>>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<String>>(4)?,
+                r.get::<_, Option<String>>(5)?,
+                r.get::<_, Option<String>>(6)?,
+                r.get::<_, Option<String>>(7)?,
+            ))
+        },
+    ))?;
+    let (computed, reqs, projects, experiences, education, certifications, achievements, skills) =
+        row;
+    let Some(computed) = computed else {
+        return Ok(false); // no report — nothing to be stale
+    };
+    let newest = [
+        reqs,
+        projects,
+        experiences,
+        education,
+        certifications,
+        achievements,
+        skills,
+    ]
+    .into_iter()
+    .flatten()
+    .max();
+    Ok(newest.is_some_and(|n| n > computed))
+}
+
+#[cfg(test)]
+mod evidence_tests {
+    use super::*;
+    use crate::db::apply_migrations;
+    use rusqlite::Connection;
+
+    fn mem_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        apply_migrations(&conn).unwrap();
+        conn
+    }
+
+    fn seed_job_with_requirement(conn: &Connection) -> (i64, i64) {
+        conn.execute(
+            "INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Acme', 'Dev', 'a sufficiently long job description body for validation')",
+            [],
+        )
+        .unwrap();
+        let job_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO job_requirements (job_id, kind, raw_text, normalized_key, importance, user_confirmed, updated_at) \
+             VALUES (?1, 'required_skill', 'Rust', 'rust', 0.9, 1, '2026-01-01 00:00:00')",
+            params![job_id],
+        )
+        .unwrap();
+        let req_id = conn.last_insert_rowid();
+        (job_id, req_id)
+    }
+
+    #[test]
+    fn selections_upsert_per_requirement_and_record() {
+        let conn = mem_db();
+        let (job_id, req_id) = seed_job_with_requirement(&conn);
+
+        let first = set_evidence_selection(&conn, job_id, req_id, "project", 3, "use").unwrap();
+        assert_eq!(first.decision, "use");
+        // Switching the decision updates the same row — one decision per pair.
+        let switched =
+            set_evidence_selection(&conn, job_id, req_id, "project", 3, "dismiss").unwrap();
+        assert_eq!(switched.id, first.id);
+        assert_eq!(switched.decision, "dismiss");
+        assert_eq!(list_evidence_selections(&conn, job_id).unwrap().len(), 1);
+
+        // A second record gets its own row.
+        set_evidence_selection(&conn, job_id, req_id, "experience", 9, "use").unwrap();
+        assert_eq!(list_evidence_selections(&conn, job_id).unwrap().len(), 2);
+
+        // Unknown decisions and entity types are refused.
+        assert!(set_evidence_selection(&conn, job_id, req_id, "project", 3, "maybe").is_err());
+        assert!(set_evidence_selection(&conn, job_id, req_id, "dragon", 3, "use").is_err());
+
+        delete_evidence_selection(&conn, req_id, "project", 3).unwrap();
+        assert_eq!(list_evidence_selections(&conn, job_id).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn staleness_follows_requirements_and_vault_changes() {
+        let conn = mem_db();
+        let (job_id, _req) = seed_job_with_requirement(&conn);
+        conn.execute("INSERT INTO projects (title, origin, updated_at) VALUES ('PyKV', 'imported', '2026-01-01 00:00:00')", []).unwrap();
+
+        // No report yet — staleness is meaningless, so false.
+        assert!(!is_match_stale(&conn, job_id).unwrap());
+
+        // A report computed BEFORE the newest change is stale.
+        conn.execute(
+            "INSERT INTO match_reports (job_id, report_json, matching_version, computed_at) \
+             VALUES (?1, '{}', 1, '2025-12-31 00:00:00')",
+            params![job_id],
+        )
+        .unwrap();
+        assert!(
+            is_match_stale(&conn, job_id).unwrap(),
+            "vault changed after compute"
+        );
+
+        // Recompute "now" — fresh again.
+        conn.execute(
+            "UPDATE match_reports SET computed_at = '2026-06-01 00:00:00' WHERE job_id = ?1",
+            params![job_id],
+        )
+        .unwrap();
+        assert!(!is_match_stale(&conn, job_id).unwrap());
+
+        // A requirement edit after the compute → stale again.
+        conn.execute(
+            "UPDATE job_requirements SET raw_text = 'Rust + SQL', updated_at = '2026-07-01 00:00:00' WHERE job_id = ?1",
+            params![job_id],
+        )
+        .unwrap();
+        assert!(
+            is_match_stale(&conn, job_id).unwrap(),
+            "requirement changed after compute"
+        );
     }
 }

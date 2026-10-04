@@ -82,6 +82,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0015_plan_revisions",
         include_str!("../../migrations/0015_plan_revisions.sql"),
     ),
+    (
+        "0016_evidence_review_progress",
+        include_str!("../../migrations/0016_evidence_review_progress.sql"),
+    ),
 ];
 
 pub fn open_and_migrate(db_path: &Path, data_dir: &Path) -> Result<Connection, Box<dyn Error>> {
@@ -169,7 +173,8 @@ mod tests {
                 "0012_soft_delete".to_string(),
                 "0013_artifact_fingerprints".to_string(),
                 "0014_record_origin".to_string(),
-                "0015_plan_revisions".to_string()
+                "0015_plan_revisions".to_string(),
+                "0016_evidence_review_progress".to_string()
             ]
         );
     }
@@ -180,7 +185,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
-        assert_eq!(names.len(), 15);
+        assert_eq!(names.len(), 16);
     }
 
     #[test]
@@ -238,7 +243,7 @@ mod tests {
         apply_migrations(&conn).unwrap();
         let names = applied_migrations(&conn).unwrap();
         assert_eq!(names.len(), MIGRATIONS.len());
-        assert_eq!(names.last().unwrap(), "0015_plan_revisions");
+        assert_eq!(names.last().unwrap(), "0016_evidence_review_progress");
 
         // Pre-upgrade data survives byte-for-byte.
         let title: String = conn

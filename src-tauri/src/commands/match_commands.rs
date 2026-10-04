@@ -36,3 +36,49 @@ pub fn get_match(state: State<'_, DbState>, job_id: i64) -> Result<Option<MatchR
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
     matching::get_report(&conn, job_id)
 }
+
+#[tauri::command]
+pub fn is_match_stale(state: State<'_, DbState>, job_id: i64) -> Result<bool, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    matching::is_match_stale(&conn, job_id)
+}
+
+#[tauri::command]
+pub fn list_evidence_selections(
+    state: State<'_, DbState>,
+    job_id: i64,
+) -> Result<Vec<matching::EvidenceSelection>, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    matching::list_evidence_selections(&conn, job_id)
+}
+
+#[tauri::command]
+pub fn set_evidence_selection(
+    state: State<'_, DbState>,
+    job_id: i64,
+    requirement_id: i64,
+    entity_type: String,
+    entity_id: i64,
+    decision: String,
+) -> Result<matching::EvidenceSelection, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    matching::set_evidence_selection(
+        &conn,
+        job_id,
+        requirement_id,
+        &entity_type,
+        entity_id,
+        &decision,
+    )
+}
+
+#[tauri::command]
+pub fn delete_evidence_selection(
+    state: State<'_, DbState>,
+    requirement_id: i64,
+    entity_type: String,
+    entity_id: i64,
+) -> Result<(), String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    matching::delete_evidence_selection(&conn, requirement_id, &entity_type, entity_id)
+}
