@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Routes, Route } from "react-router-dom";
 import OnboardingPage from "../features/onboarding/OnboardingPage";
+import { ApplicationTab } from "../features/jobs/workspaceSteps";
 import { NewJobDialog } from "../features/jobs/NewJobDialog";
 import ResumeStudioPage from "../features/resume-studio/ResumeStudioPage";
 import { resetPlanSaves } from "../lib/planAutosave";
@@ -394,3 +395,40 @@ describe("journey · exporting a PDF", () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// Task 5 — applying with a deliberately chosen version
+// ---------------------------------------------------------------------------
+
+describe("journey · tracking an application", () => {
+  it("tracks the exact version the user picked, not the newest one", async () => {
+    mocks.listApplications = vi.fn().mockResolvedValue([]);
+    mocks.listResumeVersions = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 202, versionNumber: 2, createdAt: "2026-10-02" },
+        { id: 201, versionNumber: 1, createdAt: "2026-10-01" },
+      ]);
+    mocks.createApplication = vi
+      .fn()
+      .mockImplementation(async (app: { resumeVersionId: number | null }) => app);
+
+    renderAt(<ApplicationTab job={JOB} />);
+
+    // The picker names versions; the newest is the default suggestion only.
+    await screen.findByLabelText(/sent version/i);
+    const picker = screen.getByLabelText(/sent version/i) as HTMLSelectElement;
+    expect(picker.value).toBe("202");
+
+    // The user sent v1 (the older one) — that is what gets tracked.
+    fireEvent.change(picker, { target: { value: "201" } });
+    fireEvent.click(screen.getByRole("button", { name: /track application/i }));
+
+    await waitFor(() =>
+      expect((mocks.createApplication as ReturnType<typeof vi.fn>).mock.calls[0][0]),
+    );
+    const sent = (mocks.createApplication as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sent.resumeVersionId).toBe(201);
+    expect(sent.notes).toContain("Sent version 1");
+  });
+});
