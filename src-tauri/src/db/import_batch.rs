@@ -448,8 +448,8 @@ mod tests {
         let experience_links = links_for("experience", result.experience_ids[0]);
         assert_eq!(
             experience_links,
-            vec!["Rust"],
-            "text match links the experience"
+            vec!["LLVM", "Rust"],
+            "every mentioned skill links, not just the last"
         );
     }
 

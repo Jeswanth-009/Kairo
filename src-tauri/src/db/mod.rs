@@ -85,6 +85,14 @@ const MIGRATIONS: &[(&str, &str)] = &[
 ];
 
 pub fn open_and_migrate(db_path: &Path, data_dir: &Path) -> Result<Connection, Box<dyn Error>> {
+    // Finish or roll back a restore that a crash interrupted mid-swap —
+    // before the connection opens, so plain file operations are safe.
+    let recovered = backup::recover_interrupted_restore(data_dir);
+    if recovered > 0 {
+        eprintln!(
+            "[kairo] rolled back {recovered} interrupted restore(s) to the pre-restore snapshot"
+        );
+    }
     if let Some(parent) = db_path.parent() {
         fs::create_dir_all(parent)?;
     }

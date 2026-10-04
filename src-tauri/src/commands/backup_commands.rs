@@ -58,6 +58,7 @@ pub fn restore_backup(
         &backup::backups_dir(data),
         &file_name,
         &data.join("pdf"),
+        backup::FailPoint::None,
     )?;
     crate::logging::log_event(
         "info",

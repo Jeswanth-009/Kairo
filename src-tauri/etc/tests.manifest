@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <!-- Test executables (cargo test) get no manifest from tauri-build, so
+       comctl32 binds to the 5.82 copy which lacks TaskDialogIndirect and the
+       process dies with STATUS_ENTRYPOINT_NOT_FOUND. Embedding this resource
+       activates the v6 side-by-side assembly for test binaries too. -->
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls"
+                        version="6.0.0.0" processorArchitecture="*"
+                        publicKeyToken="6595b64144ccf1df" language="*"/>
+    </dependentAssembly>
+  </dependency>
+</assembly>

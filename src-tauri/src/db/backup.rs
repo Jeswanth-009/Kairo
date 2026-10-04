@@ -15,7 +15,7 @@ use super::{vault::sql_err, MIGRATIONS};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 /// Older backups beyond this count are pruned after each successful backup.
@@ -91,6 +91,38 @@ pub struct RestoreReport {
     pub applied_migrations: usize,
     pub files_restored: usize,
 }
+
+/// Test hook: where the restore pipeline fails, so every boundary can be
+/// exercised. Production always passes `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailPoint {
+    None,
+    /// Fail while upgrading the staged DB — before anything live is touched.
+    StagedMigration,
+    /// Fail after the pdf tree swapped in, while the DB restores into live.
+    /// The rollback must put the previous DB + tree back together.
+    DbRestore,
+}
+
+/// Written before the first live mutation and removed on success: lets the
+/// next startup finish or roll back a restore that a crash interrupted
+/// mid-swap (between "pdf tree replaced" and "database restored").
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct RestoreJournal {
+    /// The live database file this journal guards (None in tests, whose
+    /// connections are in-memory).
+    live_db: Option<PathBuf>,
+    pdf_root: PathBuf,
+    /// Set-aside previous pdf tree once the swap has happened.
+    old_tree: Option<PathBuf>,
+    /// Pre-restore safety snapshot — the last state known consistent with
+    /// the old tree.
+    pre_restore_db: PathBuf,
+    /// Extracted DB still waiting to be restored (removed on completion).
+    staging_db: PathBuf,
+}
+
+const RESTORE_JOURNAL: &str = ".restore-journal.json";
 
 pub fn backups_dir(app_data_dir: &Path) -> PathBuf {
     app_data_dir.join("backups")
@@ -409,14 +441,18 @@ fn read_archive_manifest(path: &Path) -> Result<BackupManifest, String> {
 
 /// Restore `file_name` from `dir` into the live connection. Archives are
 /// hash-verified entry by entry before anything live is touched; the DB must
-/// carry the Kairo schema. The `pdf/` tree is swapped in only after the
-/// database restore succeeded, with rollback if the swap fails. Migrations
-/// are re-applied afterwards so older backups upgrade transparently.
+/// carry the Kairo schema. The staged database is migrated and rebased
+/// BEFORE anything live changes, the `pdf/` tree swap and the database
+/// restore are guarded by a recovery journal (so a crash mid-restore
+/// recovers on next startup), and every failure path rolls the previous
+/// database and tree back together. Migrations run on the staged copy so
+/// older backups upgrade transparently without ever touching live data.
 pub fn restore_backup(
     live: &mut Connection,
     dir: &Path,
     file_name: &str,
     pdf_root: &Path,
+    inject: FailPoint,
 ) -> Result<RestoreReport, String> {
     if !is_backup_name(file_name) {
         return Err(format!(
@@ -430,7 +466,7 @@ pub fn restore_backup(
     if file_name.ends_with(LEGACY_DB_EXT) {
         return restore_legacy_db(live, dir, file_name);
     }
-    restore_archive(live, &path, pdf_root, file_name)
+    restore_archive(live, &path, pdf_root, file_name, inject)
 }
 
 fn restore_legacy_db(
@@ -497,6 +533,7 @@ fn restore_archive(
     path: &Path,
     pdf_root: &Path,
     file_name: &str,
+    inject: FailPoint,
 ) -> Result<RestoreReport, String> {
     // 1. Read the manifest, sanitize every path, and hash every entry against
     //    it. Nothing is extracted to its real location until everything checks
@@ -560,70 +597,254 @@ fn restore_archive(
         }
     }
 
-    // 2. Extract kairo.db to a staging file and prove it is a Kairo DB.
+    // 2. Extract kairo.db to a staging file, open it (fail fast — never sail
+    //    through the tree swap with a database that will not open), prove it
+    //    is a Kairo DB, then migrate and rebase it IN STAGING. Every failure
+    //    here leaves the live database and pdf tree exactly as they were.
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    let staging_db = dir.join(format!(
-        ".restore-{}-{DB_ENTRY}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis())
-            .unwrap_or(0)
-    ));
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let staging_db = dir.join(format!(".restore-{stamp}-{DB_ENTRY}"));
     {
         let mut entry = archive
             .by_name(DB_ENTRY)
             .map_err(|e| format!("archive missing {DB_ENTRY}: {e}"))?;
         let mut out = std::fs::File::create(&staging_db)
             .map_err(|e| format!("cannot stage database: {e}"))?;
-        std::io::copy(&mut entry, &mut out).map_err(|e| format!("cannot stage database: {e}"))?;
+        copy_capped(&mut entry, &mut out, MAX_ENTRY_BYTES)?;
     }
     let staging_conn =
-        Connection::open(&staging_db).map_err(|e| format!("staged database will not open: {e}"));
-    if let Ok(ref conn) = staging_conn {
-        if let Err(e) = validate_kairo_db(conn) {
-            let _ = std::fs::remove_file(&staging_db);
-            return Err(e);
-        }
+        Connection::open(&staging_db).map_err(|e| format!("staged database will not open: {e}"))?;
+    if let Err(e) = validate_kairo_db(&staging_conn) {
+        let _ = std::fs::remove_file(&staging_db);
+        return Err(e);
+    }
+    if inject == FailPoint::StagedMigration {
+        let _ = std::fs::remove_file(&staging_db);
+        return Err("injected failure: staged migration".to_string());
+    }
+    if let Err(e) = super::apply_migrations(&staging_conn)
+        .map_err(|e| format!("backup needs an older Kairo to restore: {e}"))
+    {
+        let _ = std::fs::remove_file(&staging_db);
+        return Err(e);
+    }
+    if let Err(e) = rebase_artifact_paths(&staging_conn) {
+        let _ = std::fs::remove_file(&staging_db);
+        return Err(format!("backup could not be prepared: {e}"));
     }
 
     // 3. Safety net: snapshot the current live state first, so restoring the
     //    wrong backup (or an older-schema one) is always reversible.
-    let safety = create_db_backup_inner(live, dir, Some(PRE_RESTORE_SUFFIX));
-    let result = safety.and_then(|_| {
-        // 4. Swap the pdf tree FIRST. If anything from here on fails, the
-        //    swap is rolled back — the live DB is never left pointing at a
-        //    half-replaced tree.
-        let old_tree = swap_pdf_tree(&mut archive, &manifest, pdf_root)?;
-        // 5. Restore the DB, then rebase artifact paths to this machine.
-        let db = staging_conn
-            .as_ref()
-            .map_err(Clone::clone)
-            .and_then(|src| restore_db_into_live(src, live))
-            .and_then(|_| rebase_artifact_paths(live));
-        if let Err(e) = db {
-            // Roll the previous pdf tree back so the old DB still matches it.
-            let _ = std::fs::remove_dir_all(pdf_root);
-            if let Some(old) = &old_tree {
-                let _ = std::fs::rename(old, pdf_root);
-            }
+    let pre_restore_db =
+        dir.join(create_db_backup_inner(live, dir, Some(PRE_RESTORE_SUFFIX))?.file_name);
+
+    // 4. Journal before the first mutation: from here on, a crash must be
+    //    recoverable on the next startup.
+    let journal = RestoreJournal {
+        live_db: live.path().map(PathBuf::from),
+        pdf_root: pdf_root.to_path_buf(),
+        old_tree: None,
+        pre_restore_db: pre_restore_db.clone(),
+        staging_db: staging_db.clone(),
+    };
+    let journal_path = pdf_root
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(RESTORE_JOURNAL);
+    std::fs::write(
+        &journal_path,
+        serde_json::to_string(&journal).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("cannot write restore journal: {e}"))?;
+
+    // 5. Swap the pdf tree. `swap_pdf_tree` rolls the swap back internally
+    //    when its own promote fails.
+    let swapped = swap_pdf_tree(&mut archive, &manifest, pdf_root);
+    let old_tree = match swapped {
+        Ok(old) => old,
+        Err(e) => {
+            let _ = std::fs::remove_file(&journal_path);
+            let _ = std::fs::remove_file(&staging_db);
             return Err(e);
         }
-        if let Some(old) = old_tree {
-            let _ = std::fs::remove_dir_all(old);
+    };
+    if let Some(old) = &old_tree {
+        let with_tree = RestoreJournal {
+            old_tree: Some(old.clone()),
+            ..journal.clone()
+        };
+        let _ = std::fs::write(
+            &journal_path,
+            serde_json::to_string(&with_tree).map_err(|e| e.to_string())?,
+        );
+    }
+
+    // 6. Restore the database from the prepared staging copy. Migrations ran
+    //    in staging; re-running on live is idempotent. On failure the
+    //    previous database AND tree must go back together — and if the
+    //    rollback itself cannot complete, the journal stays behind so the
+    //    next startup finishes the recovery.
+    let db = restore_db_into_live(&staging_conn, live).and_then(|_| {
+        if inject == FailPoint::DbRestore {
+            Err("injected failure: db restore".to_string())
+        } else {
+            Ok(())
         }
-        Ok(manifest
-            .files
-            .iter()
-            .filter(|f| f.path.starts_with("pdf/"))
-            .count())
     });
+    if let Err(e) = db {
+        let rollback = rollback_restore(live, &journal, &old_tree);
+        if let Err(rollback_err) = rollback {
+            let _ = std::fs::write(
+                &journal_path,
+                serde_json::to_string(&RestoreJournal {
+                    old_tree: old_tree.clone(),
+                    ..journal.clone()
+                })
+                .map_err(|je| je.to_string())?,
+            );
+            return Err(format!(
+                "{e}; automatic rollback failed ({rollback_err}). Close Kairo and start it \
+                 again — startup recovery will finish rolling back. Your previous data is \
+                 safe in {}.",
+                journal.pre_restore_db.display()
+            ));
+        }
+        let _ = std::fs::remove_file(&journal_path);
+        let _ = std::fs::remove_file(&staging_db);
+        return Err(e);
+    }
+
+    // 7. Success: journal gone, old tree gone, staging gone.
+    let _ = std::fs::remove_file(&journal_path);
+    if let Some(old) = old_tree {
+        let _ = std::fs::remove_dir_all(old);
+    }
     let _ = std::fs::remove_file(&staging_db);
-    let files_restored = result?;
     Ok(RestoreReport {
         restored_from: file_name.to_string(),
         applied_migrations: count_migrations(live),
-        files_restored,
+        files_restored: manifest
+            .files
+            .iter()
+            .filter(|f| f.path.starts_with("pdf/"))
+            .count(),
     })
+}
+
+/// Puts the previous state back after a failed restore: the pre-restore DB
+/// snapshot replaces the live database (through the online backup API — the
+/// live connection stays open), and the old pdf tree returns. Every step is
+/// best-effort; the caller keeps the recovery journal when this fails.
+fn rollback_restore(
+    live: &mut Connection,
+    journal: &RestoreJournal,
+    old_tree: &Option<PathBuf>,
+) -> Result<(), String> {
+    // DB first: the snapshot is the state that pairs with the old tree.
+    let snapshot = Connection::open(&journal.pre_restore_db)
+        .map_err(|e| format!("cannot open the pre-restore snapshot: {e}"))?;
+    restore_db_into_live(&snapshot, live)?;
+    // Tree second.
+    if let Some(old) = old_tree {
+        if old.exists() {
+            let _ = std::fs::remove_dir_all(&journal.pdf_root);
+            std::fs::rename(old, &journal.pdf_root)
+                .map_err(|e| format!("cannot put the previous pdf tree back: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Startup recovery for a restore that a crash interrupted mid-swap. Runs
+/// BEFORE the live connection opens, so plain file operations are safe.
+/// Returns the number of interrupted restores recovered. Any leftover
+/// `.pdf-old-*` / `.pdf-restore-*` / staged-DB files from older crashes are
+/// reclaimed regardless.
+pub fn recover_interrupted_restore(data_dir: &Path) -> usize {
+    let journal_path = data_dir.join(RESTORE_JOURNAL);
+    let mut recovered = 0;
+    if journal_path.is_file() {
+        let parsed = std::fs::read_to_string(&journal_path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<RestoreJournal>(&s).ok());
+        match parsed {
+            Some(journal) => {
+                // Roll the database back to the pre-restore snapshot: it is
+                // the last state known to pair with the old tree, whether
+                // the crash hit before or in the middle of the DB copy.
+                let db_ok = match &journal.live_db {
+                    Some(live_db) => {
+                        let ok = std::fs::copy(&journal.pre_restore_db, live_db).is_ok();
+                        for suffix in ["-wal", "-shm"] {
+                            let _ = std::fs::remove_file(format!("{}{suffix}", live_db.display()));
+                        }
+                        ok
+                    }
+                    None => true,
+                };
+                let mut tree_ok = true;
+                if let Some(old) = &journal.old_tree {
+                    if old.exists() {
+                        if journal.pdf_root.exists() {
+                            tree_ok = std::fs::remove_dir_all(&journal.pdf_root).is_ok();
+                        }
+                        if tree_ok {
+                            tree_ok = std::fs::rename(old, &journal.pdf_root).is_ok();
+                        }
+                    }
+                }
+                if db_ok && tree_ok {
+                    let _ = std::fs::remove_file(&journal.staging_db);
+                    let _ = std::fs::remove_file(&journal_path);
+                    recovered += 1;
+                    eprintln!(
+                        "[kairo] recovered an interrupted restore from the pre-restore snapshot"
+                    );
+                } else {
+                    eprintln!(
+                        "[kairo] an interrupted restore could not be rolled back automatically; \
+                         restore the snapshot {} manually",
+                        journal.pre_restore_db.display()
+                    );
+                }
+            }
+            None => {
+                let _ = std::fs::remove_file(&journal_path);
+            }
+        }
+    }
+    reclaim_restore_leftovers(data_dir);
+    recovered
+}
+
+/// Removes staging debris from crashed restores that left no journal behind
+/// (crashes before the journal existed, or already-recovered runs).
+fn reclaim_restore_leftovers(data_dir: &Path) {
+    let mut roots = vec![data_dir.to_path_buf()];
+    roots.push(backups_dir(data_dir));
+    for root in roots {
+        let entries = match std::fs::read_dir(&root) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let is_old_tree = name.starts_with(".pdf-old-");
+            let is_staging_tree = name.starts_with(".pdf-restore-");
+            let is_staging_db = name.starts_with(".restore-") && name.ends_with(DB_ENTRY);
+            if is_old_tree || is_staging_tree || is_staging_db {
+                let path = entry.path();
+                let _ = if path.is_dir() {
+                    std::fs::remove_dir_all(&path)
+                } else {
+                    std::fs::remove_file(&path)
+                };
+            }
+        }
+    }
 }
 
 /// Extract the archived `pdf/` entries into a staging dir, then swap it in as
@@ -678,7 +899,10 @@ fn swap_pdf_tree(
             }
             let mut out = std::fs::File::create(&target)
                 .map_err(|e| format!("cannot stage {}: {e}", name))?;
-            std::io::copy(&mut entry, &mut out).map_err(|e| format!("cannot stage {name}: {e}"))?;
+            // Cap what is actually written: the declared entry size cannot be
+            // trusted on a hostile archive.
+            copy_capped(&mut entry, &mut out, MAX_ENTRY_BYTES)
+                .map_err(|e| format!("cannot stage {name}: {e}"))?;
         }
         // Staged tree replaces the live one: old aside, new in, old gone.
         let old = parent.join(format!(".pdf-old-{stamp}"));
@@ -862,6 +1086,30 @@ fn file_size(path: &Path) -> Result<u64, String> {
         .len())
 }
 
+/// Copy with a hard byte cap enforced on what is ACTUALLY read — a hostile
+/// zip can declare a small `size()` while the decompressed stream runs long,
+/// and plain `io::copy` would happily write all of it.
+fn copy_capped(src: &mut impl Read, dst: &mut impl Write, cap: u64) -> Result<u64, String> {
+    let mut copied: u64 = 0;
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = src
+            .read(&mut buf)
+            .map_err(|e| format!("archive read failed: {e}"))?;
+        if n == 0 {
+            return Ok(copied);
+        }
+        copied += n as u64;
+        if copied > cap {
+            return Err(format!(
+                "archive entry exceeds the extraction limit ({cap} bytes)"
+            ));
+        }
+        dst.write_all(&buf[..n])
+            .map_err(|e| format!("archive write failed: {e}"))?;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -965,7 +1213,14 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(&fresh_pdfs);
 
-        let report = restore_backup(&mut fresh, &dir, &info.file_name, &fresh_pdfs).unwrap();
+        let report = restore_backup(
+            &mut fresh,
+            &dir,
+            &info.file_name,
+            &fresh_pdfs,
+            FailPoint::None,
+        )
+        .unwrap();
         assert_eq!(report.restored_from, info.file_name);
         assert_eq!(report.files_restored, 2);
         assert_eq!(project_count(&fresh), 1);
@@ -1015,7 +1270,14 @@ mod tests {
         std::fs::create_dir_all(&stale_dir).unwrap();
         std::fs::write(stale_dir.join("stale.pdf"), b"stale").unwrap();
 
-        restore_backup(&mut live, &dir, &info.file_name, &live_pdfs).unwrap();
+        restore_backup(
+            &mut live,
+            &dir,
+            &info.file_name,
+            &live_pdfs,
+            FailPoint::None,
+        )
+        .unwrap();
         assert!(stale_dir.join("resume.pdf").is_file());
         assert!(
             !stale_dir.join("stale.pdf").exists(),
@@ -1045,7 +1307,7 @@ mod tests {
         });
 
         let mut live = conn;
-        assert!(restore_backup(&mut live, &dir, &info.file_name, &pdfs).is_err());
+        assert!(restore_backup(&mut live, &dir, &info.file_name, &pdfs, FailPoint::None).is_err());
         assert_eq!(project_count(&live), 1);
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&pdfs);
@@ -1174,7 +1436,14 @@ mod tests {
         let fresh_pdf_root = fresh_data.join("pdf");
         std::fs::create_dir_all(&fresh_pdf_root).unwrap();
 
-        restore_backup(&mut live, &dir, &info.file_name, &fresh_pdf_root).unwrap();
+        restore_backup(
+            &mut live,
+            &dir,
+            &info.file_name,
+            &fresh_pdf_root,
+            FailPoint::None,
+        )
+        .unwrap();
 
         let (stored, tex): (String, String) = live
             .query_row(
@@ -1211,7 +1480,7 @@ mod tests {
         );
 
         let mut live = conn;
-        let err = restore_backup(&mut live, &dir, &file_name, &pdfs).unwrap_err();
+        let err = restore_backup(&mut live, &dir, &file_name, &pdfs, FailPoint::None).unwrap_err();
         assert!(err.contains("unsafe entry path"), "unexpected error: {err}");
         assert!(!dir.join("evil.txt").exists());
         let _ = std::fs::remove_dir_all(&dir);
@@ -1236,7 +1505,7 @@ mod tests {
         );
 
         let mut live = conn;
-        let err = restore_backup(&mut live, &dir, &file_name, &pdfs).unwrap_err();
+        let err = restore_backup(&mut live, &dir, &file_name, &pdfs, FailPoint::None).unwrap_err();
         assert!(err.contains("unsafe entry path"), "unexpected error: {err}");
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&pdfs);
@@ -1258,7 +1527,7 @@ mod tests {
 
         let mut live = db();
         live.execute("DELETE FROM projects", []).unwrap();
-        restore_backup(&mut live, &dir, &info.file_name, &pdfs).unwrap();
+        restore_backup(&mut live, &dir, &info.file_name, &pdfs, FailPoint::None).unwrap();
         assert_eq!(project_count(&live), 1);
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&pdfs);
@@ -1281,7 +1550,8 @@ mod tests {
             &mut live,
             &dir,
             fake.file_name().unwrap().to_str().unwrap(),
-            &pdfs
+            &pdfs,
+            FailPoint::None
         )
         .is_err());
         assert_eq!(project_count(&live), 1);
@@ -1293,16 +1563,17 @@ mod tests {
             .execute("CREATE TABLE stuff (x INTEGER)", [])
             .unwrap();
         let name = other.file_name().unwrap().to_str().unwrap().to_string();
-        assert!(restore_backup(&mut live, &dir, &name, &pdfs).is_err());
+        assert!(restore_backup(&mut live, &dir, &name, &pdfs, FailPoint::None).is_err());
         assert_eq!(project_count(&live), 1);
 
         // 3. Path traversal via the file name is rejected by the pattern.
-        assert!(restore_backup(&mut live, &dir, "..\\secrets.db", &pdfs).is_err());
+        assert!(restore_backup(&mut live, &dir, "..\\secrets.db", &pdfs, FailPoint::None).is_err());
         assert!(restore_backup(
             &mut live,
             &dir,
             "sub/dir/kairo-backup-20990101-000000.zip",
-            &pdfs
+            &pdfs,
+            FailPoint::None
         )
         .is_err());
         let _ = std::fs::remove_dir_all(&dir);
@@ -1352,5 +1623,248 @@ mod tests {
         assert!(!is_backup_name("other-20260913-101500.zip"));
         assert!(!is_backup_name("kairo-backup-20260913_101500.zip"));
         assert!(!is_backup_name("kairo-backup-20260913-101500-2.db"));
+    }
+
+    /// Seeds `conn` with one project + one job and returns the job id.
+    fn seed_job(conn: &Connection, title: &str) -> i64 {
+        conn.execute(
+            "INSERT INTO projects (title, origin) VALUES (?1, 'manual')",
+            [title],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Acme', 'Dev', 'jd')",
+            [],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    /// A DB-restore failure AFTER the tree swap must put the previous
+    /// database AND tree back together — the invariant the whole restore
+    /// pipeline exists to keep.
+    #[test]
+    fn failure_during_db_restore_rolls_back_database_and_tree() {
+        let source = db();
+        // Independent DBs both number jobs from 1 — pad the source so the
+        // two trees are distinguishable.
+        seed_job(&source, "Padding");
+        let backup_job = seed_job(&source, "FromBackup");
+        let dir = dir("inject-db");
+        let backup_pdfs = pdf_root("inject-db-src", &[backup_job]);
+        let info = create_backup(&source, &dir, &backup_pdfs).unwrap();
+
+        // Live state differs from the backup: its own project, job and file.
+        let mut live = db();
+        let live_job = seed_job(&live, "LiveOnly");
+        let live_pdfs = pdf_root("inject-db-live", &[live_job]);
+        let live_file = live_pdfs.join(format!("job_{live_job}")).join("resume.pdf");
+
+        let err = restore_backup(
+            &mut live,
+            &dir,
+            &info.file_name,
+            &live_pdfs,
+            FailPoint::DbRestore,
+        )
+        .unwrap_err();
+        assert!(err.contains("injected"), "{err}");
+
+        // The live DB kept ITS data, not the backup's.
+        let titles: Vec<String> = live
+            .prepare("SELECT title FROM projects ORDER BY title")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(titles, vec!["LiveOnly"], "the pre-restore DB must survive");
+        // The live tree kept ITS file, not the backup's.
+        assert!(
+            live_file.is_file(),
+            "previous pdf file must be back in place"
+        );
+        assert!(
+            !live_pdfs.join(format!("job_{backup_job}")).exists(),
+            "the backup's tree must be gone"
+        );
+        // No crash debris.
+        let data_dir = live_pdfs.parent().unwrap().to_path_buf();
+        assert_eq!(recover_interrupted_restore(&data_dir), 0);
+        assert!(!data_dir.join(RESTORE_JOURNAL).exists());
+        let leftovers: Vec<_> = std::fs::read_dir(&data_dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.starts_with(".pdf-old-") || n.starts_with(".pdf-restore-"))
+            .collect();
+        assert!(leftovers.is_empty(), "left behind: {leftovers:?}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&backup_pdfs);
+        let _ = std::fs::remove_dir_all(&live_pdfs);
+    }
+
+    /// A staged-migration failure happens before anything live is touched:
+    /// both database and tree are simply untouched.
+    #[test]
+    fn failure_during_staged_migration_touches_nothing_live() {
+        let source = db();
+        seed_job(&source, "FromBackup");
+        let dir = dir("inject-stage");
+        let backup_pdfs = pdf_root("inject-stage-src", &[1]);
+        let info = create_backup(&source, &dir, &backup_pdfs).unwrap();
+
+        let mut live = db();
+        seed_job(&live, "LiveOnly");
+        let live_pdfs = pdf_root("inject-stage-live", &[2]);
+
+        assert!(restore_backup(
+            &mut live,
+            &dir,
+            &info.file_name,
+            &live_pdfs,
+            FailPoint::StagedMigration
+        )
+        .is_err());
+
+        assert_eq!(project_count(&live), 1);
+        let title: String = live
+            .query_row("SELECT title FROM projects LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "LiveOnly");
+        assert!(live_pdfs.join("job_2").join("resume.pdf").is_file());
+
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&backup_pdfs);
+        let _ = std::fs::remove_dir_all(&live_pdfs);
+    }
+
+    /// A crash between "pdf tree swapped" and "database restored" leaves the
+    /// new tree paired with the old database. Startup recovery must roll the
+    /// whole state back to the pre-restore snapshot.
+    #[test]
+    fn crash_between_swap_and_db_restore_recovers_on_next_open() {
+        // File-backed live DB — recovery rewrites the file itself.
+        let data_dir = dir("recover-data");
+        std::fs::create_dir_all(&data_dir).unwrap();
+        let live_path = data_dir.join("kairo.db");
+        {
+            let live = Connection::open(&live_path).unwrap();
+            apply_migrations(&live).unwrap();
+            seed_job(&live, "LiveOnly");
+        }
+        let live_job = live_job_id(&live_path);
+        let live_pdfs = pdf_root("recover-live", &[live_job]);
+
+        // Pre-restore snapshot (what recovery rolls the DB back to).
+        let backups = backups_dir(&data_dir);
+        {
+            let reopen = Connection::open(&live_path).unwrap();
+            let safety =
+                create_db_backup_inner(&reopen, &backups, Some(PRE_RESTORE_SUFFIX)).unwrap();
+            assert!(backups.join(&safety.file_name).is_file());
+        }
+
+        // The backup being restored (from a different DB with its own tree).
+        let source = db();
+        // Independent DBs both number jobs from 1 — pad the source so the
+        // two trees are distinguishable.
+        seed_job(&source, "Padding");
+        let backup_job = seed_job(&source, "FromBackup");
+        let bdir = dir("recover-backup");
+        let backup_pdfs = pdf_root("recover-src", &[backup_job]);
+        let info = create_backup(&source, &bdir, &backup_pdfs).unwrap();
+
+        // Simulate the crash: swap the tree in, write the journal, die.
+        let file = std::fs::File::open(Path::new(&info.path)).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        let manifest = read_archive_manifest(Path::new(&info.path)).unwrap();
+        let old_tree = swap_pdf_tree(&mut archive, &manifest, &live_pdfs).unwrap();
+        assert!(old_tree.is_some());
+        let journal = RestoreJournal {
+            live_db: Some(live_path.clone()),
+            pdf_root: live_pdfs.clone(),
+            old_tree: old_tree.clone(),
+            pre_restore_db: backups.join(
+                list_backups(&backups)
+                    .unwrap()
+                    .into_iter()
+                    .find(|b| b.file_name.contains(PRE_RESTORE_SUFFIX))
+                    .unwrap()
+                    .file_name,
+            ),
+            staging_db: bdir.join(format!(".restore-1-{DB_ENTRY}")),
+        };
+        std::fs::write(
+            data_dir.join(RESTORE_JOURNAL),
+            serde_json::to_string(&journal).unwrap(),
+        )
+        .unwrap();
+        // Crash state: new tree live, old tree aside, old DB on disk.
+        assert!(live_pdfs
+            .join(format!("job_{backup_job}"))
+            .join("resume.pdf")
+            .is_file());
+
+        // Next startup: open_and_migrate calls this before opening the DB.
+        assert_eq!(recover_interrupted_restore(&data_dir), 1);
+
+        // The live DB file is the pre-restore snapshot again.
+        let reopened = Connection::open(&live_path).unwrap();
+        let titles: Vec<String> = reopened
+            .prepare("SELECT title FROM projects ORDER BY title")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(titles, vec!["LiveOnly"], "old DB pairs with old tree again");
+        // The old tree is back in place; the backup's tree is gone.
+        assert!(live_pdfs
+            .join(format!("job_{live_job}"))
+            .join("resume.pdf")
+            .is_file());
+        assert!(!live_pdfs.join(format!("job_{backup_job}")).exists());
+        assert!(!data_dir.join(RESTORE_JOURNAL).exists());
+        assert!(old_tree.is_some_and(|old| !old.exists()));
+
+        let _ = std::fs::remove_dir_all(&data_dir);
+        let _ = std::fs::remove_dir_all(&bdir);
+        let _ = std::fs::remove_dir_all(&backup_pdfs);
+    }
+
+    /// Finds the single job id in a test DB (seeded exactly once).
+    fn live_job_id(live_path: &Path) -> i64 {
+        let conn = Connection::open(live_path).unwrap();
+        conn.query_row("SELECT id FROM jobs LIMIT 1", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    /// Leftovers from crashes that predate the journal (or from already
+    /// recovered runs) are reclaimed at startup.
+    #[test]
+    fn leftover_crash_debris_is_reclaimed_without_journal() {
+        let data_dir = dir("reclaim");
+        std::fs::create_dir_all(data_dir.join(".pdf-old-123")).unwrap();
+        std::fs::create_dir_all(data_dir.join(".pdf-restore-456")).unwrap();
+        std::fs::write(data_dir.join(format!(".restore-789-{DB_ENTRY}")), b"db").unwrap();
+        std::fs::create_dir_all(backups_dir(&data_dir)).unwrap();
+        std::fs::write(
+            backups_dir(&data_dir).join(format!(".restore-111-{DB_ENTRY}")),
+            b"db",
+        )
+        .unwrap();
+        std::fs::write(data_dir.join("kairo.db"), b"keep").unwrap();
+
+        assert_eq!(recover_interrupted_restore(&data_dir), 0);
+        assert!(!data_dir.join(".pdf-old-123").exists());
+        assert!(!data_dir.join(".pdf-restore-456").exists());
+        assert!(!data_dir.join(format!(".restore-789-{DB_ENTRY}")).exists());
+        assert!(!backups_dir(&data_dir)
+            .join(format!(".restore-111-{DB_ENTRY}"))
+            .exists());
+        assert!(data_dir.join("kairo.db").is_file());
+        let _ = std::fs::remove_dir_all(&data_dir);
     }
 }
