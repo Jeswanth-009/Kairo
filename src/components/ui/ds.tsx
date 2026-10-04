@@ -137,8 +137,25 @@ export function StatusLine({
 
 /**
  * Stage navigation for a guided sequence (workspace: Role → Evidence →
- * Resume → Review → Applied). Backward-free: reached stages stay reachable.
+ * Resume → Review → Applied). Every step carries its real saved-state
+ * status — navigation is backward-free but never implies completion.
  */
+export type StepStatus = "not-started" | "in-progress" | "needs-attention" | "complete";
+
+const STEP_STATUS_MARK: Record<StepStatus, string> = {
+  "not-started": "",
+  "in-progress": "",
+  "needs-attention": "!",
+  complete: "✓",
+};
+
+const STEP_STATUS_CLASS: Record<StepStatus, string> = {
+  "not-started": "bg-accent-soft text-muted",
+  "in-progress": "bg-kairo-blue/10 text-kairo-blue",
+  "needs-attention": "bg-warn/15 text-warn dark:bg-warn/25 dark:text-kairo-dawn",
+  complete: "bg-ok/15 text-ok dark:bg-ok/25 dark:text-emerald-300",
+};
+
 export function StepNav<T extends string>({
   steps,
   active,
@@ -146,32 +163,37 @@ export function StepNav<T extends string>({
   hint,
   className,
 }: {
-  steps: { key: T; label: string }[];
+  /** `status` defaults to "not-started" for callers that don't track it. */
+  steps: { key: T; label: string; status?: StepStatus; action?: string }[];
   active: T;
   onChange: (key: T) => void;
   hint?: ReactNode;
   className?: string;
 }) {
-  const activeIndex = steps.findIndex((s) => s.key === active);
   return (
     <div className={className}>
       <ol className="flex flex-wrap items-center gap-x-4 gap-y-2" aria-label="Progress">
         {steps.map((step, i) => {
           const isActive = step.key === active;
-          const done = i < activeIndex;
+          const status: StepStatus = isActive
+            ? (step.status ?? "in-progress")
+            : (step.status ?? "not-started");
           return (
             <li key={step.key} className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => onChange(step.key)}
                 aria-current={isActive ? "step" : undefined}
+                title={status === "needs-attention" ? step.action : undefined}
                 className={cn(
                   "flex items-center gap-2 rounded-lg px-2 py-1 text-sm transition-colors",
                   isActive
                     ? "bg-kairo-blue/10 font-semibold text-kairo-blue"
-                    : done
+                    : status === "complete"
                       ? "text-ink hover:text-kairo-blue"
-                      : "text-muted hover:text-ink",
+                      : status === "needs-attention"
+                        ? "font-medium text-warn hover:text-ink"
+                        : "text-muted hover:text-ink",
                 )}
               >
                 <span
@@ -180,12 +202,10 @@ export function StepNav<T extends string>({
                     "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
                     isActive
                       ? "bg-kairo-blue text-white"
-                      : done
-                        ? "bg-ok/15 text-ok"
-                        : "bg-accent-soft text-muted",
+                      : STEP_STATUS_CLASS[status],
                   )}
                 >
-                  {done ? "✓" : i + 1}
+                  {STEP_STATUS_MARK[status] || i + 1}
                 </span>
                 {step.label}
               </button>

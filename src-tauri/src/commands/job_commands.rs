@@ -92,3 +92,22 @@ pub fn parse_jd(
 ) -> Result<crate::jd::JobExtraction, String> {
     Ok(crate::jd::parse_jd(&text))
 }
+
+/// The stage the user left this workspace in — returning resumes there.
+#[tauri::command]
+pub fn set_job_active_stage(
+    state: State<'_, DbState>,
+    job_id: i64,
+    stage: String,
+) -> Result<(), String> {
+    const STAGES: &[&str] = &["role", "evidence", "resume", "review", "applied"];
+    if !STAGES.contains(&stage.as_str()) {
+        return Err(format!("unknown workspace stage '{stage}'"));
+    }
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    crate::db::vault::sql_err(conn.execute(
+        "UPDATE jobs SET active_stage = ?1 WHERE id = ?2",
+        rusqlite::params![stage, job_id],
+    ))?;
+    Ok(())
+}

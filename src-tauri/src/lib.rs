@@ -116,6 +116,7 @@ pub fn run() {
             commands::job_commands::list_jobs,
             commands::job_commands::get_job,
             commands::job_commands::update_job,
+            commands::job_commands::set_job_active_stage,
             commands::job_commands::delete_job,
             commands::job_commands::create_job_with_requirements,
             commands::job_commands::list_requirements,

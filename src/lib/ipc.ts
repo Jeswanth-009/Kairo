@@ -147,6 +147,8 @@ export const ipc = {
   getJob: (id: number): Promise<Job> => invoke<Job>("get_job", { id }),
   updateJob: (job: Job): Promise<Job> => invoke<Job>("update_job", { job }),
   deleteJob: (id: number): Promise<void> => invoke("delete_job", { id }),
+  setJobActiveStage: (jobId: number, stage: string): Promise<void> =>
+    invoke<void>("set_job_active_stage", { jobId, stage }),
   createJobWithRequirements: (job: Job, requirements: JobRequirement[]): Promise<JobWithRequirements> =>
     invoke<JobWithRequirements>("create_job_with_requirements", { job, requirements }),
   listRequirements: (jobId: number): Promise<JobRequirement[]> =>

@@ -695,7 +695,9 @@ export default function ResumeStudioPage() {
   // and the single primary action. exportPdf is read through a ref so the
   // published action always runs the latest closure.
   const exportPdfRef = useRef(exportPdf);
-  exportPdfRef.current = exportPdf;
+  useEffect(() => {
+    exportPdfRef.current = exportPdf;
+  });
   const jobTitle = jobs.find((j) => j.id === jobId)?.roleTitle || "Workspace";
   useEffect(() => {
     if (jobId === null) return;

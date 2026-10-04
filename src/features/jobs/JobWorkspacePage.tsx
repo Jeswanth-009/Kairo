@@ -3,11 +3,12 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
-import { StepNav } from "../../components/ui/ds";
+import { StepNav, type StepStatus } from "../../components/ui/ds";
 import { Badge } from "../../components/ui/Badge";
 import { Skeleton } from "../../components/ui/Feedback";
 import { Field, Input, Select } from "../../components/ui/inputs";
 import { JOB_REQUIREMENT_KINDS } from "../../lib/types";
+import { ipc } from "../../lib/ipc";
 import { scrollMainToTop } from "../../lib/dom";
 import type {
   Job,
@@ -48,6 +49,13 @@ export default function JobWorkspacePage() {
   const [tab, setTab] = useState<WorkspaceTab>("role");
   const loadRequirements = useJobsStore((s) => s.loadRequirements);
   const requirements = useJobsStore((s) => s.reqCache[id]) ?? [];
+  // Saved state the statuses derive from — everything below is persisted
+  // truth, never "the user visited the tab".
+  const report = useJobsStore((s) => s.matchCache[id] ?? null);
+  const matchStale = useJobsStore((s) => s.matchStaleCache[id] ?? false);
+  const selections = useJobsStore((s) => s.selectionCache[id] ?? []);
+  const pdfStatus = useJobsStore((s) => s.pdfStatusCache[id] ?? null);
+  const applications = useJobsStore((s) => s.applications ?? null);
 
   const loadSeq = useRef(0);
   useEffect(() => {
@@ -57,13 +65,45 @@ export default function JobWorkspacePage() {
         const job = await ipcGetJob(id);
         if (seq !== loadSeq.current) return;
         setJob(job);
+        // Resume in the stage the user left — saved on the job row.
+        const stage = job.activeStage as WorkspaceTab | undefined;
+        if (stage && TAB_META.some((t) => t.key === stage)) setTab(stage);
         await loadRequirements(id);
+        if (seq !== loadSeq.current) return;
+        const [report, stale, sel, pdf, apps] = await Promise.all([
+          ipcGetMatch(id).catch(() => null),
+          ipc.isMatchStale(id).catch(() => false),
+          ipc.listEvidenceSelections(id).catch(() => []),
+          ipc.getPdfStatus(id).catch(() => null),
+          ipc.listApplications().catch(() => []),
+        ]);
+        if (seq !== loadSeq.current) return;
+        useJobsStore.setState((s) => ({
+          matchCache: { ...s.matchCache, [id]: report },
+          matchStaleCache: { ...s.matchStaleCache, [id]: stale },
+          selectionCache: { ...s.selectionCache, [id]: sel },
+          pdfStatusCache: { ...s.pdfStatusCache, [id]: pdf },
+          applications: apps,
+        }));
       } catch (e) {
         if (seq === loadSeq.current) setError(String(e));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const changeStage = (key: WorkspaceTab) => {
+    setTab(key);
+    // Persist the exit point — navigation never implies completion.
+    void ipc
+      .setJobActiveStage(id, key)
+      .then(() => {
+        setJob((prev) => (prev ? { ...prev, activeStage: key } : prev));
+      })
+      .catch(() => {});
+    // Stage bodies differ wildly in height — never land mid-page.
+    scrollMainToTop();
+  };
 
   if (error) {
     return (
@@ -99,6 +139,63 @@ export default function JobWorkspacePage() {
   const isGeneral = job.kind === "general";
   const tabs = TAB_META.filter((t) => !(isGeneral && t.key === "evidence"));
 
+  // Stage statuses derive from SAVED state only — visiting a stage never
+  // completes it. The action text is the specific next step for the stage.
+  const confirmedRequirements = requirements.filter((r) => r.userConfirmed);
+  const nonMissing = (report?.results ?? []).filter((r) => r.coverage !== "missing");
+  const usedForRequirement = (requirementId: number) =>
+    selections.some((s) => s.requirementId === requirementId && s.decision === "use");
+  const reviewed = pdfStatus?.pdfHash != null && pdfStatus.reviewedPdfHash === pdfStatus.pdfHash;
+  const linkedApplications = (applications ?? []).filter((a) => a.jobId === job.id);
+
+  const stageStatus: Record<WorkspaceTab, { status: StepStatus; action: string }> = {
+    role: isGeneral
+      ? { status: "complete", action: "" }
+      : requirements.length === 0
+        ? { status: "not-started", action: "Confirm the requirements from the posting" }
+        : confirmedRequirements.length < requirements.length
+          ? {
+              status: "in-progress",
+              action: `Confirm ${requirements.length - confirmedRequirements.length} more requirement(s)`,
+            }
+          : { status: "complete", action: "" },
+    evidence: !report
+      ? { status: "not-started", action: "Run the match to see your proof" }
+      : matchStale
+        ? { status: "needs-attention", action: "Requirements or facts changed — re-run the match" }
+        : nonMissing.length > 0 && nonMissing.every((r) => usedForRequirement(r.requirementId))
+          ? { status: "complete", action: "" }
+          : {
+              status: "in-progress",
+              action: `Decide on ${nonMissing.filter((r) => !usedForRequirement(r.requirementId)).length} requirement(s) with supporting records`,
+            },
+    resume:
+      pdfStatus == null || pdfStatus.state === "none"
+        ? { status: "not-started", action: "Compose the resume and export a PDF" }
+        : pdfStatus.state === "current"
+          ? { status: "complete", action: "" }
+          : { status: "needs-attention", action: "The PDF is out of date — export to refresh it" },
+    review:
+      pdfStatus == null || pdfStatus.state === "none"
+        ? { status: "not-started", action: "Export a PDF first" }
+        : pdfStatus.state !== "current"
+          ? { status: "needs-attention", action: "The PDF changed — re-export, then review it" }
+          : reviewed
+            ? { status: "complete", action: "" }
+            : { status: "in-progress", action: "Look through the PDF, then mark it reviewed" },
+    applied:
+      linkedApplications.length > 0
+        ? { status: "complete", action: "" }
+        : (pdfStatus?.pdfHash ?? null) != null
+          ? { status: "in-progress", action: "Track the application with the version you sent" }
+          : { status: "not-started", action: "Export a PDF, then track the application" },
+  };
+
+  const activeStage = stageStatus[tab];
+  const hint = activeStage.action
+    ? `Next: ${activeStage.action}`
+    : TAB_META.find((t) => t.key === tab)?.hint;
+
   return (
     <div className="mx-auto max-w-5xl p-8">
       <div className="mb-5 flex items-start justify-between gap-4">
@@ -125,14 +222,15 @@ export default function JobWorkspacePage() {
 
       <div className="mb-2">
         <StepNav
-          steps={tabs.map((t) => ({ key: t.key, label: t.label }))}
+          steps={tabs.map((t) => ({
+            key: t.key,
+            label: t.label,
+            status: stageStatus[t.key].status,
+            action: stageStatus[t.key].action,
+          }))}
           active={tab}
-          onChange={(key) => {
-            setTab(key as WorkspaceTab);
-            // Stage bodies differ wildly in height — never land mid-page.
-            scrollMainToTop();
-          }}
-          hint={tabs.find((t) => t.key === tab)?.hint}
+          onChange={changeStage}
+          hint={hint}
         />
       </div>
 

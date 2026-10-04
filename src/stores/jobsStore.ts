@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import { ipc } from "../lib/ipc";
-import type { Job, JobRequirement } from "../lib/types";
+import type {
+  Application,
+  EvidenceSelection,
+  Job,
+  JobRequirement,
+  MatchReport,
+  PdfStatusView,
+} from "../lib/types";
 
 interface JobsStore {
   jobs: Job[];
@@ -8,6 +15,12 @@ interface JobsStore {
   loading: boolean;
   error: string | null;
   reqCache: Record<number, JobRequirement[]>;
+  /** Saved state the workspace's stage statuses derive from. */
+  matchCache: Record<number, MatchReport | null>;
+  matchStaleCache: Record<number, boolean>;
+  selectionCache: Record<number, EvidenceSelection[]>;
+  pdfStatusCache: Record<number, PdfStatusView | null>;
+  applications: Application[] | null;
   load: () => Promise<void>;
   createWorkspace: (job: Job, requirements: JobRequirement[]) => Promise<JobWithRequirements_>;
   deleteJob: (id: number) => Promise<void>;
@@ -37,6 +50,11 @@ export const useJobsStore = create<JobsStore>()((set, get) => ({
   loading: false,
     error: null,
   reqCache: {},
+  matchCache: {},
+  matchStaleCache: {},
+  selectionCache: {},
+  pdfStatusCache: {},
+  applications: null,
 
   load: async () => {
     if (get().loading) return;

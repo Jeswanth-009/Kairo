@@ -392,6 +392,8 @@ export interface Job {
   domain: string;
   /** "role" (job application) or "general" (no-job resume workspace). */
   kind?: "role" | "general";
+  /** The workspace stage the user was last in. */
+  activeStage?: string;
   requirementCount: number;
 }
 

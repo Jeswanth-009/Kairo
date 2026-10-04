@@ -26,6 +26,9 @@ pub struct Job {
     /// workspace — no JD, no requirements; the same editor flows through).
     #[serde(default = "default_job_kind")]
     pub kind: String,
+    /// The workspace stage the user was last in — returning resumes there.
+    #[serde(default)]
+    pub active_stage: String,
     /// Enriched on read: number of reviewed requirements.
     #[serde(default)]
     pub requirement_count: i64,
@@ -47,6 +50,7 @@ impl VaultEntity for Job {
         "seniority",
         "domain",
         "kind",
+        "active_stage",
     ];
 
     fn id(&self) -> i64 {
@@ -63,6 +67,7 @@ impl VaultEntity for Job {
             seniority: row.get(5)?,
             domain: row.get(6)?,
             kind: row.get(7)?,
+            active_stage: row.get(8)?,
             requirement_count: 0,
         })
     }
@@ -80,6 +85,7 @@ impl VaultEntity for Job {
             } else {
                 self.kind.clone()
             }),
+            FieldVal::Text(self.active_stage.clone()),
         ]
     }
 
@@ -357,6 +363,7 @@ mod tests {
             seniority: "Senior".to_string(),
             domain: "Fintech".to_string(),
             kind: "role".to_string(),
+            active_stage: String::new(),
             requirement_count: 0,
         }
     }
@@ -442,6 +449,7 @@ mod tests {
             seniority: String::new(),
             domain: String::new(),
             kind: "general".to_string(),
+            active_stage: String::new(),
             requirement_count: 0,
         };
         let created = create_job_with_requirements(&conn, &general, &[]).unwrap();

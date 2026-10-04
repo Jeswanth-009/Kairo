@@ -89,7 +89,7 @@ export function ReviewStage({ jobId }: { jobId: number }) {
   const [loaded, setLoaded] = useState(false);
   const [marking, setMarking] = useState(false);
 
-  const refresh = (cancelled: () => boolean) =>
+  const refresh = (cancelled: () => boolean = () => false) =>
     void (async () => {
       try {
         const [s, prof, onboarding, plan] = await Promise.all([
@@ -122,8 +122,7 @@ export function ReviewStage({ jobId }: { jobId: number }) {
     setMarking(true);
     try {
       await ipc.markArtifactReviewed(jobId);
-      let cancelled = false;
-      refresh(() => cancelled);
+      refresh();
       toast.ok("Marked reviewed — this exact PDF is what you checked.");
     } catch (e) {
       toast.error(String(e));
