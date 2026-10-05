@@ -4,7 +4,7 @@
 
 # Kairo
 
-A local-first career workspace that turns your existing resume into a reviewed, relevant PDF for a specific role — with every recommendation explained and every claim traceable to your confirmed history.
+A local-first desktop workspace for turning your career history into a role-specific resume. Review imported facts, choose relevant experience and skills, edit the draft, and inspect the PDF you actually send. Optional AI suggests wording that you approve.
 
 [![CI](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml/badge.svg)](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml)
 ![license](https://img.shields.io/badge/license-MIT-10B981)
@@ -16,35 +16,33 @@ A local-first career workspace that turns your existing resume into a reviewed, 
 
 ## What Kairo does
 
-Kairo keeps your career history — projects, experience, education, skills, achievements — as
-**reviewable, verifiable facts** in a local SQLite database (the *My Story* library). For each
-job you target, it builds a tailored resume from those facts:
+Kairo keeps projects, experience, education, skills, and achievements in a local SQLite database. Imported records are candidates until you review them. Each role has its own evidence choices, draft, PDF, versions, and application history.
 
 1. **Import** an existing resume (PDF / DOCX / pasted text) — extracted facts are grouped for
    your review; the accepted set saves in one transaction (an interrupted import leaves zero
    partial records). Nothing is trusted automatically.
 2. **Choose the shape** — tailor for a specific job (paste the description, confirm the
    requirements that matter) or compose a general resume with no posting at all.
-3. **See the evidence** — Kairo matches your confirmed history against each requirement and
+   Repeated imports of the same posting reopen its existing workspace.
+3. **See the evidence** — Kairo matches your saved history against each requirement and
    explains *why* a record was selected, with clear / partial / missing support. You decide per
-   record: use it, dismiss it, edit the fact, or find another example. Never a
-   hiring-probability score.
-4. **Review the exact PDF** — the compiled document is shown with a checklist; "reviewed" is
+   record: use it, dismiss it, edit the fact, or find another example. These choices affect the draft. Matching does not predict hiring outcomes.
+4. **Build the draft** — select skills deliberately, edit and reorder content, and optionally ask an OpenAI-compatible provider for bullet rewrites. Each suggestion is shown beside the original and requires acceptance.
+5. **Review the exact PDF** — the compiled document is shown with a checklist; "reviewed" is
    recorded against that file's hash, and saving a version requires you to have reviewed that
    specific revision.
-5. **Track the application** — which version you actually sent, when, and what happened next.
+6. **Track the application** — which version you actually sent, when, and what happened next.
 
-The first run ends at a real PDF: the guided flow composes and exports it inline, shows the
-still-unverified records, and offers *Save to Downloads* or *Customize in the editor*. Leaving
-mid-flow resumes where you stopped — the step, the reviewed draft and the workspace persist.
+With source experience saved, the guided first run composes and exports a real PDF inline, shows the still-unverified records, and offers *Save to Downloads* or *Customize in the editor*. Starting from scratch first asks you to add experience rather than exporting a blank resume. Leaving mid-flow resumes the step, reviewed draft, and workspace.
 
 The interface is organised around these goals:
 
 | Destination | Purpose |
 |---|---|
 | **Home** | Continue the most important unfinished action |
-| **Jobs** | Manage each role and its tailored resume |
+| **Workspaces** | Manage each role, its evidence, resume, and application |
 | **My Story** | Review and improve reusable career history |
+| **Skills** | Manage canonical skills and aliases separately from resume selection |
 | **Applications** | Track what was submitted and what happened |
 | **Settings** | Appearance, AI provider, backups, diagnostics |
 
@@ -52,15 +50,13 @@ Interview prep lives inside each job workspace, because its questions depend on 
 
 ## Design principles
 
-- **No fabrication, ever.** Every resume line traces back to a confirmed fact; AI-suggested
-  rewrites are validated against your evidence and require explicit acceptance.
+- **Human review of claims.** Kairo keeps sources and provenance visible. AI rewrites pass automated claim checks and require acceptance; automated checks cannot prove that every statement is true.
 - **Honest provenance.** Imported facts are labelled *Imported from resume* until you edit
   (*Edited by you*), attach evidence (*Evidence attached*), or explicitly verify them
   (*Verified by you*). Verification is always a deliberate human act.
 - **Explainable selection.** The composer shows why each record was chosen — the matched
   requirement, the source record, and the strength of support.
-- **Local-first.** Your data stays in a local SQLite database. AI is optional and
-  clearly separated; without a provider, everything except wording suggestions works.
+- **Local-first.** Your data stays in a local SQLite database unless you explicitly use an external AI provider. Import, matching, editing, composition, and PDF export work without AI.
 - **Reviewable PDFs.** Export is revision-checked end to end: the PDF records the saved-draft
   revision it was compiled from, edits after the export make the PDF visibly out of date, and
   overlapping exports of one workspace are serialized.
@@ -73,8 +69,7 @@ Interview prep lives inside each job workspace, because its questions depend on 
 
 ## Getting started (5 minutes)
 
-1. Install Node.js **20+** and Rust (stable; on Windows the repo builds with the
-   GNU toolchain by default — see `~/.cargo/config.toml` notes — while CI uses MSVC).
+1. Install Node.js **20+** and Rust (stable). On Windows, install the MSVC C++ Build Tools or an installed GNU Rust toolchain and MinGW linker; CI uses MSVC.
 2. `npm install`
 3. `npm run tauri dev` — the app launches; a blank slate opens the guided first-run flow:
    bring an existing resume, review and accept the extracted facts, choose *tailor for a job*
@@ -104,6 +99,13 @@ suite on three platforms. On Windows the local Rust test binary needs a comctl32
 RUSTFLAGS="-C link-arg=<repo>/src-tauri/etc/tests-manifest.o" cargo test --lib
 ```
 
+On PowerShell, the equivalent is:
+
+```powershell
+$env:RUSTFLAGS='-C link-arg=C:/path/to/Kairo/src-tauri/etc/tests-manifest.o'
+cargo test --lib
+```
+
 CI additionally runs the integration tests (`tests/pdf_pipeline.rs`, `tests/versions_flow.rs`),
 which skip automatically when Tectonic is unavailable.
 
@@ -112,9 +114,7 @@ which skip automatically when Tectonic is unavailable.
 Everything except wording suggestions works with **no AI provider configured** — import,
 matching, composition, export, versions, applications and backups are all local and
 deterministic. When you configure an OpenAI-compatible provider (OpenAI, Groq, a local
-Ollama server), Kairo sends only the requirement text and the exact resume bullet you ask it
-to rewrite, plus the evidence excerpts those bullets cite — never your whole database, never
-contact details, and nothing leaves the machine unless a tailor suggestion is requested. The
+Ollama server), Kairo sends the selected role context, planned bullet text, and supporting record and evidence context needed for the rewrite. Review your provider's privacy terms before using a remote endpoint. The
 API key is stored in the OS credential store, not the database.
 
 ### Architecture (short version)
@@ -123,11 +123,8 @@ API key is stored in the OS credential store, not the database.
 - **Backend:** Rust (Tauri 2) with a domain-module layout — matching, composer, tailor,
   imports — over a 16-migration SQLite schema (WAL, foreign keys, soft-delete trash,
   artifact fingerprints, plan revisions, record provenance, evidence decisions).
-- **PDF:** headless Tectonic (LaTeX) compilation in a staging directory with atomic
-  promotion — an interrupted export leaves the previous PDF intact.
-- **Trust model:** every record carries origin/edited/verified provenance; evidence links
-  back claims to proof; AI rewrites pass a validation pipeline that rejects fabricated
-  technologies, metrics and uncited claims.
+- **PDF:** headless Tectonic (LaTeX) compilation in a staging directory. The exporter checks the saved plan revision, keeps a copy of the previous files during promotion, and verifies artifact hashes when showing PDF status.
+- **Trust model:** records carry origin, edited, and verified provenance; source passages and attached evidence provide review context. AI rewrites pass checks for unsupported technologies, metrics, and claims. The user remains responsible for factual review.
 
 ## Honest limitations
 
@@ -141,7 +138,4 @@ API key is stored in the OS credential store, not the database.
 
 ## Contributing
 
-Good first tasks: additional resume-parser patterns (see `src-tauri/src/imports.rs` tests),
-frontend test coverage for the onboarding flow, and dark-theme contrast passes. Run
-`npm run verify` before pushing — CI runs the same checks plus the Rust suite on three
-platforms.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the code map, and review expectations. Good first tasks include additional resume-parser patterns, accessibility and contrast fixes, and focused journey tests.

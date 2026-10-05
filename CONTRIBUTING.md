@@ -1,109 +1,44 @@
 # Contributing to Kairo
 
-Thanks for your interest in improving Kairo! This guide gets you from clone to
-a running dev environment and explains the conventions the codebase follows.
+Kairo is a local-first desktop app. Contributions should make a job seeker's next step clearer, improve the accuracy of their saved facts, or make the exported resume more dependable.
 
-## Prerequisites
+## Start locally
 
-### Windows
-
-| Tool | Notes |
-|---|---|
-| Node.js 18+ | For the React/Vite frontend |
-| Rust stable (MSVC toolchain) | `rustup` with the `stable-msvc` target |
-| Visual Studio Build Tools | "Desktop development with C++" workload — provides `cl.exe`, which bundled SQLite compiles with |
-| Tectonic | LaTeX engine used for PDF export — `winget install Tectonic.Typesetting`. The app also finds it via `PATH` or `Settings` override. First compile downloads the TeX bundle (~100 MB, once). |
-| Ollama (optional) | Only for local AI tailoring — no API key needed |
-
-### macOS
-
-| Tool | Notes |
-|---|---|
-| Node.js 18+ | `brew install node` |
-| Rust stable | `rustup` (aarch64-apple-darwin or x86_64-apple-darwin) |
-| Xcode Command Line Tools | `xcode-select --install` — provides the C compiler for bundled SQLite |
-| Tectonic | `brew install tectonic` (optional — dev builds also fetch a sidecar binary automatically) |
-
-### Linux (Debian/Ubuntu)
-
-| Tool | Notes |
-|---|---|
-| Node.js 18+ | `nvm` or distro package |
-| Rust stable | `rustup` |
-| System libraries | `sudo apt install libwebkit2gtk-4.1-dev build-essential libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev` |
-| Tectonic | Download from [tectonic releases](https://github.com/tectonic-typesetting/tectonic/releases) and put it on `PATH` |
-
-## Setup
+Install Node.js 20+, Rust, and a working C/C++ linker for your Rust target. On Windows, the app also needs WebView2 and the Tectonic sidecar for real PDF exports. Then run:
 
 ```bash
-git clone https://github.com/Jeswanth-009/Kairo.git
-cd Kairo
 npm install
 npm run tauri dev
 ```
 
-`npm run tauri dev` starts the Vite dev server (:5173) and compiles/launches
-the Rust shell. On machines where MSVC isn't on `PATH`, `dev.ps1` activates a
-portable toolchain — see the script for the paths it expects.
+`npm run dev` opens a browser preview with mock data. It is useful for layout work; verify data and PDF changes in the desktop app.
 
-### Browser-only development
+## Where things live
 
-The frontend can run without the Rust backend against fixture data:
+| Area | Location |
+| --- | --- |
+| App shell and routes | `src/app/` |
+| User journeys and screen components | `src/features/` |
+| Shared controls and design tokens | `src/components/`, `src/styles/global.css` |
+| IPC and frontend types | `src/lib/ipc.ts`, `src/lib/types.ts` |
+| Desktop commands | `src-tauri/src/commands/` |
+| Database and migrations | `src-tauri/src/db/` |
+| Matching, composition, claim checks, PDF rendering | `src-tauri/src/matching.rs`, `composer.rs`, `tailor.rs`, `latex.rs` |
+| Brand sources and usage | `brand/README.md`, `public/brand/` |
 
-```bash
-npm run dev
-# open http://localhost:5173/mock.html
-```
+## Before opening a pull request
 
-`mock.html` installs an in-memory Tauri IPC shim (`src/dev/`) — useful for UI
-work; data is fake and nothing persists.
+1. Describe the user problem and the behavior you changed. Include screenshots for visible UI changes and a sample PDF for renderer changes.
+2. Run `npm run verify` and `cargo test` in `src-tauri`. On Windows, see the test manifest command in the README. Run `cargo fmt --all -- --check` and `cargo clippy --all-targets -- -D warnings` for Rust changes.
+3. Add a test when a change fixes a data-loss, trust, matching, or PDF regression. Keep tests focused on observable behavior.
+4. Update the README when installation, supported platforms, data sent to AI, or known limitations change.
 
-## Testing & verification
+Please avoid claims such as “verified” or “factually accurate” for imported or generated text unless a user has actually confirmed it. AI suggestions must remain visible, reviewable, and optional. Avoid adding network calls to the offline core journey.
 
-```bash
-cd src-tauri
-cargo test          # Rust unit + integration tests
-cargo fmt --check   # formatting gate (run `cargo fmt` to apply)
-cargo clippy --all-targets -- -D warnings
+## Database changes
 
-cd ..
-npm run lint        # ESLint (react-hooks rules on; a few warnings tolerated)
-npm test            # vitest unit tests (pure logic + dev-harness parsers)
-npm run build       # TypeScript type-check + production bundle
-```
+Add a forward migration in `src-tauri/src/db/`. Preserve old data and include a migration test for a previous database version. Review how the change interacts with backups, soft deletion, and restored artifact paths.
 
-CI runs all of these on every push/PR. Please make sure they are green
-before opening a PR. Prettier (`.prettierrc.json`, `npm run format`) is
-available but not enforced — don't reformat unrelated code in a PR.
+## Reporting a problem
 
-## Architecture conventions
-
-These keep the project coherent — please follow them:
-
-- **IPC boundary**: the frontend never calls `invoke()` directly. Everything
-  goes through the typed wrapper in `src/lib/ipc.ts`; payload shapes live in
-  `src/lib/types.ts` and mirror the Rust structs (camelCase serde). New
-  commands need a `#[tauri::command]` in `src-tauri/src/commands/` plus
-  registration in `src-tauri/src/lib.rs`.
-- **Determinism**: composer/matching outputs must stay deterministic — same
-  input ⇒ byte-identical output. No clocks, no RNG, no LLM in the solver.
-- **Zero fabrication**: resume wording may only reorganize evidence-backed
-  facts. The validation gates in `src-tauri/src/tailor.rs` enforce this;
-  don't weaken them.
-- **UI kit**: build pages from the primitives in `src/components/ui/`
-  (Button, Tabs, Badge, Card, …) and the semantic tokens in
-  `src/styles/global.css` — not raw slate/white utility classes — so both
-  light and dark themes keep working.
-- **Migrations are append-only**: never edit a shipped migration; add a new
-  numbered one and register it in `src-tauri/src/db/mod.rs`.
-
-## Commit style
-
-Short, imperative, conventional-ish subjects: `feat(studio): …`,
-`fix(composer): …`, `docs: …`. One logical change per commit.
-
-## Reporting issues
-
-Use the issue templates. For security concerns, see
-[SECURITY.md](SECURITY.md) — please don't open public issues for
-vulnerabilities.
+Include the platform, app version, steps to reproduce, expected and actual behavior, and whether the issue happens without an AI provider. Remove personal resume content, API keys, and private job details from logs or screenshots before posting them publicly.

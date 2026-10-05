@@ -4,6 +4,40 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.0.0] — 2026-10-05
+
+Kairo 5 reshapes the desktop workflow around a reviewed career history, a
+distinct skill library, role workspaces, and an easier to read PDF editor.
+AI writing remains optional and requires the user to accept each suggestion.
+
+### Added
+- A dedicated Skills screen for canonical skills and aliases, separate from
+  choosing which skills appear on a particular resume.
+- A prominent AI writing studio inside the job's Resume Studio. Suggestions
+  appear beside the resume preview and are applied only after acceptance.
+- Source passages from resume import are stored with their records as review
+  context. Matching explains clear, partial, and missing support for job
+  requirements.
+- Job posting deduplication: reopening the same posting returns its existing
+  workspace instead of adding another copy.
+
+### Changed
+- Rebuilt navigation, dashboard, workspaces, onboarding, My Story, Skills,
+  Applications, and Settings around clearer next actions and Kairo branding.
+- Resume Studio gives the PDF more space and moves files and versions into an
+  optional panel. Skills relevant to the role appear first in its picker.
+- Import, matching, composition, and PDF export continue to work without an
+  AI provider. The README now explains those paths and the limits of automated
+  claim checks.
+
+### Fixed
+- AI wording that fails claim validation cannot be accepted or silently
+  overlaid onto an exported resume. Accepting a new rewrite replaces the
+  previous accepted rewrite for that bullet.
+- PDF and version operations check draft revisions and artifact integrity so
+  stale output is not presented as current.
+- The job workspace no longer loops on an uncached empty selection snapshot.
+
 ## [4.2.0] — 2026-09-27
 
 The "make it great" release: first-run friction removed, PDF engine bundled,
