@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, FileUp, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, FileUp, PencilLine, ShieldCheck } from "lucide-react";
+import { BrandMark } from "../../components/BrandMark";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Skeleton } from "../../components/ui/Feedback";
@@ -80,6 +81,10 @@ export default function OnboardingPage() {
   // Review decisions survive leaving: restored into ReviewGroups on return.
   const [review, setReview] = useState<unknown>(null);
   const [restored, setRestored] = useState(false);
+  const snapshotRef = useRef<PersistedOnboarding>({
+    step: "welcome", parsed: null, jobId: null, review: null,
+  });
+  const writeQueueRef = useRef<Promise<unknown>>(Promise.resolve());
 
   // Leave-and-resume: the reached step and the reviewed draft are the user's
   // work — persist them (a broken snapshot just restarts the journey).
@@ -90,6 +95,7 @@ export default function OnboardingPage() {
         if (raw) {
           const saved = JSON.parse(raw) as PersistedOnboarding;
           if (saved && RESUMABLE_STEPS.includes(saved.step)) {
+            snapshotRef.current = saved;
             setStep(saved.step);
             setParsed(saved.parsed ?? null);
             setJobId(saved.jobId ?? null);
@@ -104,18 +110,13 @@ export default function OnboardingPage() {
   }, []);
 
   const persist = (patch: Partial<PersistedOnboarding>) => {
-    const next: PersistedOnboarding = {
-      step,
-      parsed,
-      jobId,
-      review,
-      ...patch,
-    };
-    try {
-      void Promise.resolve(ipc.setOnboardingState(JSON.stringify(next))).catch(() => {});
-    } catch {
-      // Persistence is best-effort — never break the journey on it.
-    }
+    const next = { ...snapshotRef.current, ...patch };
+    snapshotRef.current = next;
+    // Serialize writes so a slow earlier response cannot overwrite a later edit.
+    writeQueueRef.current = writeQueueRef.current
+      .catch(() => {})
+      .then(() => ipc.setOnboardingState(JSON.stringify(next)))
+      .catch(() => {});
   };
 
   const go = (s: Step) => {
@@ -165,11 +166,12 @@ export default function OnboardingPage() {
         })}
       </ol>
 
-      {step === "welcome" ? <Welcome onResume={() => go("import")} onManual={() => go("role")} /> : null}
+      {step === "welcome" ? <Welcome onResume={() => go("import")} onManual={() => go("path")} /> : null}
       {step === "import" ? (
         <ImportStep
           onParsed={(result) => {
             setParsed(result);
+            persist({ parsed: result });
             go("review");
           }}
         />
@@ -178,7 +180,10 @@ export default function OnboardingPage() {
         <ReviewStep
           parsed={parsed}
           initialReview={review}
-          onReviewChange={setReview}
+          onReviewChange={(next) => {
+            setReview(next);
+            persist({ review: next });
+          }}
           onDone={() => go("path")}
           onSkip={() => go("path")}
         />
@@ -212,7 +217,7 @@ export default function OnboardingPage() {
             })();
           }}
           onJob={() => go("role")}
-          onBack={() => go("review")}
+          onBack={() => go(parsed ? "review" : "welcome")}
         />
       ) : null}
       {step === "role" ? (
@@ -231,7 +236,9 @@ export default function OnboardingPage() {
             if (jobId !== null) navigate(`/jobs/${jobId}/resume`);
             else navigate("/jobs");
           }}
-          onComplete={() => void ipc.clearOnboardingState().catch(() => {})}
+          onComplete={() => {
+            void writeQueueRef.current.catch(() => {}).then(() => ipc.clearOnboardingState());
+          }}
         />
       ) : null}
 
@@ -253,25 +260,30 @@ export default function OnboardingPage() {
 
 function Welcome({ onResume, onManual }: { onResume: () => void; onManual: () => void }) {
   return (
-    <Card className="p-8 text-center">
-      <Sparkles className="mx-auto size-8 text-kairo-violet" />
-      <h1 className="mt-3 text-xl font-semibold tracking-tight text-ink">
-        Turn your existing resume into your first application
-      </h1>
-      <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-muted">
-        Bring the resume you already have — Kairo pulls out your contact details, work, projects,
-        education and skills for you to review. Then paste one job description and get a relevant
-        first draft with a real PDF. Everything stays editable; nothing is trusted automatically.
-      </p>
-      <div className="mt-6 flex flex-col items-center gap-2">
-        <Button className="w-full max-w-xs justify-center" onClick={onResume}>
-          <FileUp className="size-4" /> Bring an existing resume
-        </Button>
-        <Button variant="ghost" className="text-xs" onClick={onManual}>
-          Start manually instead
-        </Button>
+    <div className="space-y-6">
+      <div className="relative overflow-hidden rounded-3xl bg-[#0B1020] p-8 text-white sm:p-10">
+        <div aria-hidden className="absolute -right-20 -top-24 size-72 rounded-full bg-kairo-blue/25 blur-3xl" />
+        <div className="relative flex items-center gap-4"><BrandMark size={58} surface="dark" /><span className="text-sm font-semibold tracking-[0.16em] uppercase text-kairo-sky">Kairo</span></div>
+        <h1 className="relative mt-7 max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl">Build a resume you can stand behind.</h1>
+        <p className="relative mt-3 max-w-xl text-base leading-relaxed text-slate-300">
+          Choose the real experience that matters for a role, shape the wording yourself or with AI, and review the exact PDF before you send it.
+        </p>
       </div>
-    </Card>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <button type="button" aria-label="Bring an existing resume" onClick={onResume} className="group rounded-2xl border border-kairo-blue/30 bg-card p-6 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-kairo-blue hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kairo-blue">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-kairo-blue/10 text-kairo-blue"><FileUp className="size-5" /></span>
+          <span className="mt-5 block text-lg font-semibold text-ink">I have a resume</span>
+          <span className="mt-2 block text-sm leading-relaxed text-muted">Import it, correct the extracted facts, then make your first role-specific PDF.</span>
+          <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-kairo-blue">Bring my resume <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" /></span>
+        </button>
+        <button type="button" aria-label="Start manually" onClick={onManual} className="group rounded-2xl border border-line bg-card p-6 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-kairo-blue/60 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kairo-blue">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-kairo-violet/10 text-kairo-violet"><PencilLine className="size-5" /></span>
+          <span className="mt-5 block text-lg font-semibold text-ink">I’m starting fresh</span>
+          <span className="mt-2 block text-sm leading-relaxed text-muted">Add a role or make a general resume. You can build your experience library as you go.</span>
+          <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-kairo-blue">Start from scratch <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" /></span>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -507,11 +519,10 @@ function ReviewGroups({
   const [verifySkills, setVerifySkills] = useState(saved?.verify?.skills ?? false);
   const [saving, setSaving] = useState(false);
 
-  // Persist review decisions as they change (debounced — every keystroke
-  // must not hit the backend).
+  // Capture every edit before navigation can unmount this step. The parent
+  // serializes writes, preserving the latest snapshot even on a quick exit.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      onReviewChange({
+    onReviewChange({
         contact: serializeEditable(contact),
         experiences: experiences.map(serializeEditable),
         projects: projects.map(serializeEditable),
@@ -527,10 +538,10 @@ function ReviewGroups({
           achievements: verifyAchievements,
           skills: verifySkills,
         },
-      });
-    }, 400);
-    return () => clearTimeout(timer);
-  });
+    });
+  }, [contact, experiences, projects, education, achievements, removedSkills,
+    skillsDismissed, verifyContact, verifyWork, verifyProjects, verifyEducation,
+    verifyAchievements, verifySkills]);
 
   const hasContact = Boolean(
     contact.fullName || contact.email || contact.phone || contact.headline || contact.summary,
@@ -563,6 +574,7 @@ function ReviewGroups({
 
   const save = async () => {
     setSaving(true);
+    let committed = false;
     try {
       // Skills referenced by records stay in the batch even when the user
       // pruned the top-level list — a record's own chips decide its links.
@@ -645,6 +657,7 @@ function ReviewGroups({
           })),
         skills: skillList,
       });
+      committed = true;
 
       // Verify the exact records the user confirmed, by their real ids.
       const verifications: { kind: string; id: number }[] = [];
@@ -660,13 +673,22 @@ function ReviewGroups({
       if (verifyAchievements) {
         for (const id of result.achievementIds) verifications.push({ kind: "achievement", id });
       }
+      let verificationFailed = false;
       for (const v of verifications) {
-        await ipc.markVerified(v.kind, v.id);
+        try {
+          await ipc.markVerified(v.kind, v.id);
+        } catch {
+          verificationFailed = true;
+        }
       }
 
       // The batch wrote rows behind the store's back — reload so the Vault
       // and the rest of onboarding see what actually saved.
-      await reloadVault();
+      try {
+        await reloadVault();
+      } catch {
+        toast.error("Your import was saved, but My Story could not refresh. Reopen it to see your records.");
+      }
 
       const created =
         (result.profileSaved ? 1 : 0) +
@@ -681,10 +703,14 @@ function ReviewGroups({
       toast.ok(
         `${created} record${created === 1 ? "" : "s"} saved to your Vault — each shows where it came from.`,
       );
+      if (verificationFailed) {
+        toast.error("Some records were saved but could not be marked verified. Check them in My Story.");
+      }
       onDone({ createdCount: created });
     } catch (e) {
-      // Nothing was saved — the whole batch rolled back. Retrying is safe.
-      toast.error(String(e));
+      toast.error(committed
+        ? `Your import was saved, but the next step failed: ${String(e)}. Do not import it again; continue from My Story.`
+        : `Import failed and was rolled back: ${String(e)}`);
     } finally {
       setSaving(false);
     }
@@ -1129,8 +1155,7 @@ function PathStep({
       <div>
         <h2 className="text-sm font-semibold text-ink">What is this resume for?</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          Both paths end at a real PDF you can send. You can always add the other kind later —
-          every workspace edits the same Vault.
+          Choose a role-specific or general workspace. If you are starting from scratch, add your experience in My Story before exporting a PDF.
         </p>
       </div>
       <button
@@ -1156,7 +1181,7 @@ function PathStep({
         </p>
       </button>
       <button type="button" className="w-fit text-xs text-muted hover:text-ink" onClick={onBack}>
-        Back to the review
+        Back
       </button>
     </Card>
   );
@@ -1362,6 +1387,7 @@ function DraftStep({
   /** Fires when the first PDF exists — the journey is done. */
   onComplete: () => void;
 }) {
+  const navigate = useNavigate();
   const [plan, setPlan] = useState<ResumePlan | null>(null);
   const [report, setReport] = useState<MatchReport | null>(null);
   const [busy, setBusy] = useState(true);
@@ -1401,7 +1427,8 @@ function DraftStep({
         }
         if (cancelled) return;
         setReport(report);
-        setPlan(await ipc.runComposer(jobId));
+        const existing = await ipc.getPlan(jobId);
+        setPlan(existing?.plan ?? await ipc.runComposer(jobId));
       } catch (e) {
         if (!cancelled) setError(String(e));
       } finally {
@@ -1552,10 +1579,10 @@ function DraftStep({
 
       {!plan || items.length === 0 ? (
         <Card className="p-6 text-center text-sm text-muted">
-          There was nothing to select yet — add records in the Vault and compose again from the
-          Studio. You can also write bullets manually there.
-          <div className="mt-3">
-            <Button onClick={onContinue}>Continue</Button>
+          There is no experience to put on this resume yet. Add a project or role in My Story, then come back to compose a useful draft.
+          <div className="mt-3 flex justify-center gap-2">
+            <Button onClick={() => navigate("/story")}>Add my experience</Button>
+            <Button variant="secondary" onClick={onContinue}>Open Studio</Button>
           </div>
         </Card>
       ) : (

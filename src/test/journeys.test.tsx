@@ -36,6 +36,9 @@ beforeEach(() => {
   (globalThis as Record<string, unknown>).__ipcMocks = mocks;
   for (const key of Object.keys(mocks)) delete mocks[key];
   resetPlanSaves();
+  mocks.getOnboardingState = vi.fn().mockResolvedValue(null);
+  mocks.setOnboardingState = vi.fn().mockResolvedValue(undefined);
+  mocks.clearOnboardingState = vi.fn().mockResolvedValue(undefined);
   useJobsStore.setState({
     createWorkspace: vi.fn(async (job) => ({ job, requirements: [] })),
   });
@@ -218,6 +221,7 @@ function studioMocks(artifact: PdfArtifact | null) {
     reviewedHash: artifact?.pdfHash ?? null,
   };
   mocks.listJobs = vi.fn().mockResolvedValue([JOB, JOB2]);
+  mocks.listRequirements = vi.fn().mockResolvedValue([]);
   mocks.getPlan = vi.fn().mockResolvedValue({ config: PLAN.config, plan: PLAN });
   mocks.tailorList = vi.fn().mockResolvedValue([]);
   mocks.getPdfArtifact = vi.fn().mockImplementation(async () => pdfModel.artifact);
@@ -368,6 +372,7 @@ describe("journey · exporting a PDF", () => {
     expect(screen.getAllByText(/1 page/i).length).toBeGreaterThan(0);
 
     // Version 1 is locked behind the final review.
+    fireEvent.click(screen.getByRole("button", { name: /files & versions/i }));
     const saveVersion = screen.getByRole("button", { name: /save version/i }) as HTMLButtonElement;
     expect(saveVersion.disabled).toBe(true);
     // The backend review gate: mark THIS pdf reviewed, then version 1 unlocks.
@@ -386,6 +391,7 @@ describe("journey · exporting a PDF", () => {
     await renderStudio();
     expect(screen.getByTestId("studio-status").textContent).toMatch(/current pdf/i);
 
+    fireEvent.click(screen.getByRole("button", { name: /files & versions/i }));
     fireEvent.click(screen.getAllByRole("button", { name: /export pdf/i })[0]);
     await waitFor(() =>
       expect(screen.getByTestId("studio-status").textContent).toMatch(/export failed/i),

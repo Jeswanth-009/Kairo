@@ -17,7 +17,8 @@ const DEFAULT_CONFIG: ComposerConfig = {
 
 function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: TailorSuggestion[] }) {
   const acceptedFor = (bulletId: number) =>
-    suggestions.find((s) => s.bulletId === bulletId && s.status === "accepted");
+    suggestions.find((s) => s.bulletId === bulletId && s.status === "accepted" &&
+      (s.validation.ok || s.model === "manual") && s.suggestedText.trim().length > 0);
   return (
     <li className="rounded-lg border border-line p-3.5">
       <div className="flex items-start justify-between gap-3">
@@ -52,9 +53,9 @@ function PlanItemCard({ item, suggestions }: { item: PlanItem; suggestions: Tail
                     <>
                       <span
                         className="mr-1.5 rounded-full bg-ok-soft px-1.5 py-0.5 text-[10px] font-medium text-ok"
-                        title="Accepted AI wording — resume point unchanged"
+                        title={accepted.model === "manual" ? "Edited in Studio" : "Accepted AI wording"}
                       >
-                        tailored
+                        {accepted.model === "manual" ? "edited" : "tailored"}
                       </span>
                       {accepted.suggestedText}
                     </>

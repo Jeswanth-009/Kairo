@@ -73,7 +73,7 @@ export const useJobsStore = create<JobsStore>()((set, get) => ({
   createWorkspace: async (job, requirements) => {
     const created = await ipc.createJobWithRequirements(job, requirements);
     set((state) => ({
-      jobs: [created.job, ...state.jobs],
+      jobs: upsert(state.jobs, created.job),
       reqCache: { ...state.reqCache, [created.job.id]: created.requirements },
     }));
     return created;

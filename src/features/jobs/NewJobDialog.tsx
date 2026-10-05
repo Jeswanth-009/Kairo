@@ -85,6 +85,7 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   const create = async () => {
+    if (busy) return;
     if (requirements.length === 0) {
       setError("Add or extract at least one requirement before saving.");
       return;
@@ -102,8 +103,11 @@ export function NewJobDialog({ open, onClose }: { open: boolean; onClose: () => 
         domain: domain.trim(),
         requirementCount: 0,
       };
+      const existingIds = new Set(useJobsStore.getState().jobs.map((item) => item.id));
       const created = await createWorkspace(job, requirements);
-      toast.ok(`Workspace for "${created.job.roleTitle || "Untitled role"}" created`);
+      toast.ok(existingIds.has(created.job.id)
+        ? `Opened the existing workspace for "${created.job.roleTitle || "Untitled role"}"`
+        : `Workspace for "${created.job.roleTitle || "Untitled role"}" created`);
       close();
       navigate(`/jobs/${created.job.id}`);
     } catch (e) {

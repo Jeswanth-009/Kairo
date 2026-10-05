@@ -116,7 +116,7 @@ describe("OnboardingPage — guided first run", () => {
     // The journey state restores before anything renders.
     await waitFor(() =>
       expect(
-        screen.getByText("Turn your existing resume into your first application"),
+        screen.getByText("Build a resume you can stand behind."),
       ).toBeTruthy(),
     );
     fireEvent.click(screen.getByRole("button", { name: /bring an existing resume/i }));
@@ -173,9 +173,9 @@ describe("OnboardingPage — guided first run", () => {
         <OnboardingPage />
       </MemoryRouter>,
     );
-    const manual = await screen.findByRole("button", { name: /start manually instead/i });
+    const manual = await screen.findByRole("button", { name: /start manually/i });
     expect(manual).toBeTruthy();
     fireEvent.click(manual);
-    expect(screen.getByText("Add a role")).toBeTruthy();
+    expect(screen.getByText("General resume")).toBeTruthy();
   });
 });

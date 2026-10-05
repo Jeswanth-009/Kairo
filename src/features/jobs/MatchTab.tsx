@@ -12,7 +12,8 @@ import type {
   RequirementResult,
 } from "../../lib/types";
 import { useUiStore } from "../../stores/uiStore";
-import { enqueuePlanSave } from "../../lib/planAutosave";
+import { useJobsStore } from "../../stores/jobsStore";
+import { flushPlanSave } from "../../lib/planAutosave";
 import { toast } from "../../stores/toastStore";
 const COVERAGE_META: Record<Coverage, { label: string; dot: string; badge: string; hint: string }> = {
   covered: {
@@ -41,23 +42,6 @@ const KIND_LABELS: Record<string, string> = {
   responsibility: "Responsibility",
 };
 
-function ScoreRow({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-36 shrink-0 text-xs text-muted">{label}</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-accent-soft">
-        <div
-          className="h-full rounded-full bg-kairo-blue transition-all duration-300"
-          style={{ width: `${Math.round(value * 100)}%` }}
-        />
-      </div>
-      <span className="w-9 text-right text-xs font-medium text-ink">
-        {Math.round(value * 100)}%
-      </span>
-    </div>
-  );
-}
-
 /** The Evidence stage: each requirement beside its strongest supporting
  *  records, with the four decisions that make the resume defensible —
  *  Use it, Dismiss it, Edit the fact, or find another example. */
@@ -81,6 +65,11 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
         setReport(r);
         setStale(s);
         setSelections(sel);
+        useJobsStore.setState((state) => ({
+          matchCache: { ...state.matchCache, [jobId]: r },
+          matchStaleCache: { ...state.matchStaleCache, [jobId]: s },
+          selectionCache: { ...state.selectionCache, [jobId]: sel },
+        }));
       } catch (e) {
         toast.error(String(e));
       } finally {
@@ -95,6 +84,10 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
       const report = await ipc.runJobMatch(jobId);
       setReport(report);
       setStale(false);
+      useJobsStore.setState((state) => ({
+        matchCache: { ...state.matchCache, [jobId]: report },
+        matchStaleCache: { ...state.matchStaleCache, [jobId]: false },
+      }));
     } catch (e) {
       toast.error(String(e));
     } finally {
@@ -120,12 +113,16 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
   ) => {
     const existing = decisionFor(result.requirementId, entityType, entityId);
     try {
+      // The backend updates the decision and draft in one DB transaction.
+      // Finish any Studio autosave first so it cannot overwrite that choice.
+      const flush = await flushPlanSave(jobId);
+      if (!flush.ok) throw new Error(flush.error ?? "Save the draft before changing evidence.");
       if (existing && existing.decision === decision) {
-        // Clicking the active decision clears it (and the plan follows back
-        // to the composer's choice — inclusion).
+        // Clearing the choice leaves any direct Studio edits intact.
         await ipc.deleteEvidenceSelection(result.requirementId, entityType, entityId);
-        setSelections((prev) => prev.filter((s) => s.id !== existing.id));
-        await syncPlan(entityType, entityId, true);
+        const next = selections.filter((s) => s.id !== existing.id);
+        setSelections(next);
+        useJobsStore.setState((state) => ({ selectionCache: { ...state.selectionCache, [jobId]: next } }));
         return;
       }
       const saved = await ipc.setEvidenceSelection(
@@ -135,35 +132,11 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
         entityId,
         decision,
       );
-      setSelections((prev) => [
-        ...prev.filter((s) => s.id !== (existing?.id ?? -1)),
-        saved,
-      ]);
-      await syncPlan(entityType, entityId, decision === "use");
+      const next = [...selections.filter((s) => s.id !== (existing?.id ?? -1)), saved];
+      setSelections(next);
+      useJobsStore.setState((state) => ({ selectionCache: { ...state.selectionCache, [jobId]: next } }));
     } catch (e) {
       toast.error(String(e));
-    }
-  };
-
-  const syncPlan = async (entityType: string, entityId: number, include: boolean) => {
-    try {
-      const stored = await ipc.getPlan(jobId);
-      if (!stored?.plan) return;
-      const plan = structuredClone(stored.plan);
-      let touched = false;
-      const flip = (list: typeof plan.experience) =>
-        list.map((i) => {
-          if (i.entityType === entityType && i.id === entityId && i.excluded === !include) {
-            touched = true;
-            return { ...i, excluded: !include };
-          }
-          return i;
-        });
-      plan.experience = flip(plan.experience);
-      plan.projects = flip(plan.projects);
-      if (touched) enqueuePlanSave(jobId, plan);
-    } catch {
-      // No plan yet (never composed) — the decision still persists.
     }
   };
 
@@ -191,9 +164,7 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
       <Card className="p-8 text-center">
         <h3 className="text-base font-semibold text-ink">No match computed yet</h3>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
-          The matcher compares each reviewed requirement against your Vault evidence — skills with
-          confidence, resume points, dates — and explains every verdict. Deterministic: the same
-          Vault always produces the same result.
+          Kairo compares each reviewed requirement with the experience and proof in My Story, then shows why each item is covered or missing.
         </p>
         <div className="mt-5">
           <Button onClick={() => void run()} disabled={running}>
@@ -265,21 +236,9 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
         </p>
 
         <details className="mt-3 rounded-lg border border-line bg-accent-soft/60 px-3 py-2">
-          <summary className="cursor-pointer select-none text-xs font-medium text-muted hover:text-ink">
-            Why this ranking (weights and component scores)
-          </summary>
-          <div className="mt-2.5 space-y-2">
-            <ScoreRow label="Required skills" value={report.components.requiredSkills} />
-            <ScoreRow label="Preferred skills" value={report.components.preferredSkills} />
-            <ScoreRow label="Responsibilities" value={report.components.responsibilities} />
-            <ScoreRow label="Domain" value={report.components.domain} />
-            <ScoreRow label="Recency" value={report.components.recency} />
-            <ScoreRow label="Proof strength" value={report.components.evidenceStrength} />
-          </div>
-          <p className="mt-2 text-xs text-muted">
-            Weighted overall relevance {report.overallScore.toFixed(2)}. Weights: required 35% ·
-            preferred 20% · responsibilities 15% · domain 10% · recency 10% · evidence strength
-            10% · engine v{report.matchingVersion}.
+          <summary className="cursor-pointer select-none text-xs font-medium text-muted hover:text-ink">How Kairo finds support</summary>
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            Local matching compares requirement wording with your saved skills, aliases, record text, recency, and attached proof. It ranks possible support so you can review it; the labels are a starting point, not a hiring prediction or factual verification. Matching engine v{report.matchingVersion}.
           </p>
         </details>
       </Card>
@@ -424,30 +383,13 @@ export function MatchTab({ jobId, domain }: { jobId: number; domain: string }) {
             Ranked by requirement coverage, skill confidence and recency.
           </p>
           <ul className="mt-4 space-y-3">
-            {report.entityRanking.map((entity) => (
-              <li key={`${entity.entityType}-${entity.id}`}>
+            {report.entityRanking.map((entity, index) => (
+              <li key={`${entity.entityType}-${entity.id}`} className="rounded-xl border border-line bg-card-muted/50 p-3">
                 <div className="flex items-center gap-2">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-kairo-blue/10 text-xs font-semibold text-kairo-blue">{index + 1}</span>
                   <span className="text-sm font-medium text-ink">{entity.title}</span>
-                  <span className="text-xs text-muted">
-                    relevance {entity.relevance.toFixed(2)}
-                  </span>
                 </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-accent-soft">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-kairo-blue to-kairo-violet"
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        Math.round(
-                          (entity.relevance /
-                            (report.entityRanking[0].relevance || 1)) *
-                            100,
-                        ),
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 pl-8">
                   {entity.reasons.slice(0, 4).map((reason, i) => (
                     <li key={i} className="text-xs text-muted">
                       {reason}

@@ -12,6 +12,7 @@ import { ipc } from "../../lib/ipc";
 import { scrollMainToTop } from "../../lib/dom";
 import type {
   Job,
+  EvidenceSelection,
   JobRequirement,
   JobRequirementKind,
   MatchReport,
@@ -28,6 +29,7 @@ const KIND_LABELS: Record<JobRequirementKind, string> = {
 };
 
 const KIND_ORDER: JobRequirementKind[] = ["required_skill", "preferred_skill", "responsibility"];
+const EMPTY_SELECTIONS: EvidenceSelection[] = [];
 
 type WorkspaceTab = "role" | "evidence" | "resume" | "review" | "applied";
 
@@ -53,7 +55,7 @@ export default function JobWorkspacePage() {
   // truth, never "the user visited the tab".
   const report = useJobsStore((s) => s.matchCache[id] ?? null);
   const matchStale = useJobsStore((s) => s.matchStaleCache[id] ?? false);
-  const selections = useJobsStore((s) => s.selectionCache[id] ?? []);
+  const selections = useJobsStore((s) => s.selectionCache[id] ?? EMPTY_SELECTIONS);
   const pdfStatus = useJobsStore((s) => s.pdfStatusCache[id] ?? null);
   const applications = useJobsStore((s) => s.applications ?? null);
 
@@ -143,9 +145,11 @@ export default function JobWorkspacePage() {
   // completes it. The action text is the specific next step for the stage.
   const confirmedRequirements = requirements.filter((r) => r.userConfirmed);
   const nonMissing = (report?.results ?? []).filter((r) => r.coverage !== "missing");
-  const usedForRequirement = (requirementId: number) =>
-    selections.some((s) => s.requirementId === requirementId && s.decision === "use");
-  const reviewed = pdfStatus?.pdfHash != null && pdfStatus.reviewedPdfHash === pdfStatus.pdfHash;
+  const missingCount = (report?.results ?? []).filter((r) => r.coverage === "missing").length;
+  const decidedForRequirement = (requirementId: number) =>
+    selections.some((s) => s.requirementId === requirementId);
+  const undecidedCount = nonMissing.filter((r) => !decidedForRequirement(r.requirementId)).length;
+  const reviewed = pdfStatus?.state === "current" && pdfStatus.pdfHash != null && pdfStatus.reviewedPdfHash === pdfStatus.pdfHash;
   const linkedApplications = (applications ?? []).filter((a) => a.jobId === job.id);
 
   const stageStatus: Record<WorkspaceTab, { status: StepStatus; action: string }> = {
@@ -163,12 +167,14 @@ export default function JobWorkspacePage() {
       ? { status: "not-started", action: "Run the match to see your proof" }
       : matchStale
         ? { status: "needs-attention", action: "Requirements or facts changed — re-run the match" }
-        : nonMissing.length > 0 && nonMissing.every((r) => usedForRequirement(r.requirementId))
-          ? { status: "complete", action: "" }
-          : {
+        : undecidedCount > 0
+          ? {
               status: "in-progress",
-              action: `Decide on ${nonMissing.filter((r) => !usedForRequirement(r.requirementId)).length} requirement(s) with supporting records`,
-            },
+              action: `Decide on ${undecidedCount} requirement(s) with supporting records`,
+            }
+          : missingCount > 0
+            ? { status: "needs-attention", action: `${missingCount} requirement(s) still have no supporting record; add proof or proceed with an honest gap` }
+            : { status: "complete", action: "" },
     resume:
       pdfStatus == null || pdfStatus.state === "none"
         ? { status: "not-started", action: "Compose the resume and export a PDF" }
@@ -197,30 +203,29 @@ export default function JobWorkspacePage() {
     : TAB_META.find((t) => t.key === tab)?.hint;
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold text-ink">
-            {job.roleTitle || "Untitled role"}
-            {job.company ? <span className="text-muted"> · {job.company}</span> : null}
-          </h2>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {isGeneral ? <Badge tone="violet">General resume</Badge> : null}
-            {job.seniority ? <Badge tone="violet">{job.seniority}</Badge> : null}
-            {job.domain ? <Badge tone="sky">{job.domain}</Badge> : null}
-            {!isGeneral ? (
-              <Badge tone={job.requirementCount > 0 ? "green" : "amber"}>
-                {job.requirementCount} requirements reviewed
-              </Badge>
-            ) : null}
+    <div className="mx-auto max-w-6xl space-y-6 p-6 lg:p-8">
+      <header className="relative overflow-hidden rounded-3xl bg-[#0B1020] p-7 text-white shadow-float sm:p-9">
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-kairo-blue/25 blur-3xl" />
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kairo-sky">{isGeneral ? "General resume" : "Role workspace"}</p>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{job.roleTitle || "Untitled role"}</h1>
+            {job.company ? <p className="mt-1 text-base text-slate-300">{job.company}</p> : null}
+            <div className="mt-5 flex flex-wrap gap-2">
+              {job.seniority ? <Badge tone="violet">{job.seniority}</Badge> : null}
+              {job.domain ? <Badge tone="sky">{job.domain}</Badge> : null}
+              {!isGeneral ? <span className="rounded-full border border-white/20 px-3 py-1 text-xs text-slate-200">{confirmedRequirements.length} of {requirements.length} requirements confirmed</span> : null}
+              {pdfStatus?.state === "current" ? <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">PDF ready</span> : null}
+            </div>
           </div>
+          <Button variant="secondary" size="sm" onClick={() => navigate("/jobs")}>All workspaces</Button>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => navigate("/jobs")}>
-          All jobs
-        </Button>
-      </div>
+        <p className="relative mt-7 border-t border-white/10 pt-5 text-sm text-slate-300">
+          {activeStage.action ? `Next in ${TAB_META.find((t) => t.key === tab)?.label}: ${activeStage.action}` : "Your progress is saved. Continue with any stage below."}
+        </p>
+      </header>
 
-      <div className="mb-2">
+      <div>
         <StepNav
           steps={tabs.map((t) => ({
             key: t.key,
@@ -338,9 +343,9 @@ function OverviewTab({
       {!isGeneral ? (
         <>
           <Card className="p-6">
-            <CardTitle>Requirement model</CardTitle>
+            <CardTitle>What this role asks for</CardTitle>
             <p className="mt-2 text-xs text-muted">
-              Matching runs against this reviewed set — correct anything before Phase 5.
+              Review these requirements before comparing them with your experience.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {KIND_ORDER.map((kind) => (
@@ -440,8 +445,7 @@ function RequirementsTab({ job }: { job: Job }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted">
-          Every requirement is user-confirmed. Add, reword, re-classify or remove lines — matching
-          (Phase 5) runs on exactly this list.
+          Add, reword, reclassify, or remove requirements. Kairo compares your experience with this exact list.
         </p>
         <Button size="sm" variant="secondary" onClick={() => void reExtract()} disabled={refreshing}>
           {refreshing ? "Reloading…" : "Reload"}

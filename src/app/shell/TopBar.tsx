@@ -1,4 +1,5 @@
 import { Moon, Search, Sun } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useAppStore } from "../../stores/appStore";
 import { useThemeStore } from "../../stores/themeStore";
 import { cn } from "../../lib/cn";
@@ -34,8 +35,8 @@ export function TopBar({
   const title = crumbs?.length ? crumbs[crumbs.length - 1].label : "";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-card/80 px-8 backdrop-blur-md">
-      <nav aria-label="Location" className="flex min-w-0 items-center gap-1.5 text-sm">
+    <header className="flex h-[72px] shrink-0 items-center justify-between gap-4 border-b border-line bg-card/80 px-6 backdrop-blur-xl lg:px-10">
+      <nav aria-label="Location" className="flex min-w-0 items-center gap-2 text-sm">
         {crumbs && crumbs.length > 0 ? (
           crumbs.map((crumb, i) => (
             <span key={`${crumb.label}-${i}`} className="flex min-w-0 items-center gap-1.5">
@@ -45,11 +46,11 @@ export function TopBar({
                 </span>
               ) : null}
               {i === crumbs.length - 1 ? (
-                <span className="truncate font-semibold text-ink">{crumb.label}</span>
+                <span className="truncate text-lg font-semibold tracking-tight text-ink">{crumb.label}</span>
               ) : crumb.to ? (
-                <a href={crumb.to} className="truncate text-muted hover:text-ink">
+                <Link to={crumb.to} className="truncate text-muted hover:text-ink">
                   {crumb.label}
-                </a>
+                </Link>
               ) : (
                 <span className="truncate text-muted">{crumb.label}</span>
               )}
@@ -59,7 +60,7 @@ export function TopBar({
           <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">{title}</h1>
         ) : null}
       </nav>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         {saveState ? (
           <span
             role="status"
@@ -76,7 +77,7 @@ export function TopBar({
             type="button"
             onClick={primaryAction.onClick}
             disabled={primaryAction.disabled}
-            className="flex h-8 items-center rounded-lg bg-kairo-blue px-3 text-xs font-medium text-white shadow-sm transition-colors hover:bg-kairo-blue/90 disabled:opacity-50"
+            className="flex h-10 items-center rounded-xl bg-kairo-blue px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-kairo-blue/90 disabled:opacity-50"
           >
             {primaryAction.label}
           </button>
@@ -87,7 +88,7 @@ export function TopBar({
             onClick={onSearchClick}
             title="Search everything (Ctrl+K)"
             aria-label="Search everything (Ctrl+K)"
-            className="flex items-center gap-2 rounded-lg border border-line bg-card px-2.5 py-1.5 text-xs text-muted shadow-sm transition-all duration-150 hover:border-line-strong hover:bg-accent-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kairo-blue/60"
+            className="flex h-10 items-center gap-3 rounded-xl border border-line bg-surface px-3 text-xs text-muted transition-all duration-150 hover:border-line-strong hover:bg-accent-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kairo-blue/60"
           >
             <Search className="size-3.5" />
             <span className="hidden md:inline">Search</span>
@@ -104,13 +105,12 @@ export function TopBar({
             Database error — check Settings
           </span>
         ) : null}
-        <span className="hidden text-xs text-muted sm:inline">Local-first · Offline</span>
         <button
           type="button"
           onClick={toggle}
           aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
           title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted shadow-sm transition-all duration-150 border border-line bg-card hover:text-ink hover:border-line-strong hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kairo-blue/60"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface text-muted transition-all duration-150 hover:border-line-strong hover:bg-accent-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kairo-blue/60"
         >
           {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </button>

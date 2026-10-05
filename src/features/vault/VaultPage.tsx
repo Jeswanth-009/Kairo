@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { TrashDialog } from "../../components/ui/TrashDialog";
 import { Input } from "../../components/ui/inputs";
-import { PageHeader } from "../../components/ui/PageHeader";
-import { Archive, Sparkles } from "lucide-react";
+import { Archive, ArrowUpRight, Sparkles } from "lucide-react";
 import { Tabs } from "../../components/ui/Tabs";
 import { Skeleton } from "../../components/ui/Feedback";
 import { useVaultStore } from "../../stores/vaultStore";
@@ -30,10 +30,10 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "education", label: "Education" },
   { key: "certifications", label: "Certifications" },
   { key: "achievements", label: "Achievements" },
-  { key: "skills", label: "Skills" },
 ];
 
 export default function VaultPage() {
+  const navigate = useNavigate();
   const store = useVaultStore();
   const loadError = useVaultStore((s) => s.error);
   const { loaded, loading } = store;
@@ -88,13 +88,16 @@ export default function VaultPage() {
 
   useEffect(() => {
     if (!vaultFocus || !loaded) return;
+    if (vaultFocus.key === "skills") {
+      clearVaultFocus();
+      navigate("/skills");
+      return;
+    }
     const list = records[vaultFocus.key] ?? [];
     const target = list.find((r) => r.id === vaultFocus.id);
     if (target) {
       setTab(vaultFocus.key);
-      if (vaultFocus.key !== "skills") {
-        setDetail({ key: vaultFocus.key, record: target });
-      }
+      setDetail({ key: vaultFocus.key, record: target });
     }
     clearVaultFocus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -180,16 +183,19 @@ export default function VaultPage() {
   const tabLabel = tab === "skills" ? "Skills" : ENTITY_CONFIGS[tab].label;
 
   return (
-    <div className="mx-auto max-w-6xl p-8">
-      <PageHeader
-        title="Career Vault"
-        description="Your verified history — every record here is the source material the rest of Kairo builds on."
-        actions={
-          <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>
-            Recently deleted
-          </Button>
-        }
-      />
+    <div className="mx-auto max-w-7xl px-6 py-7 lg:px-10 lg:py-9">
+      <section className="relative mb-7 overflow-hidden rounded-[28px] bg-gradient-to-br from-[#15285B] via-[#112047] to-[#0B1020] px-7 py-8 text-white sm:px-9">
+        <div aria-hidden className="absolute -right-12 -top-28 size-80 rounded-full border border-white/10 bg-kairo-violet/15" />
+        <div className="relative flex flex-wrap items-end justify-between gap-6">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-kairo-sky">Your source of truth</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">My Story</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-300">Keep your experience, projects, and proof accurate here. Every role-specific resume starts with these records.</p>
+          </div>
+          <Button variant="secondary" onClick={() => setImportOpen(true)}>Import a resume <ArrowUpRight className="ml-2 size-4" /></Button>
+        </div>
+      </section>
+      <div className="mb-5 flex justify-end"><Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>Recently deleted</Button></div>
       <TrashDialog open={trashOpen} onClose={() => setTrashOpen(false)} />
       <ProfileCard />
 
@@ -210,8 +216,8 @@ export default function VaultPage() {
       {totalCount === 0 && loaded && !loading ? (
         <EmptyState
           icon={<Archive className="size-6" />}
-          title="Start your Career Vault"
-          description="Add your first project or import an existing resume. Every record you store here becomes verified proof that the rest of Kairo builds on."
+          title="Start your story"
+          description="Add a project or import an existing resume. Review each saved record before you use it in a resume."
         >
           <Button
             onClick={() => {

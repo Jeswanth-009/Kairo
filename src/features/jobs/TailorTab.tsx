@@ -25,9 +25,11 @@ function fmtSeconds(ms: number): string {
 export function TailorTab({
   jobId,
   onComposePlan,
+  onSuggestionsChange,
 }: {
   jobId: number;
   onComposePlan: () => void;
+  onSuggestionsChange?: () => void;
 }) {
   const [suggestions, setSuggestions] = useState<TailorSuggestion[]>([]);
   const [plan, setPlan] = useState<ResumePlan | null>(null);
@@ -42,7 +44,12 @@ export function TailorTab({
     void (async () => {
       try {
         const cfg = await ipc.aiGetConfig();
-        setAiReady(Boolean(cfg.baseUrl.trim() && cfg.model.trim() && cfg.hasApiKey));
+        // Local OpenAI-compatible endpoints commonly run without a key.
+        // Let the provider report an auth error if a custom remote needs one.
+        setAiReady(Boolean(
+          cfg.baseUrl.trim() && cfg.model.trim() &&
+          (cfg.hasApiKey || cfg.baseUrl.trim().replace(/\/$/, "") !== "https://api.openai.com/v1"),
+        ));
       } catch {
         setAiReady(false);
       }
@@ -145,10 +152,7 @@ export function TailorTab({
       <Card className="p-6">
         <CardTitle>Grounded tailoring</CardTitle>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          One AI pass rewrites every planned bullet — each with its target requirement, evidence
-          notes and guardrails as the only inputs. Every rewrite passes the validation pipeline —
-          new technologies, new metrics, forbidden claims and uncited facts are rejected before you
-          ever see them. Nothing is applied without your Accept.
+          Rewrite planned resume points using role requirements and saved source context. Kairo checks suggestions for unsupported technologies, metrics, and claims; rejected wording stays visible for review. Automated checks are imperfect, so verify every accepted sentence yourself. Nothing is applied until you accept it.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button
@@ -343,6 +347,7 @@ export function TailorTab({
                               } else {
                                 setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
                               }
+                              onSuggestionsChange?.();
                             }}
                           />
                         ) : null}

@@ -367,7 +367,7 @@ export default function DashboardPage() {
             }}
           />
           <div className="relative flex items-center gap-4">
-            <BrandMark size={48} />
+            <BrandMark size={48} surface="dark" />
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Welcome to Kairo</h1>
               <p className="mt-1 text-sm text-muted/60">
@@ -421,7 +421,7 @@ export default function DashboardPage() {
       iconClass: "bg-kairo-violet/10 text-violet-600 dark:bg-kairo-violet/15 dark:text-violet-400",
     },
     {
-      to: "/story",
+      to: "/skills",
       value: counts.skills,
       label: "Skills",
       icon: Code2,
@@ -487,19 +487,36 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
-      {/* Quiet identity strip — the brand stays, the glow goes. */}
-      <section className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-line bg-card p-6 shadow-card">
-        <BrandMark size={44} />
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">
-            {brandNew ? "Welcome to Kairo" : "Welcome back"}
-          </h1>
-          <p className="mt-0.5 text-sm text-muted">
-            {brandNew
-              ? "Bring your resume, add a role, and get a reviewed PDF — in one sitting."
-              : `${counts.projects + counts.experiences} records · ${counts.evidenceVerified} verified proof · ${counts.jobs} job workspace${counts.jobs === 1 ? "" : "s"}`}
-          </p>
+    <div className="mx-auto max-w-7xl px-6 py-7 lg:px-10 lg:py-9">
+      <section className="relative mb-8 isolate min-h-[318px] overflow-hidden rounded-[30px] border border-white/10 bg-[#0B1020] text-white shadow-[0_24px_65px_-30px_rgba(9,24,67,0.8)]">
+        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_78%_24%,rgba(49,93,255,0.4),transparent_37%),radial-gradient(circle_at_28%_100%,rgba(139,92,246,0.22),transparent_42%)]" />
+        <div aria-hidden className="absolute -right-24 -top-44 size-[480px] rounded-full border border-white/10" />
+        <div aria-hidden className="absolute -right-2 -top-28 size-[340px] rounded-full border border-white/10" />
+        <div aria-hidden className="absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-kairo-sky/60 to-transparent" />
+        <div className="relative grid min-h-[318px] items-center gap-6 px-7 py-8 md:grid-cols-[minmax(0,1fr)_220px] md:px-10 lg:px-12">
+          <div className="max-w-[680px]">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-kairo-sky">
+              <span className="size-1.5 rounded-full bg-kairo-dawn shadow-[0_0_12px_#F6C177]" /> Your career workspace
+            </div>
+            <h1 className="max-w-[680px] text-[clamp(2.2rem,4vw,3.6rem)] font-semibold leading-[1.08] tracking-[-0.045em]">
+              {brandNew ? "Make your next move count." : "Make your next move with clarity."}
+            </h1>
+            <p className="mt-4 max-w-xl text-[15px] leading-7 text-slate-300">
+              {brandNew
+                ? "Bring your experience. Choose what proves it. Leave with a resume you have checked."
+                : "One place for your real experience, role-specific drafts, and the resumes you actually sent."}
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Button onClick={() => navigate(brandNew ? "/onboarding" : "/jobs")}>{brandNew ? "Create my first resume" : "Open workspaces"} <ArrowUpRight className="ml-2 size-4" /></Button>
+              <button type="button" onClick={() => navigate("/story")} className="inline-flex h-10 items-center rounded-xl border border-white/25 bg-white/[0.07] px-4 text-sm font-medium text-white transition-colors hover:bg-white/[0.14]">Explore my story</button>
+            </div>
+          </div>
+          <div className="relative hidden items-center justify-center md:flex">
+            <div aria-hidden className="absolute size-56 rounded-[44px] bg-kairo-blue/30 blur-3xl" />
+            <div className="relative rotate-[-8deg] rounded-[38px] border border-white/20 bg-white/[0.07] p-4 shadow-2xl backdrop-blur-lg">
+              <BrandMark size={170} surface="dark" />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -520,13 +537,13 @@ export default function DashboardPage() {
       )
       }
 
-      {/* Secondary: compact live counts — no derived scores. */}
-      <div className="mb-3 flex items-center gap-3">
-        <h2 className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">Overview</h2>
+      {/* Secondary: only counts that help orient the next action. */}
+      <div className="mb-4 flex items-center gap-3">
+        <h2 className="text-sm font-semibold tracking-tight text-ink">At a glance</h2>
         <span className="h-px flex-1 bg-line" />
       </div>
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[...vaultTiles, ...pipelineTiles].map((tile) => (
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {[pipelineTiles[0], vaultTiles[2], vaultTiles[3], pipelineTiles[1]].map((tile) => (
           <StatTile key={tile.label} tile={tile} />
         ))}
       </div>
@@ -595,16 +612,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Brand close — the "Progress Builds Possibilities." banner, edge to
-          edge at a reduced height (center crop keeps the wordmark band). */}
-      <div aria-hidden className="mt-8 overflow-hidden rounded-2xl border border-line shadow-card">
-        <img
-          src="/brand/banner-waves-1600.jpg"
-          alt=""
-          draggable={false}
-          className="h-48 w-full object-cover object-center select-none"
-        />
-      </div>
     </div>
   );
 }

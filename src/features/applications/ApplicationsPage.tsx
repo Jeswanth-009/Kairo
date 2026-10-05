@@ -4,9 +4,8 @@ import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Dialog } from "../../components/ui/Dialog";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { PageHeader } from "../../components/ui/PageHeader";
 import { Field, Input, Select, Textarea } from "../../components/ui/inputs";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, Plus } from "lucide-react";
 import { Badge } from "../../components/ui/Badge";
 import { Tabs } from "../../components/ui/Tabs";
 import { Skeleton } from "../../components/ui/Feedback";
@@ -278,12 +277,18 @@ export default function ApplicationsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
-      <PageHeader
-        title="Applications"
-        description="Manual by design — you record every application and update every status. Each entry links the exact resume version submitted."
-        actions={<Button onClick={() => setCreating(true)}>New application</Button>}
-      />
+    <div className="mx-auto max-w-7xl px-6 py-7 lg:px-10 lg:py-9">
+      <section className="relative mb-7 overflow-hidden rounded-[28px] bg-gradient-to-br from-[#142F4D] via-[#15264B] to-[#0B1020] px-7 py-8 text-white sm:px-9">
+        <div aria-hidden className="absolute -right-12 -top-28 size-80 rounded-full border border-white/10 bg-kairo-sky/10" />
+        <div className="relative flex flex-wrap items-end justify-between gap-6">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-kairo-sky">What you sent</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">Applications</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-300">Track each application and the exact resume version you used. Update status and next steps as you go.</p>
+          </div>
+          <Button onClick={() => setCreating(true)}><Plus className="mr-2 size-4" /> New application</Button>
+        </div>
+      </section>
 
       {/* Status pipeline summary */}
       <div className="mb-6">

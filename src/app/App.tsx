@@ -1,29 +1,32 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Splash } from "../components/Splash";
 import { CommandPalette, useCommandPalette } from "../components/CommandPalette";
 import { Sidebar } from "./shell/Sidebar";
 import { TopBar } from "./shell/TopBar";
 import { ToastHost } from "../components/ui/Toast";
+import { Skeleton } from "../components/ui/Feedback";
 import { useAppStore } from "../stores/appStore";
 import { ipc } from "../lib/ipc";
 import type { OnboardingStatus } from "../lib/types";
 import { useTopBarStore } from "../stores/topBarStore";
-import DashboardPage from "../features/dashboard/DashboardPage";
-import OnboardingPage from "../features/onboarding/OnboardingPage";
-import VaultPage from "../features/vault/VaultPage";
-import JobsPage from "../features/jobs/JobsPage";
-import JobWorkspacePage from "../features/jobs/JobWorkspacePage";
-import ResumeStudioPage from "../features/resume-studio/ResumeStudioPage";
-import ApplicationsPage from "../features/applications/ApplicationsPage";
-import SettingsPage from "../features/settings/SettingsPage";
-import DesignPage from "../features/design/DesignPage";
+const DashboardPage = lazy(() => import("../features/dashboard/DashboardPage"));
+const OnboardingPage = lazy(() => import("../features/onboarding/OnboardingPage"));
+const VaultPage = lazy(() => import("../features/vault/VaultPage"));
+const SkillsPage = lazy(() => import("../features/vault/SkillsPage"));
+const JobsPage = lazy(() => import("../features/jobs/JobsPage"));
+const JobWorkspacePage = lazy(() => import("../features/jobs/JobWorkspacePage"));
+const ResumeStudioPage = lazy(() => import("../features/resume-studio/ResumeStudioPage"));
+const ApplicationsPage = lazy(() => import("../features/applications/ApplicationsPage"));
+const SettingsPage = lazy(() => import("../features/settings/SettingsPage"));
+const DesignPage = lazy(() => import("../features/design/DesignPage"));
 
 const TITLES: Record<string, string> = {
   "/": "Home",
   "/onboarding": "Get started",
   "/story": "My story",
-  "/jobs": "Jobs",
+  "/skills": "Skills",
+  "/jobs": "Workspaces",
   "/resume-studio": "Resume Studio",
   "/applications": "Applications",
   "/settings": "Settings",
@@ -35,7 +38,7 @@ function crumbsFor(pathname: string): { label: string; to?: string }[] {
   if (/^\/jobs\/\d+\/resume/.test(pathname)) {
     const id = pathname.split("/")[2];
     return [
-      { label: "Jobs", to: "/jobs" },
+      { label: "Workspaces", to: "/jobs" },
       { label: `Job #${id}`, to: `/jobs/${id}` },
       { label: "Resume" },
     ];
@@ -43,7 +46,7 @@ function crumbsFor(pathname: string): { label: string; to?: string }[] {
   if (/^\/jobs\/\d+/.test(pathname)) {
     const id = pathname.split("/")[2];
     return [
-      { label: "Jobs", to: "/jobs" },
+      { label: "Workspaces", to: "/jobs" },
       { label: `Job #${id}` },
     ];
   }
@@ -90,10 +93,11 @@ export default function App() {
         <main id="app-main" className="flex-1 overflow-y-auto">
           {/* Keyed by path so each page plays the enter animation on navigation. */}
           <div key={location.pathname} className="page-enter h-full">
-            <Routes>
+            <Suspense fallback={<div className="mx-auto max-w-6xl space-y-5 p-8" aria-label="Loading page"><Skeleton className="h-10 w-72" /><Skeleton className="h-48 w-full" /><Skeleton className="h-48 w-full" /></div>}><Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
               <Route path="/story" element={<VaultPage />} />
+              <Route path="/skills" element={<SkillsPage />} />
               {/* Old routes keep working: the story moved, interview moved
                   into each job workspace. */}
               <Route path="/vault" element={<Navigate to="/story" replace />} />
@@ -109,7 +113,7 @@ export default function App() {
               {needsOnboarding ? (
                 <Route path="*" element={<Navigate to="/onboarding" replace />} />
               ) : null}
-            </Routes>
+            </Routes></Suspense>
           </div>
         </main>
       </div>

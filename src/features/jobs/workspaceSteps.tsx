@@ -141,7 +141,7 @@ export function ReviewStage({ jobId }: { jobId: number }) {
       : status.state === "missing-file"
         ? "export-failed"
         : "needs-update";
-  const reviewed = status?.pdfHash != null && status.reviewedPdfHash === status.pdfHash;
+  const reviewed = status?.state === "current" && status.pdfHash != null && status.reviewedPdfHash === status.pdfHash;
   const overflow =
     status?.pageCount != null && targetPages != null && status.pageCount > targetPages;
   const missingContact = !profile?.fullName || !profile.email;
@@ -205,7 +205,7 @@ export function ReviewStage({ jobId }: { jobId: number }) {
                 <Check className="size-3.5" /> Reviewed
               </span>
             ) : (
-              <Button size="sm" onClick={() => void markReviewed()} disabled={marking}>
+              <Button size="sm" onClick={() => void markReviewed()} disabled={marking || status?.state !== "current"}>
                 {marking ? "Marking…" : "Mark this PDF reviewed"}
               </Button>
             )

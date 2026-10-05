@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Settings2, Sun } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
@@ -30,9 +30,14 @@ export default function SettingsPage() {
   const runSmokeTest = useAppStore((s) => s.runSmokeTest);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-8">
+    <div className="mx-auto max-w-5xl space-y-6 px-6 py-7 lg:px-10 lg:py-9">
+      <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#1B2655] to-[#0B1020] px-7 py-8 text-white sm:px-9">
+        <div aria-hidden className="absolute -right-12 -top-28 size-80 rounded-full border border-white/10 bg-kairo-blue/10" />
+        <div className="relative max-w-2xl"><span className="mb-4 inline-flex size-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-kairo-sky"><Settings2 className="size-5" /></span><p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-kairo-sky">Your preferences</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">Settings</h1><p className="mt-3 text-sm leading-6 text-slate-300">Choose your appearance, connect optional AI writing, and manage local backups.</p></div>
+      </section>
+      <AiProviderCard />
       <AppearanceCard />
-      <AboutCard version={diagnostics?.appVersion} />
+      <BackupsCard />
 
       <Card className="p-6">
         <CardTitle>Database</CardTitle>
@@ -60,9 +65,7 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <AiProviderCard />
-
-      <BackupsCard />
+      <AboutCard version={diagnostics?.appVersion} />
     </div>
   );
 }

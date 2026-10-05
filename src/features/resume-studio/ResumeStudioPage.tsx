@@ -38,8 +38,10 @@ import { usePdfProgress } from "../../lib/pdfProgress";
 import { fmtAgo, fmtRange } from "../../lib/dateFmt";
 import { PdfViewer } from "./PdfViewer";
 import { SaveStatusChip } from "./SaveStatusChip";
+import { TailorTab } from "../jobs/TailorTab";
 import type {
   Job,
+  JobRequirement,
   PdfArtifact,
   PdfStatusView,
   PlanItem,
@@ -148,13 +150,19 @@ function PlanPreview({
   suggestions: TailorSuggestion[];
 }) {
   const acceptedFor = (bulletId: number) =>
-    suggestions.find((s) => s.bulletId === bulletId && s.status === "accepted");
+    suggestions.find((s) => s.bulletId === bulletId && s.status === "accepted" &&
+      (s.validation.ok || s.model === "manual") && s.suggestedText.trim().length > 0);
 
   const excluded = plan.excludedSkills ?? [];
   const includedSkills = plan.skills.filter((s) => !excluded.includes(s));
-  const groups = (plan.skillsGrouped ?? []).filter(
+  const grouped = (plan.skillsGrouped ?? []).filter(
     (g) => g.skills.filter((s) => !excluded.includes(s)).length > 0,
   );
+  const groupedNames = new Set(grouped.flatMap((g) => g.skills.map((s) => s.toLowerCase())));
+  const additionalSkills = includedSkills.filter((s) => !groupedNames.has(s.toLowerCase()));
+  const groups = additionalSkills.length > 0
+    ? [...grouped, { category: "Additional", skills: additionalSkills }]
+    : grouped;
 
   /** Mirrors the renderer: bullets, falling back to description lines. */
   const previewBullets = (item: PlanItem) => {
@@ -340,6 +348,16 @@ export default function ResumeStudioPage() {
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
   const [savingVersion, setSavingVersion] = useState(false);
   const [previewMode, setPreviewMode] = useState<"pdf" | "plan" | "design">("pdf");
+  const [aiWritingOpen, setAiWritingOpen] = useState(false);
+  const [showFilesPanel, setShowFilesPanel] = useState(false);
+  useEffect(() => {
+    if (!aiWritingOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAiWritingOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [aiWritingOpen]);
   // Ephemeral, in-session only: the failed-export overlay. Durable PDF state
   // (stale / template-stale / current) always comes from the backend status.
   const [exportFailed, setExportFailed] = useState(false);
@@ -355,6 +373,7 @@ export default function ResumeStudioPage() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [showVaultSkills, setShowVaultSkills] = useState(false);
   const [vaultSkills, setVaultSkills] = useState<Skill[]>([]);
+  const [roleRequirements, setRoleRequirements] = useState<JobRequirement[]>([]);
   const [vaultQuery, setVaultQuery] = useState("");
 
   useEffect(() => {
@@ -415,10 +434,13 @@ export default function ResumeStudioPage() {
     historyRef.current = [];
     setCanUndo(false);
     setExportFailed(false);
+    setAiWritingOpen(false);
     void (async () => {
       try {
         const stored = await ipc.getPlan(jobId);
+        const requirements = await ipc.listRequirements(jobId);
         if (seq !== loadSeq.current) return;
+        setRoleRequirements(requirements);
         planRef.current = stored?.plan ?? null;
         setPlan(stored?.plan ?? null);
         const suggestions = await ipc.tailorList(jobId);
@@ -843,6 +865,8 @@ export default function ResumeStudioPage() {
     { key: "experience", label: "Experience", items: plan.experience, cap: plan.config.maxExperienceItems },
     { key: "projects", label: "Projects", items: plan.projects, cap: plan.config.maxProjects },
   ];
+  const roleText = ` ${roleRequirements.map((r) => r.rawText).join(" ").toLowerCase().replace(/[^a-z0-9+#.]+/g, " ")} `;
+  const skillMentioned = (name: string) => roleText.includes(` ${name.toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").trim()} `);
 
   // Everything below renders per-job controls; a plan only exists once a job
   // is selected (plans load with the job, and mutatePlan guards null).
@@ -856,10 +880,26 @@ export default function ResumeStudioPage() {
     <div className="flex h-full flex-col p-6">
       <PageHeader
         title="Resume Studio"
-        description="Curate what goes in, pick a template, and export a polished PDF."
+        description="Choose your evidence, write with or without AI, and review the exact PDF."
         actions={
           <>
             <SaveStatusChip jobId={jobId} />
+            <Button
+              variant="secondary"
+              onClick={() => void (async () => {
+                const flushed = await flushPlanSave(jobId);
+                if (!flushed.ok) {
+                  toast.error(flushed.error ?? "Save the draft before requesting AI suggestions.");
+                  return;
+                }
+                setAiWritingOpen(true);
+              })()}
+            >
+              <Sparkles className="size-4" aria-hidden /> AI writing
+            </Button>
+            <Button variant="secondary" onClick={() => setShowFilesPanel((open) => !open)} aria-expanded={showFilesPanel}>
+              <FolderOpen className="size-4" aria-hidden /> {showFilesPanel ? "Hide files" : "Files & versions"}
+            </Button>
             <Select
               value={jobId ?? undefined}
               onChange={(e) => navigate(`/jobs/${Number(e.target.value)}/resume`)}
@@ -919,11 +959,16 @@ export default function ResumeStudioPage() {
         </span>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-[minmax(0,1fr)_minmax(0,auto)] xl:grid-cols-[minmax(0,3fr)_minmax(0,5fr)_minmax(0,3fr)] xl:grid-rows-[minmax(0,1fr)]">
+      <div className={cn(
+        "grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-rows-[minmax(0,1fr)]",
+        showFilesPanel
+          ? "lg:grid-cols-[minmax(290px,3fr)_minmax(0,5fr)_minmax(260px,3fr)]"
+          : "lg:grid-cols-[minmax(320px,2fr)_minmax(0,4fr)]",
+      )}>
         {/* ------------------------------------------------------------- */}
         {/* LEFT — Content curation                                        */}
         {/* ------------------------------------------------------------- */}
-        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1 lg:row-span-2 xl:row-span-1">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
           {/* Page fit meter */}
           <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-card px-4 py-2.5 shadow-card">
             <span className="text-xs font-medium text-muted">Page fit</span>
@@ -1048,7 +1093,8 @@ export default function ResumeStudioPage() {
                             <ul className="space-y-1">
                               {item.bullets.map((bullet) => {
                                 const accepted = suggestions.find(
-                                  (s) => s.bulletId === bullet.id && s.status === "accepted",
+                                  (s) => s.bulletId === bullet.id && s.status === "accepted" &&
+                                    (s.validation.ok || s.model === "manual") && s.suggestedText.trim().length > 0,
                                 );
                                 return (
                                   <li key={bullet.id} className="flex items-start gap-1.5">
@@ -1172,6 +1218,9 @@ export default function ResumeStudioPage() {
                 </span>
               </CardTitle>
             </div>
+            <p className="mb-3 text-sm leading-relaxed text-muted">
+              Choose the skills for this resume. Your full library is on the Skills screen; skills appear here only when you select them.
+            </p>
 
             <div className="mb-3">
               <Button
@@ -1180,7 +1229,7 @@ export default function ResumeStudioPage() {
                 className="w-full justify-center"
                 onClick={() => setShowVaultSkills((v) => !v)}
               >
-                {showVaultSkills ? "Hide vault skills" : "Browse vault skills"}
+                {showVaultSkills ? "Hide skill library" : "Choose from skill library"}
               </Button>
               {showVaultSkills ? (
                 <div className="mt-2 rounded-lg border border-line">
@@ -1199,10 +1248,11 @@ export default function ResumeStudioPage() {
                         Loading vault skills…
                       </p>
                     ) : (
-                      vaultSkills
+                      [...vaultSkills]
                         .filter((sk) =>
                           sk.canonicalName.toLowerCase().includes(vaultQuery.trim().toLowerCase()),
                         )
+                        .sort((a, b) => Number(skillMentioned(b.canonicalName)) - Number(skillMentioned(a.canonicalName)) || a.canonicalName.localeCompare(b.canonicalName))
                         .map((sk) => {
                           const inPlan = plan.skills.some(
                             (x) => x.toLowerCase() === sk.canonicalName.toLowerCase(),
@@ -1241,7 +1291,10 @@ export default function ResumeStudioPage() {
                                 />
                                 {sk.canonicalName}
                               </span>
-                              <span className="text-[10px] uppercase tracking-wide text-muted">{sk.category}</span>
+                              <span className="flex items-center gap-1 text-xs text-muted">
+                                {skillMentioned(sk.canonicalName) ? <Badge tone="blue">In role</Badge> : null}
+                                {sk.category}
+                              </span>
                             </label>
                           );
                         })
@@ -1433,7 +1486,7 @@ export default function ResumeStudioPage() {
         {/* ------------------------------------------------------------- */}
         {/* RIGHT — Template & export rail                                 */}
         {/* ------------------------------------------------------------- */}
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pl-0 lg:col-start-2 xl:col-start-3 xl:row-start-1 lg:pr-1">
+        {showFilesPanel ? <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
           {/* Export */}
           <Card className="p-4">
             <CardTitle>Export</CardTitle>
@@ -1615,7 +1668,7 @@ export default function ResumeStudioPage() {
               <p className="mt-2 text-xs text-muted/80">No versions saved yet.</p>
             )}
           </Card>
-        </div>
+        </div> : null}
       </div>
 
       <ProfileDialog
@@ -1649,6 +1702,36 @@ export default function ResumeStudioPage() {
           });
         }}
       />
+      {aiWritingOpen ? (
+        <div className="fixed inset-0 z-50 bg-[#0B1020]/75 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label="AI writing studio">
+          <div className="mx-auto flex h-full max-w-[1440px] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-line bg-card px-5 py-4">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-ink"><Sparkles className="size-5 text-kairo-violet" aria-hidden /> AI writing studio</h2>
+                <p className="text-sm text-muted">Compare each suggestion with your approved wording. Nothing changes until you accept it.</p>
+              </div>
+              <Button variant="secondary" onClick={() => setAiWritingOpen(false)}>Return to resume</Button>
+            </div>
+            <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)]">
+              <div className="min-h-0 overflow-y-auto p-5">
+                <TailorTab
+                  jobId={jobId}
+                  onComposePlan={() => setAiWritingOpen(false)}
+                  onSuggestionsChange={() => {
+                    void ipc.tailorList(jobId).then(setSuggestions).catch((e) => toast.error(String(e)));
+                    void ipc.getPdfStatus(jobId).then(setPdfStatus).catch(() => {});
+                  }}
+                />
+              </div>
+              <div className="hidden min-h-0 overflow-y-auto border-l border-line bg-accent-soft p-5 lg:block">
+                <p className="mb-3 text-sm font-semibold text-ink">Resume preview</p>
+                <PlanPreview plan={plan} suggestions={suggestions} />
+                <p className="mt-3 text-sm text-muted">Export again after accepting wording to update the PDF.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -6,11 +6,10 @@ import { useThemeStore } from "../stores/themeStore";
  * Identity moments only (sidebar brand, about, loading states). Renders the
  * glowing midnight tile on dark themes and the white tile on light themes.
  */
-export function BrandMark({ size = 32, glow = false }: { size?: number; glow?: boolean }) {
+export function BrandMark({ size = 32, glow = false, surface = "auto" }: { size?: number; glow?: boolean; surface?: "auto" | "dark" | "light" }) {
   const theme = useThemeStore((s) => s.theme);
-  // Relative path — resolves identically in the desktop build (served from
-  // the origin root) and on the website demo (served from a subdirectory).
-  const src = theme === "dark" ? "brand/mark-128.png" : "brand/mark-light-128.png";
+  const darkSurface = surface === "dark" || (surface === "auto" && theme === "dark");
+  const src = `/brand/${darkSurface ? "mark-128.png" : "mark-light-128.png"}`;
   return (
     <img
       src={src}
