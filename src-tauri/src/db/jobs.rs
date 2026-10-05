@@ -244,6 +244,39 @@ pub fn create_job_with_requirements(
     for req in requirements {
         validate_requirement(req)?;
     }
+    // Reopening an identical posting must reuse its workspace. The DB command
+    // runs under the shared connection lock, so repeated clicks cannot create
+    // two rows between this check and the insert. Company/title alone are not
+    // identity: an employer may have several legitimate roles.
+    if job.kind != "general" {
+        let normalized_url = job.url.trim().trim_end_matches('/').to_lowercase();
+        let normalized_jd = normalize_posting(&job.raw_jd);
+        let mut stmt = sql_err(conn.prepare(
+            "SELECT id, url, raw_jd, company, role_title FROM jobs WHERE deleted_at IS NULL AND kind = 'role'",
+        ))?;
+        let candidates = sql_err(stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+            ))
+        }))?;
+        for candidate in candidates {
+            let (id, url, jd, company, role_title) = sql_err(candidate)?;
+            let same_url = !normalized_url.is_empty()
+                && normalized_url == url.trim().trim_end_matches('/').to_lowercase();
+            let same_role = normalize_posting(&job.company) == normalize_posting(&company)
+                && normalize_posting(&job.role_title) == normalize_posting(&role_title);
+            if same_url || (same_role && normalized_jd == normalize_posting(&jd)) {
+                return Ok(JobWithRequirements {
+                    job: get_job_enriched(conn, id)?,
+                    requirements: list_requirements(conn, id)?,
+                });
+            }
+        }
+    }
     let cols = Job::INSERT_COLS.join(", ");
     let placeholders = (1..=Job::INSERT_COLS.len())
         .map(|i| format!("?{i}"))
@@ -268,6 +301,13 @@ pub fn create_job_with_requirements(
         job: saved.remove(0),
         requirements: list_requirements(conn, job_id)?,
     })
+}
+
+fn normalize_posting(raw: &str) -> String {
+    raw.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 fn vault_get_job(conn: &Connection, id: i64) -> Result<Job, String> {
@@ -378,6 +418,41 @@ mod tests {
             importance: 0.8,
             user_confirmed: true,
         }
+    }
+
+    #[test]
+    fn identical_posting_reopens_the_existing_workspace() {
+        let conn = mem_db();
+        let first = create_job_with_requirements(
+            &conn,
+            &job_fixture(),
+            &[req_fixture(0, "required_skill", "Strong Python")],
+        )
+        .unwrap();
+        let mut repeated = job_fixture();
+        repeated.raw_jd =
+            " A sufficiently long job description body  goes here for validation. ".to_string();
+        let reopened = create_job_with_requirements(
+            &conn,
+            &repeated,
+            &[req_fixture(0, "required_skill", "Strong Python")],
+        )
+        .unwrap();
+        assert_eq!(first.job.id, reopened.job.id);
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM jobs", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn shared_job_description_at_another_company_is_a_separate_workspace() {
+        let conn = mem_db();
+        let first = create_job_with_requirements(&conn, &job_fixture(), &[]).unwrap();
+        let mut other = job_fixture();
+        other.company = "Another company".to_string();
+        let second = create_job_with_requirements(&conn, &other, &[]).unwrap();
+        assert_ne!(first.job.id, second.job.id);
     }
 
     #[test]

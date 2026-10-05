@@ -245,7 +245,18 @@ fn skill_groups(plan: &ResumePlan) -> Vec<(String, Vec<String>)> {
         .filter(|(_, names)| !names.is_empty())
         .collect();
     if groups.is_empty() {
-        groups.push(("Skills".to_string(), included));
+        return vec![("Skills".to_string(), included)];
+    }
+    let grouped: std::collections::HashSet<String> = groups
+        .iter()
+        .flat_map(|(_, names)| names.iter().map(|s| s.to_lowercase()))
+        .collect();
+    let ungrouped: Vec<String> = included
+        .into_iter()
+        .filter(|s| !grouped.contains(&s.to_lowercase()))
+        .collect();
+    if !ungrouped.is_empty() {
+        groups.push(("Additional".to_string(), ungrouped));
     }
     groups
 }

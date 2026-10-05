@@ -609,8 +609,9 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         }
     }
 
-    // Skills: linked to selected records, requirement mentions first,
-    // followed by all other skills from the Vault. Categories are tracked
+    // Skills: linked to selected records, requirement mentions first.
+    // The full Vault remains available in Studio, but a role's resume must
+    // never silently claim every skill in the user's library. Categories are tracked
     // alongside so templates can render grouped skill lines.
     let mut skills: Vec<String> = Vec::new();
     let mut skill_category: HashMap<String, String> = HashMap::new();
@@ -645,7 +646,8 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             skills.push(name.clone());
         }
     }
-    // Also include all vault skills so they are not lost
+    // Preserve categories for linked skills; unselected Vault skills are
+    // recommendations in the editor, not automatic resume content.
     for vs in &input.vault_skills {
         let name = vs.name.trim();
         if name.is_empty() {
@@ -655,19 +657,6 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
         skill_category
             .entry(lower.clone())
             .or_insert_with(|| vs.category.clone());
-        if skills.iter().any(|s| s.to_lowercase() == lower) {
-            continue;
-        }
-        let stem = lower.trim_end_matches('s').to_string();
-        let hits_requirements = req_token_sets
-            .iter()
-            .any(|set| set.contains(&lower) || set.contains(&stem));
-        if hits_requirements {
-            mentioned.push(name.to_string());
-        } else {
-            other.push(name.to_string());
-        }
-        skills.push(name.to_string());
     }
     // Entity-linked skills without a vault match default to "other".
     for name in &skills {

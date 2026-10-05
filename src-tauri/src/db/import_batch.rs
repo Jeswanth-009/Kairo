@@ -63,6 +63,26 @@ fn resolve_skill_tx(conn: &Connection, draft: &SkillDraft) -> Result<i64, String
     Ok(conn.last_insert_rowid())
 }
 
+/// Keep the source passage beside the imported record in the existing Proof
+/// model. This runs inside the same import transaction; a failed passage write
+/// rolls back the record as well.
+fn save_source_passage_tx(
+    conn: &Connection,
+    kind: EntityKind,
+    entity_id: i64,
+    passage: &str,
+) -> Result<(), String> {
+    if passage.trim().is_empty() {
+        return Ok(());
+    }
+    sql_err(conn.execute(
+        "INSERT INTO evidence (entity_type, entity_id, kind, title, reference, note, verified) \
+         VALUES (?1, ?2, 'document', 'Original resume passage', 'Imported resume', ?3, 0)",
+        params![kind.as_str(), entity_id, passage.trim()],
+    ))?;
+    Ok(())
+}
+
 /// The whole import in one transaction: profile, skills, and every accepted
 /// record with its skill links. Any failure rolls back everything.
 pub fn import_resume_batch(
@@ -150,6 +170,7 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
         };
         let id = insert_entity_tx::<Experience>(tx, &experience)?;
         out.experience_ids.push(id);
+        save_source_passage_tx(tx, EntityKind::Experience, id, &draft.source_snippet)?;
         // Experiences carry no per-draft skill list — link top-level skills
         // whose name appears in the description (the old importer's behavior).
         // Collect every match, then write once: write_links replaces the
@@ -195,6 +216,7 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
         };
         let id = insert_entity_tx::<Project>(tx, &project)?;
         out.project_ids.push(id);
+        save_source_passage_tx(tx, EntityKind::Project, id, &draft.source_snippet)?;
         // One write_links call per record with the full link set — see the
         // experience note above.
         let mut links: Vec<super::vault::SkillRef> = Vec::new();
@@ -233,6 +255,7 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
         };
         let id = insert_entity_tx::<Education>(tx, &education)?;
         out.education_ids.push(id);
+        save_source_passage_tx(tx, EntityKind::Education, id, &draft.source_snippet)?;
     }
 
     for draft in &batch.achievements {
@@ -248,6 +271,7 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
         };
         let id = insert_entity_tx::<Achievement>(tx, &achievement)?;
         out.achievement_ids.push(id);
+        save_source_passage_tx(tx, EntityKind::Achievement, id, &draft.source_snippet)?;
     }
 
     Ok(out)
@@ -319,6 +343,22 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn imported_passage_stays_with_its_record() {
+        let mut conn = mem_db();
+        let mut batch = sample();
+        batch.projects[0].source_snippet = "Built PyKV with Python for fast lookups".to_string();
+        let result = import_resume_batch(&mut conn, &batch).unwrap();
+        let passage: String = conn
+            .query_row(
+                "SELECT note FROM evidence WHERE entity_type = 'project' AND entity_id = ?1",
+                [result.project_ids[0]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(passage, batch.projects[0].source_snippet);
     }
 
     #[test]

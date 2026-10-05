@@ -323,8 +323,17 @@ pub fn set_evidence_selection(
     if decision != "use" && decision != "dismiss" {
         return Err(format!("unknown evidence decision '{decision}'"));
     }
-    if super::trust::EntityKind::parse(entity_type).is_err() {
+    if !super::trust::EVIDENCE_ENTITY_TYPES.contains(&entity_type) {
         return Err(format!("unknown entity type '{entity_type}'"));
+    }
+    let kind = super::trust::EntityKind::parse(entity_type)?;
+    let sql = format!(
+        "SELECT EXISTS(SELECT 1 FROM {} WHERE id = ?1 AND deleted_at IS NULL)",
+        kind.table()
+    );
+    let exists: bool = sql_err(conn.query_row(&sql, [entity_id], |row| row.get(0)))?;
+    if !exists {
+        return Err("Selected evidence record no longer exists".to_string());
     }
     sql_err(conn.execute(
         "INSERT INTO evidence_selections (job_id, requirement_id, entity_type, entity_id, decision) \
@@ -350,6 +359,93 @@ pub fn set_evidence_selection(
         })
     })
     .map_err(|e| e.to_string())
+}
+
+/// Save the Evidence decision and its effect on the current draft together.
+/// A later recompose also reapplies the saved choices in composer::run_composer.
+pub fn set_selection_and_sync_plan(
+    conn: &Connection,
+    job_id: i64,
+    requirement_id: i64,
+    entity_type: &str,
+    entity_id: i64,
+    decision: &str,
+) -> Result<EvidenceSelection, String> {
+    let tx = sql_err(conn.unchecked_transaction())?;
+    let owner: i64 = sql_err(tx.query_row(
+        "SELECT job_id FROM job_requirements WHERE id = ?1",
+        [requirement_id],
+        |row| row.get(0),
+    ))?;
+    if owner != job_id {
+        return Err("Requirement belongs to another workspace".to_string());
+    }
+    let selection = set_evidence_selection(
+        &tx,
+        job_id,
+        requirement_id,
+        entity_type,
+        entity_id,
+        decision,
+    )?;
+    sync_entity_choice(&tx, job_id, entity_type, entity_id)?;
+    sql_err(tx.commit())?;
+    Ok(selection)
+}
+
+fn sync_entity_choice(
+    conn: &Connection,
+    job_id: i64,
+    entity_type: &str,
+    entity_id: i64,
+) -> Result<(), String> {
+    // Education, achievements, and certifications can support a requirement
+    // without being optional experience/project blocks in the draft.
+    if entity_type != "experience" && entity_type != "project" {
+        return Ok(());
+    }
+    let Some(mut stored) = super::composer::get_plan(conn, job_id)? else {
+        return Ok(());
+    };
+    let choices = list_evidence_selections(conn, job_id)?;
+    let relevant: Vec<_> = choices
+        .iter()
+        .filter(|choice| choice.entity_type == entity_type && choice.entity_id == entity_id)
+        .collect();
+    // Clearing the last Evidence decision must not invent a new draft choice
+    // or undo an edit made directly in Studio.
+    if relevant.is_empty() {
+        return Ok(());
+    }
+    let include = relevant.iter().any(|choice| choice.decision == "use");
+    let input = super::composer::load_composer_input(conn, job_id, &stored.config)?;
+    super::composer::apply_evidence_choice(
+        &mut stored.plan,
+        &input,
+        entity_type,
+        entity_id,
+        include,
+    )?;
+    super::composer::save_plan(conn, job_id, &stored.config, &stored.plan)?;
+    Ok(())
+}
+
+pub fn delete_selection_and_sync_plan(
+    conn: &Connection,
+    requirement_id: i64,
+    entity_type: &str,
+    entity_id: i64,
+) -> Result<(), String> {
+    let tx = sql_err(conn.unchecked_transaction())?;
+    let job_id: i64 = sql_err(tx.query_row(
+        "SELECT job_id FROM job_requirements WHERE id = ?1",
+        [requirement_id],
+        |row| row.get(0),
+    ))?;
+    delete_evidence_selection(&tx, requirement_id, entity_type, entity_id)?;
+    sync_entity_choice(&tx, job_id, entity_type, entity_id)?;
+    sql_err(tx.commit())?;
+    Ok(())
 }
 
 pub fn delete_evidence_selection(
@@ -446,6 +542,13 @@ mod evidence_tests {
     fn selections_upsert_per_requirement_and_record() {
         let conn = mem_db();
         let (job_id, req_id) = seed_job_with_requirement(&conn);
+        conn.execute("INSERT INTO projects (id, title) VALUES (3, 'PyKV')", [])
+            .unwrap();
+        conn.execute(
+            "INSERT INTO experiences (id, organization, role) VALUES (9, 'Acme', 'Intern')",
+            [],
+        )
+        .unwrap();
 
         let first = set_evidence_selection(&conn, job_id, req_id, "project", 3, "use").unwrap();
         assert_eq!(first.decision, "use");
@@ -463,9 +566,49 @@ mod evidence_tests {
         // Unknown decisions and entity types are refused.
         assert!(set_evidence_selection(&conn, job_id, req_id, "project", 3, "maybe").is_err());
         assert!(set_evidence_selection(&conn, job_id, req_id, "dragon", 3, "use").is_err());
+        assert!(set_evidence_selection(&conn, job_id, req_id, "project", 404, "use").is_err());
 
         delete_evidence_selection(&conn, req_id, "project", 3).unwrap();
         assert_eq!(list_evidence_selections(&conn, job_id).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn evidence_decision_changes_the_saved_draft_in_the_same_transaction() {
+        let conn = mem_db();
+        let (job_id, req_id) = seed_job_with_requirement(&conn);
+        conn.execute("INSERT INTO projects (title, description, origin) VALUES ('PyKV', 'Built a Rust cache', 'manual')", []).unwrap();
+        let project_id = conn.last_insert_rowid();
+        let config = crate::composer::ComposerConfig::default();
+        crate::db::composer::run_composer(&conn, job_id, &config).unwrap();
+
+        set_selection_and_sync_plan(&conn, job_id, req_id, "project", project_id, "dismiss")
+            .unwrap();
+        let dismissed = crate::db::composer::get_plan(&conn, job_id)
+            .unwrap()
+            .unwrap();
+        assert!(
+            dismissed
+                .plan
+                .projects
+                .iter()
+                .find(|p| p.id == project_id)
+                .unwrap()
+                .excluded
+        );
+
+        set_selection_and_sync_plan(&conn, job_id, req_id, "project", project_id, "use").unwrap();
+        let used = crate::db::composer::get_plan(&conn, job_id)
+            .unwrap()
+            .unwrap();
+        assert!(
+            !used
+                .plan
+                .projects
+                .iter()
+                .find(|p| p.id == project_id)
+                .unwrap()
+                .excluded
+        );
     }
 
     #[test]

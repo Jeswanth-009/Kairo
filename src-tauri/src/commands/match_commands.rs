@@ -62,7 +62,7 @@ pub fn set_evidence_selection(
     decision: String,
 ) -> Result<matching::EvidenceSelection, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    matching::set_evidence_selection(
+    matching::set_selection_and_sync_plan(
         &conn,
         job_id,
         requirement_id,
@@ -80,5 +80,5 @@ pub fn delete_evidence_selection(
     entity_id: i64,
 ) -> Result<(), String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    matching::delete_evidence_selection(&conn, requirement_id, &entity_type, entity_id)
+    matching::delete_selection_and_sync_plan(&conn, requirement_id, &entity_type, entity_id)
 }

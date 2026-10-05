@@ -233,6 +233,17 @@ pub fn pdf_status(
         });
     }
 
+    // A failed promotion or an external file change must never be reported as
+    // the current export merely because a file with the expected name exists.
+    if let Some(expected_hash) = artifact.pdf_hash.as_deref() {
+        if super::fingerprint::file_sha256(&pdf_file)? != expected_hash {
+            return Ok(PdfStatus {
+                state: "stale".to_string(),
+                ..base
+            });
+        }
+    }
+
     if artifact.artifact_plan_revision != Some(stored.plan_revision) {
         return Ok(PdfStatus {
             state: "stale".to_string(),
@@ -245,6 +256,22 @@ pub fn pdf_status(
     {
         return Ok(PdfStatus {
             state: "template-stale".to_string(),
+            ..base
+        });
+    }
+
+    // AI acceptance changes render inputs without bumping the manually edited
+    // plan revision. Compare the full, overlaid render fingerprint as well.
+    let mut render_plan = stored.plan;
+    let _ = super::tailor::apply_accepted_suggestions(conn, job_id, &mut render_plan)?;
+    let current_fingerprint = super::fingerprint::render_fingerprint(
+        &render_plan,
+        &artifact.template_id,
+        &artifact.paper,
+    );
+    if artifact.fingerprint.as_deref() != Some(current_fingerprint.as_str()) {
+        return Ok(PdfStatus {
+            state: "stale".to_string(),
             ..base
         });
     }
@@ -456,20 +483,107 @@ pub fn compile_staged(
     }
 }
 
-/// Promotes a staged compile into the live artifact location via atomic
-/// renames (PDF first, then the .tex; a failed .tex rename removes the
-/// promoted PDF again). Hold the job's export lock so no other compile can
-/// race the renames.
-pub fn promote_staged(staged: StagedCompile) -> Result<(PathBuf, PathBuf), String> {
+/// Keeps the previous document available until its new artifact row commits.
+/// The export caller explicitly commits or rolls back this guard; Drop is a
+/// last-resort rollback for early returns.
+pub struct PromotedCompile {
+    final_pdf: PathBuf,
+    final_tex: PathBuf,
+    backup_dir: PathBuf,
+    had_pdf: bool,
+    had_tex: bool,
+    committed: bool,
+}
+
+impl PromotedCompile {
+    pub fn commit(mut self) {
+        self.committed = true;
+        let _ = std::fs::remove_dir_all(&self.backup_dir);
+    }
+
+    pub fn rollback(&mut self) -> Result<(), String> {
+        if self.committed {
+            return Ok(());
+        }
+        for (final_path, had_file) in [
+            (&self.final_pdf, self.had_pdf),
+            (&self.final_tex, self.had_tex),
+        ] {
+            if had_file {
+                let backup = self
+                    .backup_dir
+                    .join(final_path.file_name().expect("artifact filename"));
+                std::fs::copy(&backup, final_path)
+                    .map_err(|e| format!("could not restore previous PDF artifact: {e}"))?;
+            } else if final_path.exists() {
+                std::fs::remove_file(final_path)
+                    .map_err(|e| format!("could not remove incomplete PDF artifact: {e}"))?;
+            }
+        }
+        self.committed = true;
+        let _ = std::fs::remove_dir_all(&self.backup_dir);
+        Ok(())
+    }
+}
+
+impl Drop for PromotedCompile {
+    fn drop(&mut self) {
+        let _ = self.rollback();
+    }
+}
+
+/// Hold the job export lock through promotion and artifact persistence.
+pub fn promote_staged_guarded(staged: StagedCompile) -> Result<PromotedCompile, String> {
     let final_pdf = staged.out_dir.join("resume.pdf");
     let final_tex = staged.out_dir.join("resume.tex");
-    std::fs::rename(&staged.staged_pdf, &final_pdf)
-        .map_err(|e| format!("could not promote the compiled PDF: {e}"))?;
-    if let Err(e) = std::fs::rename(&staged.staged_tex, &final_tex) {
-        let _ = std::fs::remove_file(&final_pdf);
+    let backup_dir = staged.out_dir.join(format!(".previous-{}", staging_seq()));
+    std::fs::create_dir(&backup_dir)
+        .map_err(|e| format!("could not prepare previous PDF backup: {e}"))?;
+    let had_pdf = final_pdf.is_file();
+    let had_tex = final_tex.is_file();
+    for (final_path, had_file) in [(&final_pdf, had_pdf), (&final_tex, had_tex)] {
+        if had_file {
+            if let Err(e) = std::fs::copy(
+                final_path,
+                backup_dir.join(final_path.file_name().expect("artifact filename")),
+            ) {
+                let _ = std::fs::remove_dir_all(&backup_dir);
+                return Err(format!("could not back up previous PDF artifact: {e}"));
+            }
+        }
+    }
+    let mut guard = PromotedCompile {
+        final_pdf,
+        final_tex,
+        backup_dir,
+        had_pdf,
+        had_tex,
+        committed: false,
+    };
+    // Windows rename does not replace an existing destination. The previous
+    // files remain in backup_dir until the artifact row is persisted.
+    let replace = |source: &Path, target: &Path| -> std::io::Result<()> {
+        if target.exists() {
+            std::fs::remove_file(target)?;
+        }
+        std::fs::rename(source, target)
+    };
+    if let Err(e) = replace(&staged.staged_pdf, &guard.final_pdf) {
+        let _ = guard.rollback();
+        return Err(format!("could not promote the compiled PDF: {e}"));
+    }
+    if let Err(e) = replace(&staged.staged_tex, &guard.final_tex) {
+        let _ = guard.rollback();
         return Err(format!("could not promote the .tex: {e}"));
     }
-    Ok((final_pdf, final_tex))
+    Ok(guard)
+}
+
+pub fn promote_staged(staged: StagedCompile) -> Result<(PathBuf, PathBuf), String> {
+    let guard = promote_staged_guarded(staged)?;
+    let paths = (guard.final_pdf.clone(), guard.final_tex.clone());
+    guard.commit();
+    Ok(paths)
 }
 
 /// Writes the .tex, runs Tectonic in a staging dir, validates the PDF, and
@@ -706,6 +820,49 @@ mod tests {
         }
     }
 
+    #[test]
+    fn failed_artifact_persist_can_restore_the_previous_files() {
+        let out_dir = std::env::temp_dir().join(format!(
+            "kairo-promote-{}-{}",
+            std::process::id(),
+            staging_seq()
+        ));
+        let stage = out_dir.join("stage");
+        std::fs::create_dir_all(&stage).unwrap();
+        std::fs::write(out_dir.join("resume.pdf"), b"old pdf").unwrap();
+        std::fs::write(out_dir.join("resume.tex"), b"old tex").unwrap();
+        let staged_pdf = stage.join("resume.pdf");
+        let staged_tex = stage.join("resume.tex");
+        std::fs::write(&staged_pdf, b"new pdf").unwrap();
+        std::fs::write(&staged_tex, b"new tex").unwrap();
+        let staged = StagedCompile {
+            staging_dir: stage,
+            out_dir: out_dir.clone(),
+            staged_pdf,
+            staged_tex,
+            pdf_hash: String::new(),
+            log_tail: String::new(),
+            page_count: Some(1),
+            pdf_rel_path: String::new(),
+            tex_rel_path: String::new(),
+        };
+        let mut promoted = promote_staged_guarded(staged).unwrap();
+        assert_eq!(
+            std::fs::read(out_dir.join("resume.pdf")).unwrap(),
+            b"new pdf"
+        );
+        promoted.rollback().unwrap();
+        assert_eq!(
+            std::fs::read(out_dir.join("resume.pdf")).unwrap(),
+            b"old pdf"
+        );
+        assert_eq!(
+            std::fs::read(out_dir.join("resume.tex")).unwrap(),
+            b"old tex"
+        );
+        let _ = std::fs::remove_dir_all(out_dir);
+    }
+
     /// The artifact persist is a compare-and-set on the plan revision: a save
     /// that landed while the PDF compiled must never be overwritten by an
     /// artifact describing the older content.
@@ -763,13 +920,22 @@ mod tests {
             .join("resume.pdf");
         std::fs::create_dir_all(pdf_file.parent().unwrap()).unwrap();
         std::fs::write(&pdf_file, b"%PDF-1.4 fake").unwrap();
-        save_artifact(
-            &conn,
-            &sample_artifact(job_id, 1, "jake", "letter"),
-            Some(1),
-        )
-        .unwrap();
+        let mut artifact = sample_artifact(job_id, 1, "jake", "letter");
+        artifact.pdf_hash = Some(crate::db::fingerprint::file_sha256(&pdf_file).unwrap());
+        let stored = crate::db::composer::get_plan(&conn, job_id)
+            .unwrap()
+            .unwrap();
+        artifact.fingerprint = Some(crate::db::fingerprint::render_fingerprint(
+            &stored.plan,
+            "jake",
+            "letter",
+        ));
+        save_artifact(&conn, &artifact, Some(1)).unwrap();
         assert_eq!(pdf_status(&conn, job_id, &dir).unwrap().state, "current");
+
+        std::fs::write(&pdf_file, b"%PDF-1.4 changed").unwrap();
+        assert_eq!(pdf_status(&conn, job_id, &dir).unwrap().state, "stale");
+        std::fs::write(&pdf_file, b"%PDF-1.4 fake").unwrap();
 
         // An edit after the compile → stale.
         conn.execute(

@@ -459,9 +459,102 @@ pub fn run_composer(
     config: &ComposerConfig,
 ) -> Result<ResumePlan, String> {
     let input = load_composer_input(conn, job_id, config)?;
-    let plan = compose(&input);
+    let mut plan = compose(&input);
+    apply_saved_evidence_selections(conn, job_id, &input, &mut plan)?;
     let _revision = save_plan(conn, job_id, config, &plan)?;
     Ok(plan)
+}
+
+/// An explicit Evidence choice is stronger than the composer's ranking/caps.
+/// Use may add an otherwise omitted record; Dismiss keeps it in the editable
+/// plan but excludes it from the rendered document.
+pub fn apply_evidence_choice(
+    plan: &mut ResumePlan,
+    input: &ComposerInput,
+    entity_type: &str,
+    entity_id: i64,
+    include: bool,
+) -> Result<(), String> {
+    let list = match entity_type {
+        "experience" => &mut plan.experience,
+        "project" => &mut plan.projects,
+        _ => {
+            return Err(format!(
+                "Evidence choice cannot select '{entity_type}' for a resume"
+            ))
+        }
+    };
+    if let Some(item) = list.iter_mut().find(|item| item.id == entity_id) {
+        item.excluded = !include;
+        return Ok(());
+    }
+    if !include {
+        return Ok(());
+    }
+    let entity = input
+        .entities
+        .iter()
+        .find(|item| item.entity_type == entity_type && item.id == entity_id)
+        .ok_or_else(|| "Selected evidence record is no longer in My Story".to_string())?;
+    let bullets = entity
+        .bullets
+        .iter()
+        .filter(|bullet| bullet.approved)
+        .take(input.config.max_bullets_per_item as usize)
+        .map(|bullet| crate::composer::PlanBullet {
+            id: bullet.id,
+            text: bullet.text.clone(),
+            supports: crate::composer::bullet_supports(&bullet.text, &input.requirement_texts),
+            excluded: false,
+        })
+        .collect();
+    list.push(crate::composer::PlanItem {
+        entity_type: entity.entity_type.clone(),
+        id: entity.id,
+        title: entity.title.clone(),
+        subtitle: entity.subtitle.clone(),
+        start_date: entity.start_date.clone(),
+        end_date: entity.end_date.clone(),
+        is_current: entity.is_current,
+        description: entity.description.clone(),
+        bullets,
+        skills: entity.skill_names.clone(),
+        relevance: entity.relevance,
+        evidence_count: entity.evidence_count,
+        origin: entity.origin.clone(),
+        excluded: false,
+    });
+    Ok(())
+}
+
+fn apply_saved_evidence_selections(
+    conn: &Connection,
+    job_id: i64,
+    input: &ComposerInput,
+    plan: &mut ResumePlan,
+) -> Result<(), String> {
+    let mut choices = HashMap::<(String, i64), bool>::new();
+    for selection in super::matching::list_evidence_selections(conn, job_id)? {
+        let key = (selection.entity_type, selection.entity_id);
+        let is_use = selection.decision == "use";
+        choices
+            .entry(key)
+            .and_modify(|include| *include |= is_use)
+            .or_insert(is_use);
+    }
+    for ((entity_type, entity_id), include) in choices {
+        if !input
+            .entities
+            .iter()
+            .any(|entity| entity.entity_type == entity_type && entity.id == entity_id)
+        {
+            // A deleted Vault record can leave an old polymorphic selection.
+            // Recomposition still needs to work for the remaining records.
+            continue;
+        }
+        apply_evidence_choice(plan, input, &entity_type, entity_id, include)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

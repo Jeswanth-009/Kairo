@@ -159,7 +159,7 @@ pub async fn export_pdf(
         let log_tail = staged.log_tail.clone();
         let pdf_rel = staged.pdf_rel_path.clone();
         let tex_rel = staged.tex_rel_path.clone();
-        pdf::promote_staged(staged)?;
+        let mut promoted = pdf::promote_staged_guarded(staged)?;
         let artifact = pdf::PdfArtifact {
             job_id,
             tex_path: tex_rel,
@@ -172,7 +172,15 @@ pub async fn export_pdf(
             pdf_hash: Some(pdf_hash),
             artifact_plan_revision: Some(stored_revision),
         };
-        pdf::save_artifact(&conn, &artifact, Some(stored_revision))?;
+        if let Err(e) = pdf::save_artifact(&conn, &artifact, Some(stored_revision)) {
+            if let Err(rollback_error) = promoted.rollback() {
+                return Err(format!(
+                    "{e}; previous PDF recovery also failed: {rollback_error}"
+                ));
+            }
+            return Err(e);
+        }
+        promoted.commit();
         // Re-read so the caller gets the persisted truth (compiled_at et al),
         // not the pre-persist guess.
         let artifact = pdf::get_artifact(&conn, job_id)?

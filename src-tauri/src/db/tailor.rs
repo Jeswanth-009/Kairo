@@ -151,7 +151,11 @@ pub fn apply_accepted_suggestions(
 ) -> Result<usize, String> {
     let accepted: Vec<TailorSuggestion> = list_suggestions(conn, job_id)?
         .into_iter()
-        .filter(|s| s.status == "accepted" && !s.suggested_text.trim().is_empty())
+        .filter(|s| {
+            s.status == "accepted"
+                && (s.validation.ok || s.model == "manual")
+                && !s.suggested_text.trim().is_empty()
+        })
         .collect();
     if accepted.is_empty() {
         return Ok(0);
@@ -177,24 +181,57 @@ pub fn set_suggestion_status(
     if !matches!(status, "accepted" | "rejected") {
         return Err("status must be accepted or rejected".to_string());
     }
-    let affected = match text {
-        Some(t) => sql_err(conn.execute(
-            "UPDATE tailor_suggestions SET status = ?1, suggested_text = ?2, updated_at = datetime('now') WHERE id = ?3",
-            params![status, t, id],
-        ))?,
-        None => sql_err(conn.execute(
-            "UPDATE tailor_suggestions SET status = ?1, updated_at = datetime('now') WHERE id = ?2",
-            params![status, id],
-        ))?,
-    };
-    if affected == 0 {
-        return Err("Suggestion not found".to_string());
-    }
     let mut stmt = sql_err(conn.prepare(&format!(
         "SELECT {SUGGESTION_COLS} FROM tailor_suggestions WHERE id = ?1"
     )))?;
-    let (_, suggestion) = sql_err(stmt.query_row([id], suggestion_from_row))?;
-    Ok(suggestion)
+    let (_, current) = sql_err(stmt.query_row([id], suggestion_from_row))?;
+    drop(stmt);
+    if text.is_some() && status != "accepted" {
+        return Err("Edited wording can only be accepted after validation".to_string());
+    }
+    if status == "accepted" && !current.validation.ok {
+        return Err("This rewrite failed claim validation and cannot be accepted".to_string());
+    }
+    let edited_validation = if let Some(edited) = text {
+        let edited = edited.trim();
+        if edited.is_empty() {
+            return Err("Accepted wording cannot be empty".to_string());
+        }
+        let validation = claim_change_report(conn, current.job_id, current.bullet_id, edited)?;
+        if !validation.ok {
+            return Err(format!(
+                "Edited wording failed claim validation: {}",
+                validation.violations.join("; ")
+            ));
+        }
+        Some((edited, validation))
+    } else {
+        None
+    };
+    let tx = sql_err(conn.unchecked_transaction())?;
+    if let Some((edited, validation)) = edited_validation {
+        sql_err(tx.execute(
+            "UPDATE tailor_suggestions SET status = ?1, suggested_text = ?2, validation = ?3, updated_at = datetime('now') WHERE id = ?4",
+            params![status, edited, serde_json::to_string(&validation).map_err(|e| e.to_string())?, id],
+        ))?;
+    } else {
+        sql_err(tx.execute(
+            "UPDATE tailor_suggestions SET status = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![status, id],
+        ))?;
+    }
+    if status == "accepted" {
+        sql_err(tx.execute(
+            "UPDATE tailor_suggestions SET status = 'rejected', updated_at = datetime('now') WHERE job_id = ?1 AND bullet_id = ?2 AND id != ?3 AND status = 'accepted'",
+            params![current.job_id, current.bullet_id, id],
+        ))?;
+    }
+    sql_err(tx.commit())?;
+    let mut stmt = sql_err(conn.prepare(&format!(
+        "SELECT {SUGGESTION_COLS} FROM tailor_suggestions WHERE id = ?1"
+    )))?;
+    let (_, updated) = sql_err(stmt.query_row([id], suggestion_from_row))?;
+    Ok(updated)
 }
 
 /// Deletes a pending suggestion ("reset" in the UI).
@@ -447,7 +484,7 @@ impl GroundingIndex {
             evidence_notes.push(format!("Record context: {entity_title}"));
             if !entity_skills.is_empty() {
                 evidence_notes.push(format!(
-                    "Verified technologies for this record: {}",
+                    "Skills linked to this record: {}",
                     entity_skills.join(", ")
                 ));
             }
@@ -520,3 +557,158 @@ pub fn assemble_grounding(
 }
 
 pub const PROMPT_VERSION_CONST: u32 = PROMPT_VERSION;
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+
+    fn plan_with_bullet() -> crate::composer::ResumePlan {
+        use crate::composer::{ComposerConfig, PlanBullet, PlanHeader, PlanItem, ResumePlan};
+        ResumePlan {
+            composer_version: 1,
+            config: ComposerConfig::default(),
+            header: PlanHeader {
+                full_name: String::new(),
+                headline: String::new(),
+                email: String::new(),
+                phone: String::new(),
+                location: String::new(),
+                website: String::new(),
+                github: String::new(),
+                linkedin: String::new(),
+            },
+            education: vec![],
+            experience: vec![PlanItem {
+                entity_type: "experience".into(),
+                id: 1,
+                title: String::new(),
+                subtitle: String::new(),
+                start_date: None,
+                end_date: None,
+                is_current: false,
+                description: String::new(),
+                bullets: vec![PlanBullet {
+                    id: 99,
+                    text: "Original".into(),
+                    supports: vec![],
+                    excluded: false,
+                }],
+                skills: vec![],
+                relevance: 0.0,
+                evidence_count: 0,
+                origin: "manual".into(),
+                excluded: false,
+            }],
+            projects: vec![],
+            achievements: vec![],
+            skills: vec![],
+            skills_grouped: vec![],
+            excluded_skills: vec![],
+            estimated_lines: 0,
+            fits_one_page: true,
+            warnings: vec![],
+        }
+    }
+
+    #[test]
+    fn overlay_respects_human_edits_but_rejects_invalid_ai_wording() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::apply_migrations(&conn).unwrap();
+        conn.execute("INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Acme', 'Engineer', 'Job description')", []).unwrap();
+        let job_id = conn.last_insert_rowid();
+        let invalid = serde_json::to_string(&crate::tailor::ValidationResult {
+            ok: false,
+            violations: vec!["unsupported metric".into()],
+        })
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tailor_suggestions (job_id, bullet_id, original_text, suggested_text, status, validation, model) VALUES (?1, 99, 'Original', 'Invented AI claim', 'accepted', ?2, 'test-ai')",
+            params![job_id, invalid],
+        ).unwrap();
+        let mut plan = plan_with_bullet();
+        assert_eq!(
+            apply_accepted_suggestions(&conn, job_id, &mut plan).unwrap(),
+            0
+        );
+        assert_eq!(plan.experience[0].bullets[0].text, "Original");
+
+        conn.execute(
+            "INSERT INTO tailor_suggestions (job_id, bullet_id, original_text, suggested_text, status, validation, model) VALUES (?1, 99, 'Original', 'Human override', 'accepted', ?2, 'manual')",
+            params![job_id, invalid],
+        ).unwrap();
+        assert_eq!(
+            apply_accepted_suggestions(&conn, job_id, &mut plan).unwrap(),
+            1
+        );
+        assert_eq!(plan.experience[0].bullets[0].text, "Human override");
+    }
+
+    #[test]
+    fn rejected_rewrite_cannot_be_accepted_through_status_api() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::apply_migrations(&conn).unwrap();
+        conn.execute("INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Acme', 'Engineer', 'Long enough job description for testing this status transition')", []).unwrap();
+        let job_id = conn.last_insert_rowid();
+        let suggestion = insert_suggestion(
+            &conn,
+            job_id,
+            99,
+            "Built an API",
+            "Invented a billion users",
+            &crate::tailor::ValidationResult {
+                ok: false,
+                violations: vec!["unsupported metric".to_string()],
+            },
+            "test",
+        )
+        .unwrap();
+        assert!(set_suggestion_status(&conn, suggestion.id, "accepted", None).is_err());
+        assert_eq!(
+            list_suggestions(&conn, job_id).unwrap()[0].status,
+            "rejected"
+        );
+    }
+
+    #[test]
+    fn accepting_a_new_rewrite_replaces_the_previous_accepted_one() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::apply_migrations(&conn).unwrap();
+        conn.execute("INSERT INTO jobs (company, role_title, raw_jd) VALUES ('Acme', 'Engineer', 'Long enough job description for testing status replacement')", []).unwrap();
+        let job_id = conn.last_insert_rowid();
+        let valid = crate::tailor::ValidationResult {
+            ok: true,
+            violations: vec![],
+        };
+        let first = insert_suggestion(
+            &conn,
+            job_id,
+            99,
+            "Built an API",
+            "Built a reliable API",
+            &valid,
+            "test",
+        )
+        .unwrap();
+        let second = insert_suggestion(
+            &conn,
+            job_id,
+            99,
+            "Built an API",
+            "Designed an API",
+            &valid,
+            "test",
+        )
+        .unwrap();
+        set_suggestion_status(&conn, first.id, "accepted", None).unwrap();
+        set_suggestion_status(&conn, second.id, "accepted", None).unwrap();
+        let suggestions = list_suggestions(&conn, job_id).unwrap();
+        assert_eq!(
+            suggestions
+                .iter()
+                .filter(|s| s.status == "accepted")
+                .count(),
+            1
+        );
+        assert_eq!(suggestions[0].id, second.id);
+    }
+}

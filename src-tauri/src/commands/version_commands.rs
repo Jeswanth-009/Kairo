@@ -43,6 +43,10 @@ pub fn mark_artifact_reviewed(
     app_data_dir: tauri::State<'_, crate::commands::pdf_commands::AppDataDir>,
 ) -> Result<(), String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    let status = crate::db::pdf::pdf_status(&conn, job_id, &app_data_dir.0)?;
+    if status.state != "current" {
+        return Err("Export the latest saved draft before marking its PDF reviewed".to_string());
+    }
     let artifact = crate::db::pdf::get_artifact(&conn, job_id)?
         .ok_or_else(|| "No compiled PDF for this workspace — export it first".to_string())?;
     let pdf_path = crate::db::pdf::resolve_artifact_path(&app_data_dir.0, &artifact.pdf_path);
