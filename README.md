@@ -1,141 +1,105 @@
 <div align="center">
 
-<img src="public/brand/lockup-horizontal-light-800.png" alt="Kairo — Your career. A brighter next step." width="420" />
+<img src="public/brand/lockup-horizontal-light-800.png" alt="Kairo" width="380" />
 
-# Kairo
+# Your career story. A clearer next step.
 
-A local-first desktop workspace for turning your career history into a role-specific resume. Review imported facts, choose relevant experience and skills, edit the draft, and inspect the PDF you actually send. Optional AI suggests wording that you approve.
+Kairo is a free, open-source desktop workspace for turning your real experience into a focused resume for each role. Review what you import, decide what belongs, inspect the PDF, and remember the version you sent. AI writing is optional.
+
+[Download for Windows](https://github.com/Jeswanth-009/Kairo/releases/latest) · [Website](https://jeswanth-009.github.io/Kairo/) · [Browser demo](https://jeswanth-009.github.io/Kairo/demo/) · [Changelog](CHANGELOG.md)
 
 [![CI](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml/badge.svg)](https://github.com/Jeswanth-009/Kairo/actions/workflows/ci.yml)
 ![license](https://img.shields.io/badge/license-MIT-10B981)
-![platform](https://img.shields.io/badge/platform-Windows-64748B)
+![platform](https://img.shields.io/badge/installer-Windows-2563EB)
 
 </div>
 
----
+![Kairo v5 Home screen](website/assets/img/shot-dashboard-v5.png)
 
-## What Kairo does
+## Get started
 
-Kairo keeps projects, experience, education, skills, and achievements in a local SQLite database. Imported records are candidates until you review them. Each role has its own evidence choices, draft, PDF, versions, and application history.
+The [latest release](https://github.com/Jeswanth-009/Kairo/releases/latest) provides a **Windows 10/11, 64-bit installer**. It includes the Tectonic PDF engine. No account or AI provider is required to make a resume.
 
-1. **Import** an existing resume (PDF / DOCX / pasted text) — extracted facts are grouped for
-   your review; the accepted set saves in one transaction (an interrupted import leaves zero
-   partial records). Nothing is trusted automatically.
-2. **Choose the shape** — tailor for a specific job (paste the description, confirm the
-   requirements that matter) or compose a general resume with no posting at all.
-   Repeated imports of the same posting reopen its existing workspace.
-3. **See the evidence** — Kairo matches your saved history against each requirement and
-   explains *why* a record was selected, with clear / partial / missing support. You decide per
-   record: use it, dismiss it, edit the fact, or find another example. These choices affect the draft. Matching does not predict hiring outcomes.
-4. **Build the draft** — select skills deliberately, edit and reorder content, and optionally ask an OpenAI-compatible provider for bullet rewrites. Each suggestion is shown beside the original and requires acceptance.
-5. **Review the exact PDF** — the compiled document is shown with a checklist; "reviewed" is
-   recorded against that file's hash, and saving a version requires you to have reviewed that
-   specific revision.
-6. **Track the application** — which version you actually sent, when, and what happened next.
+1. **Bring your history.** Import a text-based PDF or DOCX resume, paste text, or add records manually. Review the extracted facts before saving them. Kairo keeps imported passages with their records so you can check the source later.
+2. **Choose a direction.** Create a role workspace from a job description or start a general resume. Review the requirements Kairo extracts. Reopening the same posting returns to its existing workspace.
+3. **Choose the evidence.** See which requirements have clear, partial, or missing support from your saved experience. Select records and skills deliberately; edit anything inaccurate.
+4. **Make and review the PDF.** Compose and edit the draft in Resume Studio. Re-export after changes, check the actual PDF, then save a reviewed version. When you apply, record the version you sent.
 
-With source experience saved, the guided first run composes and exports a real PDF inline, shows the still-unverified records, and offers *Save to Downloads* or *Customize in the editor*. Starting from scratch first asks you to add experience rather than exporting a blank resume. Leaving mid-flow resumes the step, reviewed draft, and workspace.
+The [browser demo](https://jeswanth-009.github.io/Kairo/demo/) uses sample data to show the interface. It is not the installed desktop app and cannot access your local Kairo database or compile PDFs.
 
-The interface is organised around these goals:
+## What is in Kairo 5
 
-| Destination | Purpose |
-|---|---|
-| **Home** | Continue the most important unfinished action |
-| **Workspaces** | Manage each role, its evidence, resume, and application |
-| **My Story** | Review and improve reusable career history |
-| **Skills** | Manage canonical skills and aliases separately from resume selection |
-| **Applications** | Track what was submitted and what happened |
-| **Settings** | Appearance, AI provider, backups, diagnostics |
+| Area              | What it does                                                                                                                                                   |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Home**          | Shows a useful next action and the state of your workspaces.                                                                                                   |
+| **My Story**      | Stores profile, experience, projects, education, achievements, source passages, and attached proof.                                                            |
+| **Skills**        | Keeps canonical skills and aliases in a separate library. A resume includes only the skills you choose.                                                        |
+| **Workspaces**    | Keeps each role's requirements, evidence decisions, resume, PDF, and application together. Repeated imports of the same posting reopen the existing workspace. |
+| **Resume Studio** | Lets you select, edit, reorder, and exclude content with a large PDF preview; files and versions are available in a separate panel.                            |
+| **AI writing**    | Offers optional bullet rewrites beside the original text. Automated claim checks reject unsupported changes, and you must accept each suggestion.              |
+| **Applications**  | Tracks the version actually sent and what happened next.                                                                                                       |
 
-Interview prep lives inside each job workspace, because its questions depend on that job.
+![Kairo v5 Workspaces](website/assets/img/shot-jobs-v5.png)
 
-## Design principles
+### With or without AI
 
-- **Human review of claims.** Kairo keeps sources and provenance visible. AI rewrites pass automated claim checks and require acceptance; automated checks cannot prove that every statement is true.
-- **Honest provenance.** Imported facts are labelled *Imported from resume* until you edit
-  (*Edited by you*), attach evidence (*Evidence attached*), or explicitly verify them
-  (*Verified by you*). Verification is always a deliberate human act.
-- **Explainable selection.** The composer shows why each record was chosen — the matched
-  requirement, the source record, and the strength of support.
-- **Local-first.** Your data stays in a local SQLite database unless you explicitly use an external AI provider. Import, matching, editing, composition, and PDF export work without AI.
-- **Reviewable PDFs.** Export is revision-checked end to end: the PDF records the saved-draft
-  revision it was compiled from, edits after the export make the PDF visibly out of date, and
-  overlapping exports of one workspace are serialized.
+Import, matching, composition, editing, PDF export, versions, applications, and backups work **without an AI provider**. With an OpenAI-compatible provider, Kairo can suggest bullet wording. A local provider such as Ollama can keep that request on your computer; a remote provider receives the selected role and supporting resume context needed for the suggestion. API keys are stored in the OS credential store.
 
-## Supported platforms
+Automated claim checks help catch unsupported technologies, metrics, and wording. They **cannot guarantee factual accuracy**. Review every suggestion and the final PDF yourself.
 
-- **Windows 10/11** (NSIS installer; Tectonic sidecar bundled).
-- macOS and Linux: the Rust core and frontend are cross-platform, but packaging and
-  the Tectonic sidecar are currently Windows-first.
+### Local-first and reviewable
 
-## Getting started (5 minutes)
+Career records live in a local SQLite database. Imported facts remain marked as imported until you edit, support, or verify them. Kairo records which saved draft revision produced a PDF; later edits make that PDF out of date. Saving a version requires review of that specific PDF.
 
-1. Install Node.js **20+** and Rust (stable). On Windows, install the MSVC C++ Build Tools or an installed GNU Rust toolchain and MinGW linker; CI uses MSVC.
-2. `npm install`
-3. `npm run tauri dev` — the app launches; a blank slate opens the guided first-run flow:
-   bring an existing resume, review and accept the extracted facts, choose *tailor for a job*
-   or *general resume*, and export the first PDF without ever opening the advanced editor.
-4. For production builds: `npm run tauri build` (requires the Tectonic sidecar —
-   `npm run ensure-tectonic` fetches it, or the build script does automatically).
+## Develop locally
 
-## Development
+Requirements: **Node.js 20+**, npm, and stable Rust. On Windows, install MSVC C++ Build Tools, or a GNU Rust toolchain with a MinGW linker. CI uses MSVC.
 
 ```bash
-npm install
-npm run dev          # frontend only (browser, with mock data)
-npm run tauri dev    # full desktop app
-
-npm run verify       # lint + test + build — the recommended local gate
-npm test             # vitest only
-cargo test           # Rust tests (in src-tauri)
-cargo clippy --all-targets -- -D warnings
+npm ci
+npm run tauri dev
 ```
 
-`npm run verify` is the check to run before pushing; CI enforces the same plus the full Rust
-suite on three platforms. On Windows the local Rust test binary needs a comctl32 v6 manifest
-(see `src-tauri/etc/` — without it `cargo test` exes fail to load with
-`STATUS_ENTRYPOINT_NOT_FOUND`); run the suite locally with:
+`npm run tauri dev` launches the full desktop app. For a browser preview with sample data, run `npm run dev` and open **`http://localhost:5173/mock.html`**. Opening the normal app route in a browser produces a Tauri bridge error because desktop commands are unavailable there.
+
+To build a Windows installer, run `npm run tauri build`; the build script fetches the Tectonic sidecar if needed.
+
+### Checks
 
 ```bash
-RUSTFLAGS="-C link-arg=<repo>/src-tauri/etc/tests-manifest.o" cargo test --lib
+npm run verify                    # lint, frontend tests, type-check, build
+cd src-tauri
+cargo fmt --check
+cargo clippy --all-targets --locked -- -D warnings
+cargo test --locked
 ```
 
-On PowerShell, the equivalent is:
+CI runs the Rust checks on Windows, macOS, and Linux. On some local Windows GNU setups, Rust test executables need the comctl32 v6 manifest in `src-tauri/etc/`. A PowerShell example for the library tests:
 
 ```powershell
 $env:RUSTFLAGS='-C link-arg=C:/path/to/Kairo/src-tauri/etc/tests-manifest.o'
-cargo test --lib
+cargo test --locked --lib
 ```
 
-CI additionally runs the integration tests (`tests/pdf_pipeline.rs`, `tests/versions_flow.rs`),
-which skip automatically when Tectonic is unavailable.
+The Rust integration tests are in `src-tauri/tests/pdf_pipeline.rs` and `src-tauri/tests/versions_flow.rs`.
 
-## What AI gets (and what works without it)
+## Architecture
 
-Everything except wording suggestions works with **no AI provider configured** — import,
-matching, composition, export, versions, applications and backups are all local and
-deterministic. When you configure an OpenAI-compatible provider (OpenAI, Groq, a local
-Ollama server), Kairo sends the selected role context, planned bullet text, and supporting record and evidence context needed for the rewrite. Review your provider's privacy terms before using a remote endpoint. The
-API key is stored in the OS credential store, not the database.
+- **UI:** React 18, TypeScript, Tailwind CSS 4, Vite, and Zustand inside Tauri 2.
+- **Core:** Rust commands and domain modules over a 16-migration SQLite schema.
+- **PDF:** Tectonic compiles LaTeX templates to a text-based PDF. Draft revisions and artifact fingerprints help identify stale output.
+- **AI:** Optional OpenAI-compatible provider. Suggestions pass claim checks and remain subject to human review.
+- **Website:** A static landing page in `website/` and a fixture-backed demo, assembled by `scripts/build-site.sh` and deployed through GitHub Pages.
 
-### Architecture (short version)
+## Current limits
 
-- **Frontend:** React 18 + TypeScript + Tailwind v4 + Vite; zustand stores; Tauri IPC.
-- **Backend:** Rust (Tauri 2) with a domain-module layout — matching, composer, tailor,
-  imports — over a 16-migration SQLite schema (WAL, foreign keys, soft-delete trash,
-  artifact fingerprints, plan revisions, record provenance, evidence decisions).
-- **PDF:** headless Tectonic (LaTeX) compilation in a staging directory. The exporter checks the saved plan revision, keeps a copy of the previous files during promotion, and verifies artifact hashes when showing PDF status.
-- **Trust model:** records carry origin, edited, and verified provenance; source passages and attached evidence provide review context. AI rewrites pass checks for unsupported technologies, metrics, and claims. The user remains responsible for factual review.
+- The official installer is Windows-only. The core is tested on macOS and Linux, but those platforms do not have packaged releases yet.
+- PDF import needs a text layer. Scanned PDFs need OCR elsewhere or manual entry.
+- Matching shows support from your stored records; it does not predict hiring outcomes.
+- Automated claim checks cannot establish that your source records or accepted wording are true.
 
-## Honest limitations
+## Contribute
 
-- Windows-first packaging; macOS/Linux are buildable but not installer-ready.
-- Resume PDF extraction handles text-based PDFs; scanned/image exports need pasted text
-  (onboarding keeps the manual-entry path open in every failure case).
-- "Where is this fact used?" counts in My Story show evidence coverage and provenance; a
-  per-job usage index ("which resumes include this record") is planned.
-- AI features require an OpenAI-compatible provider (OpenAI, Groq, a local Ollama server);
-  Kairo works fully without them.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the code map. Bug reports, focused improvements, accessibility fixes, parser cases, and documentation are welcome. Security issues should follow [SECURITY.md](SECURITY.md).
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the code map, and review expectations. Good first tasks include additional resume-parser patterns, accessibility and contrast fixes, and focused journey tests.
+Kairo is [MIT licensed](LICENSE).
