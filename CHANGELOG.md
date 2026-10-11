@@ -4,6 +4,22 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [5.0.1] — 2026-10-11
+
+### Fixed
+- Re-importing a resume that contains records already in the Vault now
+  refreshes those records in place (matched by normalized project title or
+  organization + role) instead of stacking duplicate rows. Existing skill
+  links merge by highest confidence and the original resume passage updates
+  rather than accumulating.
+- A startup maintenance pass collapses records duplicated by earlier
+  imports: the oldest copy is kept, its skill links, proof, canonical
+  bullets, Evidence decisions, and saved resume-plan references move onto
+  it, and the extras are removed in one transaction.
+- The Evidence tab renders at most one supporting record per vault record
+  per requirement — an record backing several skills of the same
+  requirement shows its contributions joined instead of repeated cards.
+
 ## [5.0.0] — 2026-10-05
 
 Kairo 5 reshapes the desktop workflow around a reviewed career history, a

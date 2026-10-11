@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const MATCHING_VERSION: u32 = 2;
+pub const MATCHING_VERSION: u32 = 3;
 
 /// Spec §6.2 weights. Persisted inside every report for reproducibility.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -251,6 +251,40 @@ fn skills_mentioned<'a>(text_tokens: &[String], skills: &'a [MatchSkill]) -> Vec
         }
     }
     mentioned
+}
+
+/// One record must appear at most once per requirement. An entity backing
+/// several skills of the same requirement gets its contributions joined
+/// ("React used here (confidence 3/5) · Python used here (confidence 3/5)")
+/// instead of a repeated card.
+fn dedupe_refs(refs: Vec<EntityRef>) -> Vec<EntityRef> {
+    let mut kept: Vec<EntityRef> = Vec::new();
+    for r in refs {
+        if let Some(existing) = kept
+            .iter_mut()
+            .find(|k| k.entity_type == r.entity_type && k.id == r.id)
+        {
+            if !existing.contribution.contains(&r.contribution) {
+                existing.contribution.push_str(" · ");
+                existing.contribution.push_str(&r.contribution);
+            }
+        } else {
+            kept.push(r);
+        }
+    }
+    kept
+}
+
+/// Explanation strings list record titles; dedupe so a summary never reads
+/// "Kairo, Kairo, Kairo".
+fn dedupe_titles(titles: Vec<String>) -> Vec<String> {
+    let mut kept: Vec<String> = Vec::new();
+    for title in titles {
+        if !kept.contains(&title) {
+            kept.push(title);
+        }
+    }
+    kept
 }
 
 // ---------------------------------------------------------------------------
@@ -726,7 +760,7 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                         format!(
                             "Covered by combined Vault evidence: {:.0}% wording overlap across {}.",
                             union_ratio * 100.0,
-                            matched_titles.join(", ")
+                            dedupe_titles(matched_titles).join(", ")
                         )
                     } else if union_ratio >= RESPONSIBILITY_PARTIAL {
                         format!("Closest Vault evidence overlaps {:.0}% of this responsibility's wording.", union_ratio * 100.0)
@@ -926,7 +960,7 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
                     }
                     explanation = format!(
                         "Supported by project and experience evidence: {} ({:.0}% matching context).",
-                        matched_titles.join(", "),
+                        dedupe_titles(matched_titles).join(", "),
                         union_ratio * 100.0
                     );
                 } else {
@@ -945,7 +979,7 @@ pub fn run_match(input: &MatchInput, now: &str) -> MatchReport {
             coverage,
             explanation,
             matched_skills,
-            entity_refs,
+            entity_refs: dedupe_refs(entity_refs),
         });
     }
 
@@ -1086,6 +1120,38 @@ mod tests {
         };
         let report = run_match(&no_alias, "2026-01");
         assert_eq!(report.results[0].coverage, Coverage::Missing);
+    }
+
+    /// One record backing several skills of the same requirement renders as a
+    /// single Supporting-record card with joined contributions — never as a
+    /// repeated card per skill.
+    #[test]
+    fn entity_supporting_two_skills_appears_once_with_joined_contributions() {
+        let input = MatchInput {
+            job_domain: String::new(),
+            requirements: vec![req(
+                1,
+                "required_skill",
+                "Familiarity with React and Python",
+            )],
+            skills: vec![skill(1, "Python", &[]), skill(2, "React", &[])],
+            entities: vec![entity(
+                1,
+                "Fullstack app",
+                vec![(1, 4), (2, 3)],
+                (None, None),
+            )],
+        };
+        let report = run_match(&input, "2026-01");
+        let refs = &report.results[0].entity_refs;
+        assert_eq!(refs.len(), 1, "one card, not one per skill");
+        assert!(refs[0].contribution.contains("React used here"));
+        assert!(refs[0].contribution.contains("Python used here"));
+        assert!(
+            refs[0].contribution.contains(" · "),
+            "contributions joined: {}",
+            refs[0].contribution
+        );
     }
 
     #[test]

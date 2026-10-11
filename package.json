@@ -7,7 +7,7 @@
   "engines": {
     "node": ">=20"
   },
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Kairo — local-first career intelligence workspace",
   "type": "module",
   "scripts": {

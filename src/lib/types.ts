@@ -355,6 +355,12 @@ export interface ImportBatchResult {
   achievementIds: number[];
   /** Ids of the skills the batch resolved or created (deduplicated). */
   skillIds: number[];
+  /** Records that already existed and were refreshed in place instead of
+   *  being duplicated — a re-import updates, never stacks copies. */
+  mergedProjectIds?: number[];
+  mergedExperienceIds?: number[];
+  mergedEducationIds?: number[];
+  mergedAchievementIds?: number[];
 }
 
 // --- Evidence stage decisions ------------------------------------------------

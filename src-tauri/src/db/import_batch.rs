@@ -32,6 +32,17 @@ pub struct ImportBatchResult {
     pub education_ids: Vec<i64>,
     pub achievement_ids: Vec<i64>,
     pub skill_ids: Vec<i64>,
+    /// Records that already existed (same title / org+role / degree) and were
+    /// refreshed in place instead of duplicated. The Vault never grows a
+    /// second copy of a record a re-import brings back.
+    #[serde(default)]
+    pub merged_project_ids: Vec<i64>,
+    #[serde(default)]
+    pub merged_experience_ids: Vec<i64>,
+    #[serde(default)]
+    pub merged_education_ids: Vec<i64>,
+    #[serde(default)]
+    pub merged_achievement_ids: Vec<i64>,
 }
 
 /// Resolves a skill by canonical name or alias, creating it when missing.
@@ -80,6 +91,101 @@ fn save_source_passage_tx(
          VALUES (?1, ?2, 'document', 'Original resume passage', 'Imported resume', ?3, 0)",
         params![kind.as_str(), entity_id, passage.trim()],
     ))?;
+    Ok(())
+}
+
+/// Finds the live record a draft re-imports, matched on the identity the
+/// Vault dedupes on (normalized title / org+role / degree). A re-import must
+/// refresh the existing record, never stack a second copy — duplicate rows
+/// are what made the matcher show the same record three times.
+fn find_live_by_tx(
+    conn: &Connection,
+    table: &str,
+    key: &[(&str, &str)],
+) -> Result<Option<i64>, String> {
+    let where_sql = key
+        .iter()
+        .map(|(col, _)| format!("LOWER(TRIM({col})) = ?"))
+        .collect::<Vec<_>>()
+        .join(" AND ");
+    let sql = format!(
+        "SELECT id FROM {table} WHERE deleted_at IS NULL AND {where_sql} ORDER BY id LIMIT 1"
+    );
+    let values: Vec<rusqlite::types::Value> = key
+        .iter()
+        .map(|(_, v)| rusqlite::types::Value::Text(v.trim().to_lowercase()))
+        .collect();
+    conn.query_row(&sql, rusqlite::params_from_iter(values.iter()), |r| {
+        r.get(0)
+    })
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+/// Merges a re-import's skill links into an existing record: union by skill,
+/// highest confidence wins. `write_links` replaces the whole set, so the
+/// existing links are read first and written back with the union.
+fn merge_links_tx(
+    conn: &Connection,
+    kind: EntityKind,
+    entity_id: i64,
+    incoming: &[super::vault::SkillRef],
+) -> Result<(), String> {
+    if incoming.is_empty() {
+        return Ok(());
+    }
+    let mut stmt = sql_err(conn.prepare(
+        "SELECT skill_id, confidence FROM entity_skills WHERE entity_type = ?1 AND entity_id = ?2",
+    ))?;
+    let rows = stmt
+        .query_map(params![kind.as_str(), entity_id], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut union: Vec<(i64, i64)> = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    for skill in incoming {
+        match union.iter_mut().find(|(sid, _)| *sid == skill.skill_id) {
+            Some((_, confidence)) => {
+                if skill.confidence > *confidence {
+                    *confidence = skill.confidence;
+                }
+            }
+            None => union.push((skill.skill_id, skill.confidence)),
+        }
+    }
+    let links: Vec<super::vault::SkillRef> = union
+        .into_iter()
+        .map(|(skill_id, confidence)| super::vault::SkillRef {
+            skill_id,
+            canonical_name: String::new(),
+            confidence,
+        })
+        .collect();
+    write_links(conn, kind.as_str(), entity_id, &links)
+}
+
+/// Keeps exactly one "Original resume passage" per record: a re-import
+/// updates the stored passage instead of stacking a new row per import.
+fn refresh_source_passage_tx(
+    conn: &Connection,
+    kind: EntityKind,
+    entity_id: i64,
+    passage: &str,
+) -> Result<(), String> {
+    if passage.trim().is_empty() {
+        return Ok(());
+    }
+    let changed = sql_err(conn.execute(
+        "UPDATE evidence SET note = ?3, updated_at = datetime('now') \
+         WHERE entity_type = ?1 AND entity_id = ?2 \
+           AND kind = 'document' AND title = 'Original resume passage'",
+        params![kind.as_str(), entity_id, passage.trim()],
+    ))?;
+    if changed == 0 {
+        save_source_passage_tx(conn, kind, entity_id, passage)?;
+    }
     Ok(())
 }
 
@@ -153,24 +259,6 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
     }
 
     for draft in &batch.experiences {
-        let experience = Experience {
-            id: 0,
-            organization: draft.organization.trim().to_string(),
-            role: draft.role.trim().to_string(),
-            description: draft.description.clone(),
-            start_date: draft.start_date.clone(),
-            end_date: draft.end_date.clone(),
-            is_current: draft.is_current,
-            location: draft.location.clone(),
-            skills: Vec::new(),
-            evidence_count: 0,
-            origin: "imported".to_string(),
-            edited_at: None,
-            verified_at: None,
-        };
-        let id = insert_entity_tx::<Experience>(tx, &experience)?;
-        out.experience_ids.push(id);
-        save_source_passage_tx(tx, EntityKind::Experience, id, &draft.source_snippet)?;
         // Experiences carry no per-draft skill list — link top-level skills
         // whose name appears in the description (the old importer's behavior).
         // Collect every match, then write once: write_links replaces the
@@ -193,30 +281,68 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
                 });
             }
         }
-        if !links.is_empty() {
-            write_links(tx, EntityKind::Experience.as_str(), id, &links)?;
-        }
+
+        let existing = find_live_by_tx(
+            tx,
+            "experiences",
+            &[("organization", &draft.organization), ("role", &draft.role)],
+        )?;
+        let id = match existing {
+            Some(id) => {
+                // Re-import: refresh the existing row in place. Only fields
+                // the draft carries are overwritten; the edited_flag trigger
+                // stamps edited_at when content actually changes.
+                sql_err(tx.execute(
+                    "UPDATE experiences SET \
+                        description = CASE WHEN ?1 != '' THEN ?1 ELSE description END, \
+                        start_date = COALESCE(?2, start_date), \
+                        end_date = COALESCE(?3, end_date), \
+                        is_current = ?4, \
+                        location = CASE WHEN ?5 != '' THEN ?5 ELSE location END, \
+                        updated_at = datetime('now') \
+                     WHERE id = ?6",
+                    params![
+                        draft.description,
+                        draft.start_date,
+                        draft.end_date,
+                        draft.is_current,
+                        draft.location.trim(),
+                        id
+                    ],
+                ))?;
+                merge_links_tx(tx, EntityKind::Experience, id, &links)?;
+                refresh_source_passage_tx(tx, EntityKind::Experience, id, &draft.source_snippet)?;
+                out.merged_experience_ids.push(id);
+                id
+            }
+            None => {
+                let experience = Experience {
+                    id: 0,
+                    organization: draft.organization.trim().to_string(),
+                    role: draft.role.trim().to_string(),
+                    description: draft.description.clone(),
+                    start_date: draft.start_date.clone(),
+                    end_date: draft.end_date.clone(),
+                    is_current: draft.is_current,
+                    location: draft.location.clone(),
+                    skills: Vec::new(),
+                    evidence_count: 0,
+                    origin: "imported".to_string(),
+                    edited_at: None,
+                    verified_at: None,
+                };
+                let id = insert_entity_tx::<Experience>(tx, &experience)?;
+                save_source_passage_tx(tx, EntityKind::Experience, id, &draft.source_snippet)?;
+                if !links.is_empty() {
+                    write_links(tx, EntityKind::Experience.as_str(), id, &links)?;
+                }
+                id
+            }
+        };
+        out.experience_ids.push(id);
     }
 
     for draft in &batch.projects {
-        let project = Project {
-            id: 0,
-            title: draft.title.trim().to_string(),
-            description: draft.description.clone(),
-            start_date: draft.start_date.clone(),
-            end_date: draft.end_date.clone(),
-            is_current: draft.is_current,
-            url: draft.url.clone(),
-            repo_url: draft.repo_url.clone(),
-            skills: Vec::new(),
-            evidence_count: 0,
-            origin: "imported".to_string(),
-            edited_at: None,
-            verified_at: None,
-        };
-        let id = insert_entity_tx::<Project>(tx, &project)?;
-        out.project_ids.push(id);
-        save_source_passage_tx(tx, EntityKind::Project, id, &draft.source_snippet)?;
         // One write_links call per record with the full link set — see the
         // experience note above.
         let mut links: Vec<super::vault::SkillRef> = Vec::new();
@@ -234,44 +360,148 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
                 confidence: 3,
             });
         }
-        if !links.is_empty() {
-            write_links(tx, EntityKind::Project.as_str(), id, &links)?;
-        }
+
+        let existing = find_live_by_tx(tx, "projects", &[("title", &draft.title)])?;
+        let id = match existing {
+            Some(id) => {
+                // Re-import: refresh the existing row in place; see the
+                // experience note above.
+                sql_err(tx.execute(
+                    "UPDATE projects SET \
+                        description = CASE WHEN ?1 != '' THEN ?1 ELSE description END, \
+                        start_date = COALESCE(?2, start_date), \
+                        end_date = COALESCE(?3, end_date), \
+                        is_current = ?4, \
+                        url = CASE WHEN ?5 != '' THEN ?5 ELSE url END, \
+                        repo_url = CASE WHEN ?6 != '' THEN ?6 ELSE repo_url END, \
+                        updated_at = datetime('now') \
+                     WHERE id = ?7",
+                    params![
+                        draft.description,
+                        draft.start_date,
+                        draft.end_date,
+                        draft.is_current,
+                        draft.url.trim(),
+                        draft.repo_url.trim(),
+                        id
+                    ],
+                ))?;
+                merge_links_tx(tx, EntityKind::Project, id, &links)?;
+                refresh_source_passage_tx(tx, EntityKind::Project, id, &draft.source_snippet)?;
+                out.merged_project_ids.push(id);
+                id
+            }
+            None => {
+                let project = Project {
+                    id: 0,
+                    title: draft.title.trim().to_string(),
+                    description: draft.description.clone(),
+                    start_date: draft.start_date.clone(),
+                    end_date: draft.end_date.clone(),
+                    is_current: draft.is_current,
+                    url: draft.url.clone(),
+                    repo_url: draft.repo_url.clone(),
+                    skills: Vec::new(),
+                    evidence_count: 0,
+                    origin: "imported".to_string(),
+                    edited_at: None,
+                    verified_at: None,
+                };
+                let id = insert_entity_tx::<Project>(tx, &project)?;
+                save_source_passage_tx(tx, EntityKind::Project, id, &draft.source_snippet)?;
+                if !links.is_empty() {
+                    write_links(tx, EntityKind::Project.as_str(), id, &links)?;
+                }
+                id
+            }
+        };
+        out.project_ids.push(id);
     }
 
     for draft in &batch.education {
-        let education = Education {
-            id: 0,
-            institution: draft.institution.trim().to_string(),
-            degree: draft.degree.trim().to_string(),
-            field_of_study: draft.field_of_study.trim().to_string(),
-            description: String::new(),
-            start_date: draft.start_date.clone(),
-            end_date: draft.end_date.clone(),
-            is_current: draft.is_current,
-            origin: "imported".to_string(),
-            edited_at: None,
-            verified_at: None,
+        let existing = find_live_by_tx(
+            tx,
+            "education",
+            &[
+                ("institution", &draft.institution),
+                ("degree", &draft.degree),
+                ("field_of_study", &draft.field_of_study),
+            ],
+        )?;
+        let id = match existing {
+            Some(id) => {
+                sql_err(tx.execute(
+                    "UPDATE education SET \
+                        start_date = COALESCE(?1, start_date), \
+                        end_date = COALESCE(?2, end_date), \
+                        is_current = ?3, \
+                        updated_at = datetime('now') \
+                     WHERE id = ?4",
+                    params![draft.start_date, draft.end_date, draft.is_current, id],
+                ))?;
+                refresh_source_passage_tx(tx, EntityKind::Education, id, &draft.source_snippet)?;
+                out.merged_education_ids.push(id);
+                id
+            }
+            None => {
+                let education = Education {
+                    id: 0,
+                    institution: draft.institution.trim().to_string(),
+                    degree: draft.degree.trim().to_string(),
+                    field_of_study: draft.field_of_study.trim().to_string(),
+                    description: String::new(),
+                    start_date: draft.start_date.clone(),
+                    end_date: draft.end_date.clone(),
+                    is_current: draft.is_current,
+                    origin: "imported".to_string(),
+                    edited_at: None,
+                    verified_at: None,
+                };
+                let id = insert_entity_tx::<Education>(tx, &education)?;
+                save_source_passage_tx(tx, EntityKind::Education, id, &draft.source_snippet)?;
+                id
+            }
         };
-        let id = insert_entity_tx::<Education>(tx, &education)?;
         out.education_ids.push(id);
-        save_source_passage_tx(tx, EntityKind::Education, id, &draft.source_snippet)?;
     }
 
     for draft in &batch.achievements {
-        let achievement = Achievement {
-            id: 0,
-            title: draft.title.trim().to_string(),
-            issuer: draft.issuer.trim().to_string(),
-            description: draft.description.clone(),
-            achieved_on: draft.achieved_on.clone(),
-            origin: "imported".to_string(),
-            edited_at: None,
-            verified_at: None,
+        let existing = find_live_by_tx(
+            tx,
+            "achievements",
+            &[("title", &draft.title), ("issuer", &draft.issuer)],
+        )?;
+        let id = match existing {
+            Some(id) => {
+                sql_err(tx.execute(
+                    "UPDATE achievements SET \
+                        description = CASE WHEN ?1 != '' THEN ?1 ELSE description END, \
+                        achieved_on = COALESCE(?2, achieved_on), \
+                        updated_at = datetime('now') \
+                     WHERE id = ?3",
+                    params![draft.description, draft.achieved_on, id],
+                ))?;
+                refresh_source_passage_tx(tx, EntityKind::Achievement, id, &draft.source_snippet)?;
+                out.merged_achievement_ids.push(id);
+                id
+            }
+            None => {
+                let achievement = Achievement {
+                    id: 0,
+                    title: draft.title.trim().to_string(),
+                    issuer: draft.issuer.trim().to_string(),
+                    description: draft.description.clone(),
+                    achieved_on: draft.achieved_on.clone(),
+                    origin: "imported".to_string(),
+                    edited_at: None,
+                    verified_at: None,
+                };
+                let id = insert_entity_tx::<Achievement>(tx, &achievement)?;
+                save_source_passage_tx(tx, EntityKind::Achievement, id, &draft.source_snippet)?;
+                id
+            }
         };
-        let id = insert_entity_tx::<Achievement>(tx, &achievement)?;
         out.achievement_ids.push(id);
-        save_source_passage_tx(tx, EntityKind::Achievement, id, &draft.source_snippet)?;
     }
 
     Ok(out)
@@ -511,5 +741,106 @@ mod tests {
             })
             .collect();
         assert_eq!(counts, vec![0, 0, 0, 0], "no partial rows may survive");
+    }
+
+    /// Re-importing the same resume must refresh the existing records, never
+    /// stack second copies — duplicate rows are what made the matcher show
+    /// the same record three times in the Evidence tab.
+    #[test]
+    fn reimport_refreshes_existing_records_instead_of_duplicating() {
+        let mut conn = mem_db();
+        let mut first_batch = sample();
+        first_batch.projects[0].source_snippet = "PyKV passage v1".to_string();
+        first_batch.experiences[0].source_snippet = "Acme passage v1".to_string();
+        first_batch.education[0].source_snippet = "Edu passage v1".to_string();
+        let first = import_resume_batch(&mut conn, &first_batch).unwrap();
+
+        let mut updated = sample();
+        updated.projects[0].description = "in-memory cache with TTL".to_string();
+        updated.projects[0].skills.push("Rust".to_string());
+        updated.projects[0].source_snippet = "PyKV passage v2".to_string();
+        updated.experiences[0].description = "built tooling with Python and Rust".to_string();
+        updated.experiences[0].source_snippet = "Acme passage v2".to_string();
+        updated.education[0].source_snippet = "Edu passage v2".to_string();
+        let second = import_resume_batch(&mut conn, &updated).unwrap();
+
+        // Same records, same ids — refreshed in place.
+        assert_eq!(second.project_ids, first.project_ids);
+        assert_eq!(second.experience_ids, first.experience_ids);
+        assert_eq!(second.education_ids, first.education_ids);
+        assert_eq!(second.merged_project_ids, first.project_ids);
+        assert_eq!(second.merged_experience_ids, first.experience_ids);
+        assert_eq!(second.merged_education_ids, first.education_ids);
+
+        for (table, expected) in [("projects", 1), ("experiences", 1), ("education", 1)] {
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(count, expected, "{table} must not grow a second copy");
+        }
+
+        // Content refreshes and skill links union (Python + Rust both linked).
+        let (desc, links): (String, i64) = conn
+            .query_row(
+                "SELECT description, (SELECT COUNT(*) FROM entity_skills es \
+                 WHERE es.entity_type = 'project' AND es.entity_id = projects.id) \
+                 FROM projects WHERE id = ?1",
+                [second.project_ids[0]],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(desc, "in-memory cache with TTL");
+        assert_eq!(links, 2, "Python + Rust links survive the merge");
+
+        // Exactly one original-passage row per record, note refreshed to v2.
+        for (kind, id, v2) in [
+            ("project", second.project_ids[0], "PyKV passage v2"),
+            ("experience", second.experience_ids[0], "Acme passage v2"),
+            ("education", second.education_ids[0], "Edu passage v2"),
+        ] {
+            let (count, note): (i64, String) = conn
+                .query_row(
+                    "SELECT COUNT(*) OVER (), note FROM evidence \
+                     WHERE entity_type = ?1 AND entity_id = ?2 \
+                       AND kind = 'document' AND title = 'Original resume passage'",
+                    params![kind, id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .unwrap();
+            assert_eq!(count, 1, "one passage per {kind}, not one per import");
+            assert_eq!(note, v2, "{kind} passage refreshed in place");
+        }
+
+        // A genuinely new record still inserts (and is not reported merged).
+        let mut extra = sample();
+        extra.projects[0].title = "Different Project".to_string();
+        let third = import_resume_batch(&mut conn, &extra).unwrap();
+        assert_ne!(third.project_ids[0], second.project_ids[0]);
+        assert!(third.merged_project_ids.is_empty());
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM projects", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    /// Case and whitespace differences in the source resume must not defeat
+    /// the identity match — the same record is still recognized.
+    #[test]
+    fn reimport_matches_identity_despite_case_and_padding() {
+        let mut conn = mem_db();
+        let first = import_resume_batch(&mut conn, &sample()).unwrap();
+
+        let mut noisy = sample();
+        noisy.projects[0].title = "  pykv ".to_string();
+        noisy.experiences[0].organization = "ACME".to_string();
+        noisy.experiences[0].role = "intern".to_string();
+        let second = import_resume_batch(&mut conn, &noisy).unwrap();
+
+        assert_eq!(second.project_ids, first.project_ids);
+        assert_eq!(second.experience_ids, first.experience_ids);
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM projects", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
     }
 }

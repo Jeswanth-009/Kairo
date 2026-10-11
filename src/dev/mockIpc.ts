@@ -581,6 +581,10 @@ const handlers: Record<string, Handler> = {
       educationIds,
       achievementIds,
       skillIds: [...new Set(nameId.values())],
+      mergedProjectIds: [],
+      mergedExperienceIds: [],
+      mergedEducationIds: [],
+      mergedAchievementIds: [],
     };
   },
 };

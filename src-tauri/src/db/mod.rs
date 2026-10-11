@@ -15,6 +15,7 @@ pub mod applications;
 pub mod backup;
 pub mod composer;
 pub mod dashboard;
+pub mod dedup;
 pub mod fingerprint;
 pub mod import_batch;
 pub mod interview;
@@ -104,6 +105,13 @@ pub fn open_and_migrate(db_path: &Path, data_dir: &Path) -> Result<Connection, B
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
     apply_migrations(&conn)?;
+    // Collapse records duplicated by pre-5.0.1 resume re-imports. Runs at
+    // startup only and never blocks opening.
+    match dedup::merge_duplicate_vault_records(&conn) {
+        Ok(0) => {}
+        Ok(n) => eprintln!("[kairo] merged {n} duplicate vault record(s)"),
+        Err(e) => eprintln!("[kairo] duplicate merge skipped: {e}"),
+    }
     // Trash expiry and orphan-file reconciliation run at startup only — a
     // failure in either must not block opening.
     let pdf_root = data_dir.join("pdf");

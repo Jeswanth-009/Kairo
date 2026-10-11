@@ -697,11 +697,19 @@ function ReviewGroups({
         result.educationIds.length +
         result.achievementIds.length +
         (skillList.length > 0 ? 1 : 0);
+      // A re-import refreshes existing records instead of duplicating them.
+      const updated =
+        (result.mergedProjectIds?.length ?? 0) +
+        (result.mergedExperienceIds?.length ?? 0) +
+        (result.mergedEducationIds?.length ?? 0) +
+        (result.mergedAchievementIds?.length ?? 0);
       if (verifyContact && result.profileSaved) {
         toast.ok("Contact details saved — mark them verified from the Vault record.");
       }
       toast.ok(
-        `${created} record${created === 1 ? "" : "s"} saved to your Vault — each shows where it came from.`,
+        updated > 0
+          ? `${created} record${created === 1 ? "" : "s"} saved, ${updated} existing record${updated === 1 ? "" : "s"} updated in place — no duplicates created.`
+          : `${created} record${created === 1 ? "" : "s"} saved to your Vault — each shows where it came from.`,
       );
       if (verificationFailed) {
         toast.error("Some records were saved but could not be marked verified. Check them in My Story.");
