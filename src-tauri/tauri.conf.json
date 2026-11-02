@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; frame-src 'self' asset: http://asset.localhost blob:;",
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; frame-src 'self' asset: http://asset.localhost blob:; worker-src 'self' blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.openai.com ws://localhost:* wss://localhost:*;",
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPDATA/**"]
