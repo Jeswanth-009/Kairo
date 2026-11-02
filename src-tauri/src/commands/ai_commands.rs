@@ -1,6 +1,7 @@
 //! AI + tailoring command boundary (Phase 7).
 
 use crate::ai::AiConfig;
+use crate::commands::pdf_commands::AppDataDir;
 use crate::db::{tailor, DbState};
 use serde::Serialize;
 use tauri::State;
@@ -22,9 +23,13 @@ pub struct AiConfigView {
 }
 
 #[tauri::command]
-pub fn ai_get_config(state: State<'_, DbState>) -> Result<AiConfigView, String> {
+pub fn ai_get_config(
+    state: State<'_, DbState>,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<AiConfigView, String> {
     let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-    let (config, has_key) = tailor::get_ai_config(&conn)?;
+    let (config, has_key) =
+        tailor::get_ai_config(&conn, &crate::ai::keyring_user(&app_data_dir.0))?;
     Ok(AiConfigView {
         base_url: config.base_url,
         model: config.model,
@@ -35,6 +40,7 @@ pub fn ai_get_config(state: State<'_, DbState>) -> Result<AiConfigView, String> 
 #[tauri::command]
 pub fn ai_save_config(
     state: State<'_, DbState>,
+    app_data_dir: State<'_, AppDataDir>,
     base_url: String,
     model: String,
     api_key: Option<String>,
@@ -44,8 +50,9 @@ pub fn ai_save_config(
         base_url: base_url.trim().to_string(),
         model: model.trim().to_string(),
     };
-    tailor::save_ai_config(&conn, &config, api_key.as_deref())?;
-    let (_, has_key) = tailor::get_ai_config(&conn)?;
+    let user = crate::ai::keyring_user(&app_data_dir.0);
+    tailor::save_ai_config(&conn, &config, api_key.as_deref(), &user)?;
+    let (_, has_key) = tailor::get_ai_config(&conn, &user)?;
     Ok(AiConfigView {
         base_url: config.base_url,
         model: config.model,
@@ -56,13 +63,17 @@ pub fn ai_save_config(
 /// Blocking network call — async so it runs on the command pool, never the
 /// main thread (a 240s timeout must never freeze the window).
 #[tauri::command]
-pub async fn ai_test_connection(state: State<'_, DbState>) -> Result<String, String> {
+pub async fn ai_test_connection(
+    state: State<'_, DbState>,
+    app_data_dir: State<'_, AppDataDir>,
+) -> Result<String, String> {
     // Gather config under the lock, then DROP it before the network call —
     // a 240s timeout must never freeze every other command.
     let (config, key) = {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-        let (config, _) = tailor::get_ai_config(&conn)?;
-        let key = crate::ai::load_api_key()?.unwrap_or_default();
+        let (config, _) = tailor::get_ai_config(&conn, &crate::ai::keyring_user(&app_data_dir.0))?;
+        let key =
+            crate::ai::load_api_key(&crate::ai::keyring_user(&app_data_dir.0))?.unwrap_or_default();
         (config, key)
     };
     crate::ai::test_connection(&config, &key)
@@ -73,12 +84,13 @@ pub async fn ai_test_connection(state: State<'_, DbState>) -> Result<String, Str
 #[tauri::command]
 pub async fn ai_list_models(
     state: State<'_, DbState>,
+    app_data_dir: State<'_, AppDataDir>,
     base_url: String,
 ) -> Result<Vec<String>, String> {
     // Lock held only for the keyring read, not the network GET.
     let key = {
         let _conn = state.0.lock().map_err(|_| DB_LOCK)?;
-        crate::ai::load_api_key()?.unwrap_or_default()
+        crate::ai::load_api_key(&crate::ai::keyring_user(&app_data_dir.0))?.unwrap_or_default()
     };
     crate::ai::list_models(&base_url, &key)
 }
@@ -190,6 +202,7 @@ fn log_tailor_call(
 #[tauri::command]
 pub async fn tailor_suggest(
     state: State<'_, DbState>,
+    app_data_dir: State<'_, AppDataDir>,
     job_id: i64,
     bullet_id: i64,
 ) -> Result<tailor::TailorSuggestion, String> {
@@ -197,8 +210,9 @@ pub async fn tailor_suggest(
     // Grounding under the lock (milliseconds), then the network without it.
     let (grounding, config, key) = {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-        let (config, _) = tailor::get_ai_config(&conn)?;
-        let key = crate::ai::load_api_key()?.unwrap_or_default();
+        let user = crate::ai::keyring_user(&app_data_dir.0);
+        let (config, _) = tailor::get_ai_config(&conn, &user)?;
+        let key = crate::ai::load_api_key(&user)?.unwrap_or_default();
         let grounding = tailor::assemble_grounding(&conn, job_id, bullet_id)?;
         (grounding, config, key)
     };
@@ -274,6 +288,7 @@ pub struct TailorBatchReport {
 #[tauri::command]
 pub async fn tailor_plan_batch(
     state: State<'_, DbState>,
+    app_data_dir: State<'_, AppDataDir>,
     cancel: State<'_, TailorCancel>,
     job_id: i64,
 ) -> Result<TailorBatchReport, String> {
@@ -284,8 +299,9 @@ pub async fn tailor_plan_batch(
     // Phase 1 (lock): config, plan, and grounding for every bullet in one pass.
     let (config, key, groundings, role_line) = {
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
-        let (config, _) = tailor::get_ai_config(&conn)?;
-        let key = crate::ai::load_api_key()?.unwrap_or_default();
+        let user = crate::ai::keyring_user(&app_data_dir.0);
+        let (config, _) = tailor::get_ai_config(&conn, &user)?;
+        let key = crate::ai::load_api_key(&user)?.unwrap_or_default();
         let stored = crate::db::composer::get_plan(&conn, job_id)?.ok_or_else(|| {
             "No plan for this workspace — compose one in the Plan tab first".to_string()
         })?;

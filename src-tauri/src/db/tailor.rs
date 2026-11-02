@@ -9,7 +9,7 @@ use rusqlite::{params, Connection};
 // AI provider config (meta table; key lives in the OS credential store)
 // ---------------------------------------------------------------------------
 
-pub fn get_ai_config(conn: &Connection) -> Result<(AiConfig, bool), String> {
+pub fn get_ai_config(conn: &Connection, keyring_user: &str) -> Result<(AiConfig, bool), String> {
     let config_json: Option<String> = {
         let mut stmt = sql_err(conn.prepare("SELECT value FROM meta WHERE key = 'ai_config'"))?;
         let row = stmt.query_row([], |r| r.get(0));
@@ -34,7 +34,7 @@ pub fn get_ai_config(conn: &Connection) -> Result<(AiConfig, bool), String> {
         },
         None => AiConfig::default(),
     };
-    let has_key = crate::ai::load_api_key()?.is_some();
+    let has_key = crate::ai::load_api_key(keyring_user)?.is_some();
     Ok((config, has_key))
 }
 
@@ -42,14 +42,15 @@ pub fn save_ai_config(
     conn: &Connection,
     config: &AiConfig,
     api_key: Option<&str>,
+    keyring_user: &str,
 ) -> Result<(), String> {
     if let Some(key) = api_key {
         if key.trim().is_empty() {
             // Explicitly blanked out in the UI — clear the stored credential
             // so local providers (Ollama, LM Studio) run without auth.
-            crate::ai::delete_api_key()?;
+            crate::ai::delete_api_key(keyring_user)?;
         } else {
-            crate::ai::store_api_key(key.trim())?;
+            crate::ai::store_api_key(key.trim(), keyring_user)?;
         }
     }
     sql_err(conn.execute(

@@ -31,7 +31,20 @@ impl Default for AiConfig {
 }
 
 const KEYRING_SERVICE: &str = "Kairo";
-const KEYRING_USER: &str = "ai-api-key";
+/// Credential user before per-directory namespacing (adopted and retired by
+/// `load_api_key` so existing installs keep their stored key).
+const LEGACY_KEYRING_USER: &str = "ai-api-key";
+
+/// Namespaced keyring user: a short digest of the app data directory, so two
+/// checkouts of Kairo under the same OS user no longer share one credential.
+pub fn keyring_user(data_dir: &std::path::Path) -> String {
+    use sha2::Digest;
+    let digest = sha2::Sha256::digest(data_dir.to_string_lossy().as_bytes());
+    format!(
+        "ai-api-key-{:02x}{:02x}{:02x}{:02x}",
+        digest[0], digest[1], digest[2], digest[3]
+    )
+}
 
 /// Cold starts (first request loads a local model into RAM) can take a while —
 /// but a hung provider must not occupy the caller forever. Batch calls get a
@@ -71,16 +84,16 @@ pub struct ChatResult {
     pub duration_ms: u128,
 }
 
-pub fn store_api_key(key: &str) -> Result<(), String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
+pub fn store_api_key(key: &str, user: &str) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, user)
         .map_err(|e| format!("credential store unavailable: {e}"))?;
     entry
         .set_password(key)
         .map_err(|e| format!("could not store API key: {e}"))
 }
 
-pub fn delete_api_key() -> Result<(), String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
+pub fn delete_api_key(user: &str) -> Result<(), String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, user)
         .map_err(|e| format!("credential store unavailable: {e}"))?;
     match entry.delete_credential() {
         Ok(()) => Ok(()),
@@ -89,12 +102,28 @@ pub fn delete_api_key() -> Result<(), String> {
     }
 }
 
-pub fn load_api_key() -> Result<Option<String>, String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
+pub fn load_api_key(user: &str) -> Result<Option<String>, String> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, user)
         .map_err(|e| format!("credential store unavailable: {e}"))?;
     match entry.get_password() {
         Ok(key) => Ok(Some(key)),
-        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(keyring::Error::NoEntry) => {
+            // One-time migration: the pre-namespacing credential lived under
+            // the shared "ai-api-key" user — adopt it once, then retire it.
+            let legacy = keyring::Entry::new(KEYRING_SERVICE, LEGACY_KEYRING_USER)
+                .map_err(|e| format!("credential store unavailable: {e}"))?;
+            match legacy.get_password() {
+                Ok(key) => {
+                    entry
+                        .set_password(&key)
+                        .map_err(|e| format!("could not store API key: {e}"))?;
+                    let _ = legacy.delete_credential();
+                    Ok(Some(key))
+                }
+                Err(keyring::Error::NoEntry) => Ok(None),
+                Err(e) => Err(format!("could not read API key: {e}")),
+            }
+        }
         Err(e) => Err(format!("could not read API key: {e}")),
     }
 }
