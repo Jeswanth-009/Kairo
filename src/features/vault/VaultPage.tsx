@@ -34,9 +34,18 @@ const TABS: { key: TabKey; label: string }[] = [
 
 export default function VaultPage() {
   const navigate = useNavigate();
-  const store = useVaultStore();
+  // Slice subscriptions: evidence/bullet/rule cache updates (fired from the
+  // inspector) must not re-render the whole record grid.
+  const loaded = useVaultStore((s) => s.loaded);
+  const loading = useVaultStore((s) => s.loading);
   const loadError = useVaultStore((s) => s.error);
-  const { loaded, loading } = store;
+  const projects = useVaultStore((s) => s.projects);
+  const experiences = useVaultStore((s) => s.experiences);
+  const education = useVaultStore((s) => s.education);
+  const certifications = useVaultStore((s) => s.certifications);
+  const achievements = useVaultStore((s) => s.achievements);
+  const skills = useVaultStore((s) => s.skills);
+  const load = useVaultStore((s) => s.load);
 
   const [tab, setTab] = useState<TabKey>("projects");
   const [query, setQuery] = useState("");
@@ -55,7 +64,7 @@ export default function VaultPage() {
   const clearVaultAction = useUiStore((s) => s.clearVaultAction);
 
   useEffect(() => {
-    store.load().catch(() => { /* surfaced via store error */ });
+    load().catch(() => { /* surfaced via store error */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -63,21 +72,14 @@ export default function VaultPage() {
   // actually changes, not on every render.
   const records: Record<TabKey, AnyVaultRecord[]> = useMemo(
     () => ({
-      projects: store.projects,
-      experiences: store.experiences,
-      education: store.education,
-      certifications: store.certifications,
-      achievements: store.achievements,
-      skills: store.skills,
+      projects,
+      experiences,
+      education,
+      certifications,
+      achievements,
+      skills,
     }),
-    [
-      store.projects,
-      store.experiences,
-      store.education,
-      store.certifications,
-      store.achievements,
-      store.skills,
-    ],
+    [projects, experiences, education, certifications, achievements, skills],
   );
 
   useEffect(() => {

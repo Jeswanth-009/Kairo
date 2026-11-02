@@ -444,6 +444,7 @@ function EvidenceDialog({
       await onSave(values);
     } catch (e) {
       setError(String(e));
+    } finally {
       setSaving(false);
     }
   };
@@ -715,6 +716,7 @@ function BulletDialog({
       );
     } catch (e) {
       setError(String(e));
+    } finally {
       setSaving(false);
     }
   };
@@ -984,6 +986,7 @@ function RuleDialog({
       await onSave(values);
     } catch (e) {
       setError(String(e));
+    } finally {
       setSaving(false);
     }
   };
