@@ -1,0 +1,16 @@
+{
+  "version": "0.17.0",
+  "source": "tectonic-typesetting/tectonic release tectonic@0.17.0 — per-asset sha256 digests as published by the GitHub release API (spot-verified by download).",
+  "assets": {
+    "tectonic-0.17.0-aarch64-apple-darwin.tar.gz": "a3f1cac7c5678f01661a92212f58480ae3b0634115d880dbc59e2953ded45667",
+    "tectonic-0.17.0-aarch64-unknown-linux-musl.tar.gz": "b10954a95404f3ab2328d2fa59a5ebab8e657f893fab096f98be8db7c0c979b8",
+    "tectonic-0.17.0-arm-unknown-linux-musleabihf.tar.gz": "882f5213599931992dfb9f7e1157d3015fd9abd505c68c693b3d6dc20967f7eb",
+    "tectonic-0.17.0-i686-unknown-linux-gnu.tar.gz": "f4c887268be8ce443de7b4ccb67d6978fe40113ae8872310957693bb80d07ff4",
+    "tectonic-0.17.0-x86_64-apple-darwin.tar.gz": "7c90ef5b6ddb1eb1937e4337add5237b79338e4b9676459fa91187d24d6cdf80",
+    "tectonic-0.17.0-x86_64-pc-windows-gnu.zip": "77a0ebba1cc54f6145dbc27377e253c9fffa07eab7c368ff9ef30c2d05557365",
+    "tectonic-0.17.0-x86_64-pc-windows-msvc.zip": "f61ce51f0b0ade1015b7de7ef368541c5424e9756ecbd0d7af97d6d48030845f",
+    "tectonic-0.17.0-x86_64-unknown-linux-gnu.tar.gz": "1a715688baf591e650c8aeb160ae934e181685eecbb38b317de30b269ac5d606",
+    "tectonic-0.17.0-x86_64-unknown-linux-musl.tar.gz": "8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7",
+    "tectonic-0.17.0-x86_64.AppImage": "dd828b1d9c881373945a5f2fe0a56077be2603b500e9ce1e73147c27584b544a"
+  }
+}

@@ -1,20 +1,33 @@
 #!/usr/bin/env node
-// Downloads the platform Tectonic binary into `src-tauri/binaries/` so the
-// Tauri `externalBin` (sidecar) bundler always finds it. The binary is never
-// committed — release CI and local builds fetch it with this script, which
-// `beforeDevCommand` / `beforeBuildCommand` run automatically.
+// Downloads the pinned platform Tectonic binary into `src-tauri/binaries/` so
+// the Tauri `externalBin` (sidecar) bundler always finds it. The binary is
+// never committed — release CI and local builds fetch it with this script,
+// which `beforeDevCommand` / `beforeBuildCommand` run automatically.
+//
+// The sidecar is executable code shipped inside every installer, so this
+// script never resolves "latest": the version is pinned and every download
+// is verified against the committed digests in scripts/tectonic-checksums.json
+// before extraction. A cached binary is re-verified against its recorded hash
+// so a truncated or tampered file is never bundled. To upgrade Tectonic, add
+// the new release's asset digests to the checksums file (the GitHub release
+// API exposes them as each asset's `digest`) and bump PINNED_VERSION in the
+// same commit.
 //
 // Triple resolution order: $TAURI_TARGET_TRIPLE → `rustc -vV` host triple →
 // x86_64-pc-windows-msvc. Set TAURI_TARGET_TRIPLE when cross-compiling.
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
+  createReadStream,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +41,17 @@ const BIN_DIR = join(ROOT, "src-tauri", "binaries");
 const REPO = "tectonic-typesetting/tectonic";
 const EXE = process.platform === "win32" ? ".exe" : "";
 
+const PINNED_VERSION = "0.17.0";
+const CHECKSUMS = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "tectonic-checksums.json"), "utf8"),
+);
+if (CHECKSUMS.version !== PINNED_VERSION) {
+  console.error(
+    `[tectonic] checksum file version ${CHECKSUMS.version} does not match pinned ${PINNED_VERSION} — update them together`,
+  );
+  process.exit(1);
+}
+
 function hostTriple() {
   if (process.env.TAURI_TARGET_TRIPLE) return process.env.TAURI_TARGET_TRIPLE;
   try {
@@ -40,23 +64,13 @@ function hostTriple() {
   return "x86_64-pc-windows-msvc";
 }
 
-function fetchJson(url) {
+function sha256File(path) {
   return new Promise((resolve, reject) => {
-    get(url, { headers: { "User-Agent": "kairo-build" } }, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`GitHub API returned HTTP ${res.statusCode} for ${url}`));
-        return;
-      }
-      let body = "";
-      res.on("data", (c) => (body += c));
-      res.on("end", () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (e) {
-          reject(e);
-        }
-      });
-    }).on("error", reject);
+    const hash = createHash("sha256");
+    const stream = createReadStream(path);
+    stream.on("data", (c) => hash.update(c));
+    stream.on("end", () => resolve(hash.digest("hex")));
+    stream.on("error", reject);
   });
 }
 
@@ -78,57 +92,67 @@ function downloadTo(url, dest) {
 
 const triple = hostTriple();
 const dest = join(BIN_DIR, `tectonic-${triple}${EXE}`);
+const destHashPath = `${dest}.sha256`;
+
+// Revalidate a cached sidecar before trusting it: binaries/ persists between
+// CI runs and on dev machines, and a corrupted file must never be bundled.
 if (existsSync(dest)) {
-  console.log(`[tectonic] already present: ${dest}`);
-  process.exit(0);
-}
-
-console.log(`[tectonic] fetching binary for ${triple}…`);
-
-// GitHub API rate limits (403) hit CI occasionally. Retry with backoff, then
-// fall back to a pinned release fetched from the plain download endpoint
-// (which is not API-rate-limited) so the sidecar always lands — Tauri's
-// externalBin requires the file to exist for any cargo invocation.
-const PINNED_VERSION = "0.17.0";
-const ext = process.platform === "win32" ? "zip" : "tar.gz";
-
-async function resolveAsset() {
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    try {
-      const release = await fetchJson(`https://api.github.com/repos/${REPO}/releases/latest`);
-      const version = String(release.tag_name).replace(/^tectonic@/, "");
-      const asset = (release.assets ?? []).find(
-        (a) => a.name === `tectonic-${version}-${triple}.${ext}`,
-      );
-      if (asset) {
-        return { url: asset.browser_download_url, archiveName: asset.name };
-      }
-      console.error(`[tectonic] no release asset tectonic-${version}-${triple}.${ext}`);
-    } catch (e) {
-      if (attempt < 4) {
-        const wait = attempt * 5000;
-        console.warn(`[tectonic] release query failed (${e.message}); retry ${attempt}/3 in ${wait / 1000}s…`);
-        await new Promise((r) => setTimeout(r, wait));
-        continue;
-      }
-      console.warn(`[tectonic] release query failed (${e.message}); falling back to pinned v${PINNED_VERSION}`);
+  const recorded = existsSync(destHashPath) ? readFileSync(destHashPath, "utf8").trim() : null;
+  if (recorded) {
+    const actual = await sha256File(dest);
+    if (actual === recorded) {
+      console.log(`[tectonic] already present and verified: ${dest}`);
+      process.exit(0);
     }
-    break;
+    console.warn(`[tectonic] cached binary hash mismatch — re-downloading`);
+  } else {
+    console.warn(`[tectonic] cached binary has no recorded hash — re-downloading`);
   }
-  // Pinned fallback: direct download URL, no API needed.
-  const name = `tectonic-${PINNED_VERSION}-${triple}.${ext}`;
-  return {
-    url: `https://github.com/${REPO}/releases/download/tectonic@${PINNED_VERSION}/${name}`,
-    archiveName: name,
-  };
+  rmSync(dest, { force: true });
+  rmSync(destHashPath, { force: true });
 }
 
-const { url, archiveName } = await resolveAsset();
+const ext = process.platform === "win32" ? "zip" : "tar.gz";
+const archiveName = `tectonic-${PINNED_VERSION}-${triple}.${ext}`;
+const expectedArchiveHash = CHECKSUMS.assets[archiveName];
+if (!expectedArchiveHash) {
+  console.error(
+    `[tectonic] no committed checksum for ${archiveName} — add the digest to scripts/tectonic-checksums.json or fix TAURI_TARGET_TRIPLE`,
+  );
+  process.exit(1);
+}
+
+// Plain download endpoint: no GitHub API rate limits, fixed version.
+const url = `https://github.com/${REPO}/releases/download/tectonic@${PINNED_VERSION}/${archiveName}`;
 
 const archive = join(tmpdir(), archiveName);
 const extractDir = join(tmpdir(), `kairo-tectonic-${triple}`);
-console.log(`[tectonic] downloading ${archiveName}…`);
-await downloadTo(url, archive);
+console.log(`[tectonic] downloading pinned v${PINNED_VERSION} for ${triple}…`);
+for (let attempt = 1; ; attempt++) {
+  try {
+    await downloadTo(url, archive);
+    break;
+  } catch (e) {
+    if (attempt >= 3) {
+      console.error(`[tectonic] download failed after ${attempt} attempts: ${e.message}`);
+      process.exit(1);
+    }
+    const wait = attempt * 5000;
+    console.warn(`[tectonic] download failed (${e.message}); retry ${attempt}/2 in ${wait / 1000}s…`);
+    await new Promise((r) => setTimeout(r, wait));
+  }
+}
+
+const archiveHash = await sha256File(archive);
+if (archiveHash !== expectedArchiveHash) {
+  rmSync(archive, { force: true });
+  console.error(
+    `[tectonic] REFUSING to install: downloaded archive hash ${archiveHash} does not match the committed checksum ${expectedArchiveHash}`,
+  );
+  process.exit(1);
+}
+console.log(`[tectonic] archive checksum verified`);
+
 rmSync(extractDir, { recursive: true, force: true });
 mkdirSync(extractDir, { recursive: true });
 // Windows ships bsdtar at an absolute path (GNU tar from a dev shell would
@@ -155,6 +179,7 @@ if (!binaryPath) {
 mkdirSync(BIN_DIR, { recursive: true });
 copyFileSync(binaryPath, dest);
 if (process.platform !== "win32") chmodSync(dest, 0o755);
+writeFileSync(destHashPath, `${await sha256File(dest)}\n`, "utf8");
 rmSync(archive, { force: true });
 rmSync(extractDir, { recursive: true, force: true });
 console.log(`[tectonic] ready: ${dest}`);
