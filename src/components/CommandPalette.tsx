@@ -9,7 +9,6 @@ import {
   FolderGit2,
   GraduationCap,
   LayoutDashboard,
-  MessagesSquare,
   Search,
   Settings,
   Sparkles,
@@ -35,9 +34,9 @@ interface PaletteItem {
 const NAV_ACTIONS: { to: string; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/story", label: "My story", icon: Archive },
+  { to: "/skills", label: "Skills", icon: Sparkles },
   { to: "/jobs", label: "Jobs", icon: Briefcase },
   { to: "/applications", label: "Applications", icon: ClipboardCheck },
-  { to: "/interview", label: "Interview Prep", icon: MessagesSquare },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
