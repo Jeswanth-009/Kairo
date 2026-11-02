@@ -87,6 +87,17 @@ pub struct AchievementDraft {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CertificationDraft {
+    pub title: String,
+    pub issuer: String,
+    pub description: String,
+    #[serde(default)]
+    pub issue_date: Option<String>,
+    pub source_snippet: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SkillDraft {
     pub name: String,
     pub category: String,
@@ -122,6 +133,8 @@ pub struct ResumeImport {
     pub experiences: Vec<ExperienceDraft>,
     pub education: Vec<EducationDraft>,
     pub achievements: Vec<AchievementDraft>,
+    #[serde(default)]
+    pub certifications: Vec<CertificationDraft>,
     pub skills: Vec<SkillDraft>,
 }
 
@@ -136,6 +149,7 @@ enum Section {
     Experience,
     Education,
     Achievements,
+    Certifications,
     Skills,
     Ignored,
 }
@@ -219,10 +233,10 @@ fn detect_section(line: &str) -> Option<Section> {
         | "programming languages"
         | "languages & tools"
         | "technical expertise" => Some(Section::Skills),
-        "certifications"
-        | "certificates"
-        | "certifications & training"
-        | "contact"
+        "certifications" | "certificates" | "certifications & training" => {
+            Some(Section::Certifications)
+        }
+        "contact"
         | "contact information"
         | "references"
         | "publications"
@@ -1163,6 +1177,7 @@ fn parse_narrative_text(text: &str) -> Option<ResumeImport> {
         experiences: Vec::new(),
         education: Vec::new(),
         achievements: Vec::new(),
+        certifications: Vec::new(),
         skills: Vec::new(),
     })
 }
@@ -1258,6 +1273,7 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
     let mut experiences: Vec<ExperienceDraft> = Vec::new();
     let mut education: Vec<EducationDraft> = Vec::new();
     let mut achievements: Vec<AchievementDraft> = Vec::new();
+    let mut certifications: Vec<CertificationDraft> = Vec::new();
     let mut skills: Vec<SkillDraft> = Vec::new();
     let mut seen_skills: Vec<String> = Vec::new();
 
@@ -1265,6 +1281,7 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
     let mut cur_experience: Option<ExperienceDraft> = None;
     let mut cur_education: Option<EducationDraft> = None;
     let mut cur_achievement: Option<AchievementDraft> = None;
+    let mut cur_certification: Option<CertificationDraft> = None;
     let mut snippet: Vec<String> = Vec::new();
 
     let mut first_line_checked = false;
@@ -1301,6 +1318,10 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
             if let Some(mut a) = cur_achievement.take() {
                 a.source_snippet = snippet.join("\n");
                 achievements.push(a);
+            }
+            if let Some(mut c) = cur_certification.take() {
+                c.source_snippet = snippet.join("\n");
+                certifications.push(c);
             }
             snippet.clear();
             section = Some(next);
@@ -1560,6 +1581,51 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
                     });
                 }
             }
+            Section::Certifications => {
+                let content = trimmed.trim_start_matches(BULLETS).trim();
+                let is_bullet = starts_with_bullet(trimmed);
+                let (date, _, _) = extract_date_range(content);
+                let clean_content = strip_trailing_dates(content);
+                let has_separator = clean_content.contains('|')
+                    || clean_content.contains('—')
+                    || clean_content.contains('–');
+
+                if is_bullet {
+                    if let Some(c) = cur_certification.as_mut() {
+                        if !c.description.is_empty() {
+                            c.description.push('\n');
+                        }
+                        c.description.push_str(content);
+                        snippet.push(line.to_string());
+                    }
+                } else if cur_certification
+                    .as_ref()
+                    .is_some_and(|c| !c.description.is_empty())
+                    && date.is_none()
+                    && !has_separator
+                {
+                    if let Some(c) = cur_certification.as_mut() {
+                        c.description.push(' ');
+                        c.description.push_str(content);
+                        snippet.push(line.to_string());
+                    }
+                } else {
+                    if let Some(mut c) = cur_certification.take() {
+                        c.source_snippet = snippet.join("\n");
+                        certifications.push(c);
+                    }
+                    snippet = vec![line.to_string()];
+                    let (first, second) = split_pair(&clean_content)
+                        .unwrap_or((clean_content.clone(), String::new()));
+                    cur_certification = Some(CertificationDraft {
+                        title: clean_title(&first),
+                        issuer: second,
+                        description: String::new(),
+                        issue_date: date,
+                        source_snippet: String::new(),
+                    });
+                }
+            }
             Section::Ignored => {}
         }
     }
@@ -1579,6 +1645,10 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
     if let Some(mut a) = cur_achievement.take() {
         a.source_snippet = snippet.join("\n");
         achievements.push(a);
+    }
+    if let Some(mut c) = cur_certification.take() {
+        c.source_snippet = snippet.join("\n");
+        certifications.push(c);
     }
 
     let (headline, summary) = if !summary_lines.is_empty() {
@@ -1620,6 +1690,7 @@ pub fn parse_resume_text(text: &str) -> ResumeImport {
         experiences,
         education,
         achievements,
+        certifications,
         skills,
     }
 }

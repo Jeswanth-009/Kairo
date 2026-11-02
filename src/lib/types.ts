@@ -271,6 +271,14 @@ export interface AchievementDraft {
   sourceSnippet: string;
 }
 
+export interface CertificationDraft {
+  title: string;
+  issuer: string;
+  description: string;
+  issueDate: string | null;
+  sourceSnippet: string;
+}
+
 export interface ProjectDraft {
   title: string;
   description: string;
@@ -330,6 +338,7 @@ export interface ResumeImport {
   experiences: ExperienceDraft[];
   education: EducationDraft[];
   achievements: AchievementDraft[];
+  certifications: CertificationDraft[];
   skills: SkillDraft[];
 }
 
@@ -343,6 +352,9 @@ export interface ImportBatch {
   experiences: ExperienceDraft[];
   education: EducationDraft[];
   achievements: AchievementDraft[];
+  /** Import flows that curate certifications carry them here; the batch
+   *  inserts (or refreshes) each one. Optional so older callers compile. */
+  certifications?: CertificationDraft[];
   /** Skill names referenced anywhere in the batch; missing ones are created. */
   skills: SkillDraft[];
 }
@@ -353,6 +365,7 @@ export interface ImportBatchResult {
   experienceIds: number[];
   educationIds: number[];
   achievementIds: number[];
+  certificationIds: number[];
   /** Ids of the skills the batch resolved or created (deduplicated). */
   skillIds: number[];
   /** Records that already existed and were refreshed in place instead of
@@ -361,6 +374,7 @@ export interface ImportBatchResult {
   mergedExperienceIds?: number[];
   mergedEducationIds?: number[];
   mergedAchievementIds?: number[];
+  mergedCertificationIds?: number[];
 }
 
 // --- Evidence stage decisions ------------------------------------------------

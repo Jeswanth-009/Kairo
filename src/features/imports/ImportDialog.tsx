@@ -8,6 +8,7 @@ import { extractTextFromFile } from "./extractFile";
 import type {
   Achievement,
   AchievementDraft,
+  CertificationDraft,
   CertificateCandidate,
   Education,
   EducationDraft,
@@ -334,6 +335,7 @@ function ResumeCandidates({
     result.experiences.length +
     result.education.length +
     (result.achievements?.length ?? 0) +
+    (result.certifications?.length ?? 0) +
     (result.skills.length > 0 ? 1 : 0);
 
   const allKeys = useMemo(() => {
@@ -343,6 +345,7 @@ function ResumeCandidates({
     result.experiences.forEach((_, i) => keys.push(`experience:${i}`));
     result.education.forEach((_, i) => keys.push(`education:${i}`));
     (result.achievements ?? []).forEach((_, i) => keys.push(`achievement:${i}`));
+    (result.certifications ?? []).forEach((_, i) => keys.push(`certification:${i}`));
     if (result.skills.length > 0) keys.push("skills");
     return keys;
   }, [p, result]);
@@ -358,6 +361,7 @@ function ResumeCandidates({
           result.projects.length === 0 &&
           result.experiences.length === 0 &&
           result.education.length === 0 &&
+          (result.certifications?.length ?? 0) === 0 &&
           result.skills.length === 0
             ? "The text has no contact details and no work / projects / education / skills sections — this may be a presentation or report rather than a resume. Try the actual resume file, or paste resume text with clear section headings."
             : "Try text with clear section headings — or add records manually."}
@@ -509,6 +513,34 @@ function ResumeCandidates({
                   achievedOn,
                 } satisfies Achievement);
                 toast.ok(`Achievement "${achievement.title}" added`);
+              })
+            }
+            onReject={() => dismiss(key)}
+          />
+        );
+      })}
+
+      {(result.certifications ?? []).map((draft, i) => {
+        const key = `certification:${i}`;
+        if (!show(key)) return null;
+        return (
+          <CertificationCandidate
+            key={key}
+            draft={draft}
+            busy={busyKey === key}
+            onAccept={async (title, issuer, description, issueDate) =>
+              run(key, async () => {
+                const certification = await saveRecord("certifications", {
+                  id: 0,
+                  title,
+                  issuer,
+                  description,
+                  issueDate,
+                  expiryDate: null,
+                  credentialId: "",
+                  url: "",
+                });
+                toast.ok(`Certification "${certification.title}" added`);
               })
             }
             onReject={() => dismiss(key)}
@@ -819,6 +851,55 @@ function AchievementCandidate({
           <div className="flex items-center justify-between">
             <p className="font-medium text-ink">{title}</p>
             {achievedOn ? <span className="font-mono text-xs text-muted">{achievedOn}</span> : null}
+          </div>
+          {issuer ? <p className="text-xs text-muted">{issuer}</p> : null}
+          {description ? <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{description}</p> : null}
+        </div>
+      )}
+    </CandidateShell>
+  );
+}
+
+function CertificationCandidate({
+  draft,
+  busy,
+  onAccept,
+  onReject,
+}: {
+  draft: CertificationDraft;
+  busy: boolean;
+  onAccept: (title: string, issuer: string, description: string, issueDate: string | null) => Promise<void>;
+  onReject: () => void;
+}) {
+  const [title, setTitle] = useState(draft.title);
+  const [issuer, setIssuer] = useState(draft.issuer);
+  const [description, setDescription] = useState(draft.description);
+  const [issueDate, setIssueDate] = useState(draft.issueDate ?? "");
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <CandidateShell
+      badge="Certification"
+      badgeColor="bg-ok-soft text-ok dark:bg-ok/15 dark:text-emerald-300"
+      source={draft.sourceSnippet}
+      editing={editing}
+      setEditing={setEditing}
+      onAccept={() => void onAccept(title, issuer, description, issueDate || null)}
+      onReject={onReject}
+      saving={busy}
+    >
+      {editing ? (
+        <div className="space-y-2">
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Certification title" />
+          <Input value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="Issuer" />
+          <Input value={issueDate} onChange={(e) => setIssueDate(e.target.value)} placeholder="Issued (YYYY-MM)" />
+          <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" />
+        </div>
+      ) : (
+        <div className="text-sm">
+          <div className="flex items-center justify-between">
+            <p className="font-medium text-ink">{title}</p>
+            {issueDate ? <span className="font-mono text-xs text-muted">{issueDate}</span> : null}
           </div>
           {issuer ? <p className="text-xs text-muted">{issuer}</p> : null}
           {description ? <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{description}</p> : null}

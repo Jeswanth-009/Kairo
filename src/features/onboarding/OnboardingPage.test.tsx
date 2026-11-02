@@ -41,6 +41,7 @@ const BATCH_RESULT: ImportBatchResult = {
   experienceIds: [21],
   educationIds: [31],
   achievementIds: [],
+  certificationIds: [],
   skillIds: [41],
 };
 

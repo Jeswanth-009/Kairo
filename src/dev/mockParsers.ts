@@ -241,7 +241,7 @@ export function parseResume(text: string): ResumeImport {
     ),
   ).map((name) => ({ name, category: categorize(name) }));
 
-  return { profile, projects, experiences, education, achievements, skills };
+  return { profile, projects, experiences, education, achievements, certifications: [], skills };
 }
 
 export function parseCertificate(text: string): CertificateCandidate {

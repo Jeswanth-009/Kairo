@@ -6,10 +6,12 @@
 
 use super::trust::EntityKind;
 use super::vault::{
-    insert_entity_tx, sql_err, upsert_profile_tx, write_links, Achievement, Education, Experience,
-    Profile, Project,
+    insert_entity_tx, sql_err, upsert_profile_tx, write_links, Achievement, Certification,
+    Education, Experience, Profile, Project,
 };
-use crate::imports::{AchievementDraft, EducationDraft, ExperienceDraft, ProjectDraft, SkillDraft};
+use crate::imports::{
+    AchievementDraft, CertificationDraft, EducationDraft, ExperienceDraft, ProjectDraft, SkillDraft,
+};
 use rusqlite::{params, Connection, OptionalExtension};
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -20,6 +22,7 @@ pub struct ImportBatch {
     pub experiences: Vec<ExperienceDraft>,
     pub education: Vec<EducationDraft>,
     pub achievements: Vec<AchievementDraft>,
+    pub certifications: Vec<CertificationDraft>,
     pub skills: Vec<SkillDraft>,
 }
 
@@ -31,6 +34,7 @@ pub struct ImportBatchResult {
     pub experience_ids: Vec<i64>,
     pub education_ids: Vec<i64>,
     pub achievement_ids: Vec<i64>,
+    pub certification_ids: Vec<i64>,
     pub skill_ids: Vec<i64>,
     /// Records that already existed (same title / org+role / degree) and were
     /// refreshed in place instead of duplicated. The Vault never grows a
@@ -43,6 +47,8 @@ pub struct ImportBatchResult {
     pub merged_education_ids: Vec<i64>,
     #[serde(default)]
     pub merged_achievement_ids: Vec<i64>,
+    #[serde(default)]
+    pub merged_certification_ids: Vec<i64>,
 }
 
 /// Resolves a skill by canonical name or alias, creating it when missing.
@@ -504,6 +510,53 @@ fn run_batch(tx: &Connection, batch: &ImportBatch) -> Result<ImportBatchResult, 
         out.achievement_ids.push(id);
     }
 
+    for draft in &batch.certifications {
+        let existing = find_live_by_tx(
+            tx,
+            "certifications",
+            &[("title", &draft.title), ("issuer", &draft.issuer)],
+        )?;
+        let id = match existing {
+            Some(id) => {
+                sql_err(tx.execute(
+                    "UPDATE certifications SET \
+                        description = CASE WHEN ?1 != '' THEN ?1 ELSE description END, \
+                        issue_date = COALESCE(?2, issue_date), \
+                        updated_at = datetime('now') \
+                     WHERE id = ?3",
+                    params![draft.description, draft.issue_date, id],
+                ))?;
+                refresh_source_passage_tx(
+                    tx,
+                    EntityKind::Certification,
+                    id,
+                    &draft.source_snippet,
+                )?;
+                out.merged_certification_ids.push(id);
+                id
+            }
+            None => {
+                let certification = Certification {
+                    id: 0,
+                    title: draft.title.trim().to_string(),
+                    issuer: draft.issuer.trim().to_string(),
+                    description: draft.description.clone(),
+                    issue_date: draft.issue_date.clone(),
+                    expiry_date: None,
+                    credential_id: String::new(),
+                    url: String::new(),
+                    origin: "imported".to_string(),
+                    edited_at: None,
+                    verified_at: None,
+                };
+                let id = insert_entity_tx::<Certification>(tx, &certification)?;
+                save_source_passage_tx(tx, EntityKind::Certification, id, &draft.source_snippet)?;
+                id
+            }
+        };
+        out.certification_ids.push(id);
+    }
+
     Ok(out)
 }
 
@@ -562,6 +615,7 @@ mod tests {
                 source_snippet: String::new(),
             }],
             achievements: vec![],
+            certifications: vec![],
             skills: vec![
                 SkillDraft {
                     name: "Python".to_string(),
@@ -683,6 +737,7 @@ mod tests {
             }],
             education: vec![],
             achievements: vec![],
+            certifications: vec![],
             // The list is empty on purpose — the records still get links.
             skills: vec![],
         };
