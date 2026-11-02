@@ -423,7 +423,7 @@ pub async fn tailor_plan_batch(
         let pending: Vec<&crate::db::tailor::BulletGrounding> = groundings.iter().collect();
         let next = std::sync::atomic::AtomicUsize::new(0);
         let worker_results: Vec<Vec<(i64, RewriteOutcome, crate::tailor::TailorContext)>> =
-            std::thread::scope(|scope| {
+            std::thread::scope(|scope| -> Result<Vec<_>, String> {
                 let handles: Vec<_> = (0..3)
                     .map(|_| {
                         scope.spawn(|| {
@@ -452,11 +452,16 @@ pub async fn tailor_plan_batch(
                         })
                     })
                     .collect();
+                // A panicked worker surfaces as a command error instead of
+                // unwinding the whole app with an expect().
                 handles
                     .into_iter()
-                    .map(|h| h.join().expect("tailor worker"))
+                    .map(|h| {
+                        h.join()
+                            .map_err(|_| "tailor worker thread failed".to_string())
+                    })
                     .collect()
-            });
+            })?;
         cancelled = cancel.0.load(Ordering::Relaxed);
         let conn = state.0.lock().map_err(|_| DB_LOCK)?;
         for outcomes in worker_results {
