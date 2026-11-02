@@ -761,6 +761,7 @@ mod tests {
             min_font_size_pt: 9.0,
             template_id: template.to_string(),
             paper: paper.to_string(),
+            section_order: Vec::new(),
         }
     }
 

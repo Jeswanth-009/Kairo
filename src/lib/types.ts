@@ -504,6 +504,10 @@ export interface ComposerConfig {
   templateId?: ResumeTemplateId | string;
   /** Paper size for the compiled PDF: "letter" | "a4". */
   paper?: string;
+  /** Preferred render order of the content sections ("education",
+   * "experience", "projects", "achievements", "skills"). Unlisted sections
+   * keep the canonical order. */
+  sectionOrder?: string[];
 }
 
 export interface PlanBullet {

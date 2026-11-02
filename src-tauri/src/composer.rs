@@ -25,6 +25,11 @@ pub struct ComposerConfig {
     /// Paper size for the compiled PDF ("letter" | "a4").
     #[serde(default = "default_paper")]
     pub paper: String,
+    /// Preferred render order of the content sections ("education",
+    /// "experience", "projects", "achievements", "skills"). Unlisted sections
+    /// keep the canonical order; an empty list means the canonical order.
+    #[serde(default)]
+    pub section_order: Vec<String>,
 }
 
 fn default_template_id() -> String {
@@ -45,6 +50,7 @@ impl Default for ComposerConfig {
             min_font_size_pt: 9.5,
             template_id: default_template_id(),
             paper: default_paper(),
+            section_order: Vec::new(),
         }
     }
 }

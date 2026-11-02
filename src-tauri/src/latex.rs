@@ -332,7 +332,47 @@ fn render_jake(plan: &ResumePlan) -> String {
     }
     tex.push_str("\\end{center}\n\n");
 
-    // --- Education ---
+    // --- Content sections, emitted in the user's configured order ---
+    // plan.config.section_order names the sections in render preference;
+    // unknown names are skipped, duplicates deduped, and every section the
+    // user did not mention is appended in the canonical (historical) order.
+    const CANONICAL_ORDER: [&str; 5] = [
+        "education",
+        "experience",
+        "projects",
+        "achievements",
+        "skills",
+    ];
+    let mut order: Vec<String> = Vec::new();
+    for name in &plan.config.section_order {
+        let name = name.trim().to_ascii_lowercase();
+        if !order.contains(&name) {
+            order.push(name);
+        }
+    }
+    for name in CANONICAL_ORDER {
+        if !order.iter().any(|o| o == name) {
+            order.push(name.to_string());
+        }
+    }
+    for name in &order {
+        let body = match name.as_str() {
+            "education" => jake_education(plan),
+            "experience" => jake_experience(plan),
+            "projects" => jake_projects(plan),
+            "achievements" => jake_achievements(plan),
+            "skills" => jake_skills(plan),
+            _ => continue,
+        };
+        tex.push_str(&body);
+    }
+
+    tex.push_str("%-------------------------------------------\n\\end{document}\n");
+    tex
+}
+
+fn jake_education(plan: &ResumePlan) -> String {
+    let mut tex = String::new();
     let edu: Vec<&PlanEducation> = plan.education.iter().filter(|e| !e.excluded).collect();
     if !edu.is_empty() {
         tex.push_str("%-----------EDUCATION-----------\n\\needspace{4\\baselineskip}\n\\section{Education}\n  \\resumeSubHeadingListStart\n");
@@ -354,8 +394,11 @@ fn render_jake(plan: &ResumePlan) -> String {
         }
         tex.push_str("  \\resumeSubHeadingListEnd\n\n");
     }
+    tex
+}
 
-    // --- Experience ---
+fn jake_experience(plan: &ResumePlan) -> String {
+    let mut tex = String::new();
     // item.title = "Org — Role", item.subtitle = location (set by db/composer.rs assemble())
     let exp: Vec<&PlanItem> = plan.experience.iter().filter(|i| !i.excluded).collect();
     if !exp.is_empty() {
@@ -378,8 +421,11 @@ fn render_jake(plan: &ResumePlan) -> String {
         }
         tex.push_str("  \\resumeSubHeadingListEnd\n\n");
     }
+    tex
+}
 
-    // --- Projects ---
+fn jake_projects(plan: &ResumePlan) -> String {
+    let mut tex = String::new();
     let proj: Vec<&PlanItem> = plan.projects.iter().filter(|i| !i.excluded).collect();
     if !proj.is_empty() {
         tex.push_str("%-----------PROJECTS-----------\n\\needspace{4\\baselineskip}\n\\section{Projects}\n    \\resumeSubHeadingListStart\n");
@@ -404,8 +450,11 @@ fn render_jake(plan: &ResumePlan) -> String {
         }
         tex.push_str("    \\resumeSubHeadingListEnd\n\n");
     }
+    tex
+}
 
-    // --- Achievements ---
+fn jake_achievements(plan: &ResumePlan) -> String {
+    let mut tex = String::new();
     let ach: Vec<_> = plan.achievements.iter().filter(|a| !a.excluded).collect();
     if !ach.is_empty() {
         tex.push_str("%-----------ACHIEVEMENTS-----------\n\\needspace{4\\baselineskip}\n\\section{Achievements \\& Awards}\n  \\resumeSubHeadingListStart\n");
@@ -434,8 +483,11 @@ fn render_jake(plan: &ResumePlan) -> String {
         }
         tex.push_str("  \\resumeSubHeadingListEnd\n\n");
     }
+    tex
+}
 
-    // --- Skills (grouped by category, Jakegut-style rows) ---
+fn jake_skills(plan: &ResumePlan) -> String {
+    let mut tex = String::new();
     let groups = skill_groups(plan);
     if !groups.is_empty() {
         tex.push_str("%-----------TECHNICAL SKILLS-----------\n\\needspace{4\\baselineskip}\n\\section{Technical Skills}\n");
@@ -457,8 +509,6 @@ fn render_jake(plan: &ResumePlan) -> String {
         tex.push_str(&rows.join("\n"));
         tex.push_str("\n    }}\n \\end{itemize}\n\n");
     }
-
-    tex.push_str("%-------------------------------------------\n\\end{document}\n");
     tex
 }
 
