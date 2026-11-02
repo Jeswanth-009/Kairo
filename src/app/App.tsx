@@ -114,9 +114,12 @@ export default function App() {
               <Route path="/applications" element={<ApplicationsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/design" element={<DesignPage />} />
-              {needsOnboarding ? (
-                <Route path="*" element={<Navigate to="/onboarding" replace />} />
-              ) : null}
+              {/* Catch-all: an invalid or stale URL must never render a blank
+                  screen — first run goes to onboarding, everyone else home. */}
+              <Route
+                path="*"
+                element={<Navigate to={needsOnboarding ? "/onboarding" : "/"} replace />}
+              />
             </Routes></Suspense>
           </div>
         </main>
