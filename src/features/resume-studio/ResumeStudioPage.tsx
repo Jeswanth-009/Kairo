@@ -26,7 +26,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Badge } from "../../components/ui/Badge";
 import { IconButton } from "../../components/ui/IconButton";
 import { Tabs } from "../../components/ui/Tabs";
-import { Select } from "../../components/ui/inputs";
+import { Select, Textarea } from "../../components/ui/inputs";
 import { SectionLabel } from "../../components/ui/SectionLabel";
 import { Skeleton, Spinner } from "../../components/ui/Feedback";
 import { ProfileDialog } from "../vault/ProfileDialog";
@@ -527,10 +527,14 @@ export default function ResumeStudioPage() {
         return {
           ...item,
           excluded: old.excluded,
-          bullets: item.bullets.map((b) => ({
-            ...b,
-            excluded: old.bullets.find((ob) => ob.id === b.id)?.excluded ?? false,
-          })),
+          bullets: [
+            ...item.bullets.map((b) => ({
+              ...b,
+              excluded: old.bullets.find((ob) => ob.id === b.id)?.excluded ?? false,
+            })),
+            // Manually added bullets (negative ids) have no vault source; keep them.
+            ...old.bullets.filter((ob) => ob.id < 0 && !item.bullets.some((b) => b.id === ob.id)),
+          ],
         };
       };
       const merged: ResumePlan = {
@@ -595,6 +599,90 @@ export default function ResumeStudioPage() {
       const bullet = findItem(p, entityType, itemId)?.bullets.find((b) => b.id === bulletId);
       if (bullet) bullet.excluded = !bullet.excluded;
     });
+
+  // ---------------------------------------------------------------------------
+  // Inline bullet editing — plain bullets persist through the plan; bullets
+  // whose wording already comes from an accepted tailoring persist through a
+  // manual (model = "manual") tailoring so what renders stays what was saved.
+  // ---------------------------------------------------------------------------
+
+  const [editingBullet, setEditingBullet] = useState<{
+    entityType: string;
+    itemId: number;
+    bulletId: number;
+  } | null>(null);
+  const [bulletDraft, setBulletDraft] = useState("");
+  const suppressBulletBlur = useRef(false);
+
+  /** Manual bullets use negative ids so they never collide with composer ids. */
+  const nextManualBulletId = () => {
+    let min = 0;
+    const current = planRef.current;
+    if (current) {
+      for (const item of [...current.experience, ...current.projects]) {
+        for (const b of item.bullets) min = Math.min(min, b.id);
+      }
+    }
+    return min - 1;
+  };
+
+  const addBullet = (entityType: string, itemId: number) => {
+    const id = nextManualBulletId();
+    mutatePlan((p) => {
+      findItem(p, entityType, itemId)?.bullets.push({ id, text: "", supports: [] });
+    });
+    setEditingBullet({ entityType, itemId, bulletId: id });
+    setBulletDraft("");
+  };
+
+  const removeManualBullet = (entityType: string, itemId: number, bulletId: number) =>
+    mutatePlan((p) => {
+      const item = findItem(p, entityType, itemId);
+      if (item) item.bullets = item.bullets.filter((b) => b.id !== bulletId);
+    });
+
+  const closeBulletEditor = () => {
+    suppressBulletBlur.current = true;
+    setEditingBullet(null);
+  };
+
+  const commitBulletEdit = (entityType: string, itemId: number, bulletId: number) => {
+    closeBulletEditor();
+    const text = bulletDraft.trim();
+    const current = planRef.current;
+    if (!current) return;
+    const bullet = findItem(current, entityType, itemId)?.bullets.find((b) => b.id === bulletId);
+    if (!bullet) return;
+    if (!text) {
+      // A manual bullet left empty is removed; existing bullets keep their text.
+      if (bulletId < 0 && bullet.text.length === 0) {
+        removeManualBullet(entityType, itemId, bulletId);
+      }
+      return;
+    }
+    if (bullet.text === text) return;
+    const accepted = suggestions.find(
+      (s) => s.bulletId === bulletId && s.status === "accepted" &&
+        (s.validation.ok || s.model === "manual") && s.suggestedText.trim().length > 0,
+    );
+    if (accepted && jobId !== null) {
+      void ipc
+        .tailorSaveManualEdit(jobId, bulletId, text)
+        .then((updated) => {
+          setSuggestions((prev) => [
+            ...prev.filter((s) => !(s.bulletId === bulletId && s.status === "accepted")),
+            updated,
+          ]);
+          toast.ok("Bullet wording saved");
+        })
+        .catch((e) => toast.error(String(e)));
+      return;
+    }
+    mutatePlan((p) => {
+      const target = findItem(p, entityType, itemId)?.bullets.find((b) => b.id === bulletId);
+      if (target) target.text = text;
+    });
+  };
 
   const toggleAchievement = (id: number) =>
     mutatePlan((p) => {
@@ -1096,20 +1184,69 @@ export default function ResumeStudioPage() {
                                   (s) => s.bulletId === bullet.id && s.status === "accepted" &&
                                     (s.validation.ok || s.model === "manual") && s.suggestedText.trim().length > 0,
                                 );
+                                const rendered = accepted ? accepted.suggestedText : bullet.text;
+                                const editing =
+                                  editingBullet?.entityType === item.entityType &&
+                                  editingBullet.itemId === item.id &&
+                                  editingBullet.bulletId === bullet.id;
                                 return (
                                   <li key={bullet.id} className="flex items-start gap-1.5">
                                     <span className="min-w-0 flex-1">
-                                      <span
-                                        className={cn(
-                                          "block text-xs leading-relaxed",
-                                          bullet.excluded ? "text-muted/60 line-through" : "text-muted",
-                                        )}
-                                      >
-                                        {accepted ? accepted.suggestedText : bullet.text}
-                                        {accepted ? (
-                                          <Sparkles className="ml-1 inline size-3 text-kairo-violet" aria-label="tailored" />
-                                        ) : null}
-                                      </span>
+                                      {editing ? (
+                                        <Textarea
+                                          autoFocus
+                                          rows={2}
+                                          className="mb-1 px-2 py-1.5 text-xs leading-relaxed"
+                                          value={bulletDraft}
+                                          onChange={(e) => setBulletDraft(e.target.value)}
+                                          onBlur={() => {
+                                            if (!suppressBulletBlur.current) {
+                                              commitBulletEdit(item.entityType, item.id, bullet.id);
+                                            }
+                                            suppressBulletBlur.current = false;
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" && !e.shiftKey) {
+                                              e.preventDefault();
+                                              commitBulletEdit(item.entityType, item.id, bullet.id);
+                                            } else if (e.key === "Escape") {
+                                              closeBulletEditor();
+                                            }
+                                          }}
+                                        />
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="block w-full cursor-text rounded text-left"
+                                          title="Click to edit this bullet"
+                                          onClick={() => {
+                                            setEditingBullet({
+                                              entityType: item.entityType,
+                                              itemId: item.id,
+                                              bulletId: bullet.id,
+                                            });
+                                            setBulletDraft(rendered);
+                                          }}
+                                        >
+                                          <span
+                                            className={cn(
+                                              "block text-xs leading-relaxed",
+                                              bullet.excluded ? "text-muted/60 line-through" : "text-muted",
+                                            )}
+                                          >
+                                            {rendered.length > 0 ? (
+                                              rendered
+                                            ) : (
+                                              <span className="italic text-muted/50">
+                                                empty bullet — click to write it
+                                              </span>
+                                            )}
+                                            {accepted ? (
+                                              <Sparkles className="ml-1 inline size-3 text-kairo-violet" aria-label="tailored" />
+                                            ) : null}
+                                          </span>
+                                        </button>
+                                      )}
                                       <span
                                         data-testid="bullet-source"
                                         className="mt-0.5 block text-[10px] text-muted/70"
@@ -1131,6 +1268,14 @@ export default function ResumeStudioPage() {
                                 );
                               })}
                             </ul>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="-ml-2 mt-0.5"
+                              onClick={() => addBullet(item.entityType, item.id)}
+                            >
+                              <Plus className="size-3.5" /> Add bullet
+                            </Button>
                           </div>
                         ) : null}
                       </li>
