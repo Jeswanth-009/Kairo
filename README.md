@@ -91,6 +91,24 @@ The Rust integration tests are in `src-tauri/tests/pdf_pipeline.rs` and `src-tau
 - **AI:** Optional OpenAI-compatible provider. Suggestions pass claim checks and remain subject to human review.
 - **Website:** A static landing page in `website/` and a fixture-backed demo, assembled by `scripts/build-site.sh` and deployed through GitHub Pages.
 
+## Data and privacy
+
+Everything lives on your machine. Kairo sends nothing anywhere except the AI request you explicitly trigger (only when a provider is configured).
+
+Where to find it (per OS, under the Tauri app-data directory):
+
+| What | Where |
+| --- | --- |
+| Vault database | `kairo.db` — a plain SQLite file (schema managed by 16 ordered migrations) holding your profile, records, jobs, plans and settings |
+| Backups | `backups/` — timestamped zip archives you create from Settings |
+| Logs | `logs/` — append-only JSON event log |
+| Resume PDFs and versions | under the same directory, referenced by artifact records |
+
+- Windows: `%APPDATA%\com.kairo.app` (see `identifier` in `src-tauri/tauri.conf.json`); macOS: `~/Library/Application Support/com.kairo.app`; Linux: `~/.config/com.kairo.app`.
+- The optional AI API key is the one secret, and it never touches SQLite — it is stored in the OS credential store (Windows Credential Manager / macOS Keychain / Linux secret service), namespaced per data directory.
+
+**Encryption at rest:** the database is currently unencrypted. That is a deliberate local-first tradeoff — file access to your own profile is already gated by your OS user account. SQLCipher is the known path to encrypt the file at rest (the bundled `rusqlite` build can switch to its `sqlcipher` feature), but local key management is the open problem: a key stored next to the database, or derivable from it, adds no protection. Until that is solved properly, the practical control is full-disk encryption (BitLocker, FileVault, LUKS), which protects the database, backups, logs and exports alike. Backups and exported PDFs inherit the same treatment.
+
 ## Current limits
 
 - The official installer is Windows-only. The core is tested on macOS and Linux, but those platforms do not have packaged releases yet.
