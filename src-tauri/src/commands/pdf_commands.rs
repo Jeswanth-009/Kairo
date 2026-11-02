@@ -248,6 +248,22 @@ mod tests {
             "the lock frees after the export completes"
         );
     }
+
+    #[test]
+    fn download_names_reject_windows_reserved_devices() {
+        for raw in ["CON.pdf", "nul", "LPT1.txt", "aux.PDF", " com9.pdf "] {
+            assert!(
+                sanitize_download_name(raw).is_err(),
+                "{raw} must be rejected"
+            );
+        }
+        // The stem must match exactly — longer names are ordinary files.
+        assert_eq!(
+            sanitize_download_name("Con_Resume.pdf").unwrap(),
+            "Con_Resume.pdf"
+        );
+        assert_eq!(sanitize_download_name("report.pdf").unwrap(), "report.pdf");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -523,7 +539,9 @@ pub fn save_version_pdf_to_downloads(
 }
 
 /// Reduces a user-supplied name to a bare file name so the destination always
-/// stays inside Downloads — no `..`, separators, or null-byte escapes.
+/// stays inside Downloads — no `..`, separators, null-byte escapes, and no
+/// Windows reserved DOS device names (`CON.pdf` cannot be created and can
+/// wedge the file system call).
 fn sanitize_download_name(raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -542,6 +560,22 @@ fn sanitize_download_name(raw: &str) -> Result<String, String> {
         || base.starts_with('.')
     {
         return Err(format!("Invalid file name: {trimmed}"));
+    }
+    // Windows reserves these device names for every extension — `CON.pdf`
+    // and `NUL.txt` alike cannot be created and can hang the caller.
+    let stem = base
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    if RESERVED.contains(&stem.as_str()) {
+        return Err(format!(
+            "\"{stem}\" is a reserved Windows device name — choose a different file name"
+        ));
     }
     Ok(base)
 }
