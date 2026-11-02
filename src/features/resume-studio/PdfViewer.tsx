@@ -93,6 +93,9 @@ export function PdfViewer({ jobId, candidateName, className }: PdfViewerProps) {
   // Load the document bytes via Tauri IPC.
   useEffect(() => {
     let cancelled = false;
+    // In pdfjs v6 the loading task owns the document; destroying it on job
+    // switch and unmount releases the parsed document and its worker memory.
+    let task: pdfjsLib.PDFDocumentLoadingTask | null = null;
     setLoading(true);
     setError(null);
     setPdfDoc(null);
@@ -104,7 +107,13 @@ export function PdfViewer({ jobId, candidateName, className }: PdfViewerProps) {
         const bytes = await ipc.readJobPdfBytes(jobId);
         if (cancelled) return;
         const uint8 = new Uint8Array(bytes);
-        const doc = await pdfjsLib.getDocument({ data: uint8 }).promise;
+        const loadedTask = pdfjsLib.getDocument({ data: uint8 });
+        if (cancelled) {
+          void loadedTask.destroy();
+          return;
+        }
+        task = loadedTask;
+        const doc = await loadedTask.promise;
         if (cancelled) return;
         setPdfDoc(doc);
         setNumPages(doc.numPages);
@@ -122,6 +131,7 @@ export function PdfViewer({ jobId, candidateName, className }: PdfViewerProps) {
     void loadPdf();
     return () => {
       cancelled = true;
+      void task?.destroy();
     };
   }, [jobId]);
 
