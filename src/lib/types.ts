@@ -539,6 +539,7 @@ export interface PlanEducation {
   startDate: string | null;
   endDate: string | null;
   isCurrent: boolean;
+  excluded?: boolean;
 }
 
 export interface PlanAchievement {

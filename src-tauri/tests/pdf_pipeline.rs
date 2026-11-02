@@ -26,6 +26,7 @@ fn sample_plan() -> ResumePlan {
             start_date: Some("2022-08".to_string()),
             end_date: Some("2026-05".to_string()),
             is_current: false,
+            excluded: false,
         }],
         experience: vec![kairo_lib::composer::PlanItem {
             entity_type: "experience".to_string(),

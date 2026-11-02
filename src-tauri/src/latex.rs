@@ -2,7 +2,7 @@
 //! the only input, every user string is escaped, and the LLM is never involved
 //! — the renderer owns all document structure.
 
-use crate::composer::{effective_bullets, PlanItem, ResumePlan};
+use crate::composer::{effective_bullets, PlanEducation, PlanItem, ResumePlan};
 
 /// Escapes LaTeX special characters and normalizes the Unicode characters
 /// that Latin Modern has no text-mode glyph for (arrows, typographic quotes,
@@ -333,9 +333,10 @@ fn render_jake(plan: &ResumePlan) -> String {
     tex.push_str("\\end{center}\n\n");
 
     // --- Education ---
-    if !plan.education.is_empty() {
+    let edu: Vec<&PlanEducation> = plan.education.iter().filter(|e| !e.excluded).collect();
+    if !edu.is_empty() {
         tex.push_str("%-----------EDUCATION-----------\n\\needspace{4\\baselineskip}\n\\section{Education}\n  \\resumeSubHeadingListStart\n");
-        for e in &plan.education {
+        for e in edu {
             let inst = escape_latex(&inline(&e.institution));
             let degree_field = [e.degree.clone(), e.field_of_study.clone()]
                 .iter()
@@ -609,9 +610,10 @@ fn render_expressive(plan: &ResumePlan) -> String {
     }
 
     // Education
-    if !plan.education.is_empty() {
+    let edu: Vec<&PlanEducation> = plan.education.iter().filter(|e| !e.excluded).collect();
+    if !edu.is_empty() {
         tex.push_str("\\section{Education}\n\n");
-        for e in &plan.education {
+        for e in edu {
             let inst = escape_latex(&inline(&e.institution));
             let degree_field = [e.degree.clone(), e.field_of_study.clone()]
                 .iter()
@@ -839,9 +841,10 @@ fn render_plushcv(plan: &ResumePlan) -> String {
     }
 
     // Education
-    if !plan.education.is_empty() {
+    let edu: Vec<&PlanEducation> = plan.education.iter().filter(|e| !e.excluded).collect();
+    if !edu.is_empty() {
         tex.push_str("\\needspace{4\\baselineskip}\n\\section{Education}\n");
-        for e in &plan.education {
+        for e in edu {
             let inst = escape_latex(&inline(&e.institution));
             let degree_field = [e.degree.clone(), e.field_of_study.clone()]
                 .iter()

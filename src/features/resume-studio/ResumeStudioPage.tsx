@@ -545,6 +545,10 @@ export default function ResumeStudioPage() {
           ...a,
           excluded: prev.achievements?.find((pa) => pa.id === a.id)?.excluded ?? false,
         })),
+        education: fresh.education.map((e) => ({
+          ...e,
+          excluded: prev.education.find((pe) => pe.id === e.id)?.excluded ?? false,
+        })),
         skills: [...fresh.skills],
         excludedSkills: prev.excludedSkills ?? [],
       };
@@ -696,6 +700,19 @@ export default function ResumeStudioPage() {
       const t = index + dir;
       if (t < 0 || t >= p.achievements.length) return;
       [p.achievements[index], p.achievements[t]] = [p.achievements[t], p.achievements[index]];
+    });
+
+  const toggleEducation = (id: number) =>
+    mutatePlan((p) => {
+      const edu = p.education.find((e) => e.id === id);
+      if (edu) edu.excluded = !edu.excluded;
+    });
+
+  const moveEducation = (index: number, dir: -1 | 1) =>
+    mutatePlan((p) => {
+      const t = index + dir;
+      if (t < 0 || t >= p.education.length) return;
+      [p.education[index], p.education[t]] = [p.education[t], p.education[index]];
     });
 
   const [newSkillInput, setNewSkillInput] = useState("");
@@ -1285,6 +1302,79 @@ export default function ResumeStudioPage() {
               </Card>
             );
           })}
+
+          {/* Education */}
+          {plan.education.length > 0 ? (
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <CardTitle>
+                  Education
+                  <span className="ml-1.5 text-xs font-normal text-muted">
+                    {plan.education.filter((e) => !e.excluded).length}/{plan.education.length}
+                  </span>
+                </CardTitle>
+              </div>
+              <ul className="space-y-2">
+                {plan.education.map((edu, index) => {
+                  const degreeField = [edu.degree, edu.fieldOfStudy].filter((s) => s.length > 0).join(", ");
+                  return (
+                    <li
+                      key={edu.id}
+                      className={cn(
+                        "rounded-lg border p-3 transition-colors",
+                        edu.excluded
+                          ? "border-dashed border-line bg-accent-soft opacity-60"
+                          : "border-line bg-card",
+                      )}
+                    >
+                      <div className="flex items-start gap-1.5">
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("truncate text-xs font-semibold", edu.excluded ? "text-muted/70 line-through" : "text-ink")}>
+                            {degreeField || edu.institution}
+                          </p>
+                          <p className="truncate text-xs text-muted">
+                            {[
+                              edu.institution && degreeField ? edu.institution : "",
+                              fmtRange({ startDate: edu.startDate, endDate: edu.endDate, isCurrent: edu.isCurrent }),
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          <IconButton
+                            label="Move up"
+                            size="sm"
+                            disabled={index === 0}
+                            onClick={() => moveEducation(index, -1)}
+                          >
+                            <ChevronUp />
+                          </IconButton>
+                          <IconButton
+                            label="Move down"
+                            size="sm"
+                            disabled={index === plan.education.length - 1}
+                            onClick={() => moveEducation(index, 1)}
+                          >
+                            <ChevronDown />
+                          </IconButton>
+                          <IconButton
+                            label={edu.excluded ? "Include" : "Exclude"}
+                            title={edu.excluded ? "Include this education in the resume" : "Exclude this education from the resume"}
+                            size="sm"
+                            tone={edu.excluded ? "neutral" : "danger"}
+                            onClick={() => toggleEducation(edu.id)}
+                          >
+                            {edu.excluded ? <CirclePlus /> : <CircleMinus />}
+                          </IconButton>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          ) : null}
 
           {/* Achievements */}
           {plan.achievements && plan.achievements.length > 0 ? (

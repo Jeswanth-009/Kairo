@@ -209,6 +209,8 @@ pub struct PlanEducation {
     pub start_date: Option<String>,
     pub end_date: Option<String>,
     pub is_current: bool,
+    #[serde(default)]
+    pub excluded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -479,6 +481,7 @@ pub fn compose(input: &ComposerInput) -> ResumePlan {
             start_date: e.start_date.clone(),
             end_date: e.end_date.clone(),
             is_current: e.is_current,
+            excluded: false,
         })
         .collect();
 
