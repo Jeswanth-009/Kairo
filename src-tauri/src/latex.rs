@@ -94,12 +94,26 @@ fn latex_url(raw: &str) -> String {
 }
 
 /// Builds a complete hyperref link: raw/percent-encoded target, escaped text.
+/// Only http, https and mailto become clickable links — a manipulated profile
+/// URL (`file:///`, `ms-msdt:`, `run:`) must never reach a desktop PDF
+/// reader's link handler, so anything else renders as plain escaped text.
 fn latex_href(url: &str, display: &str, underline: bool) -> String {
     let text = escape_latex(display);
+    let trimmed = url.trim();
+    let safe_scheme = trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("mailto:");
+    if !safe_scheme {
+        return text;
+    }
     if underline {
-        format!("\\href{{{}}}{{\\underline{{{}}}}}", latex_url(url), text)
+        format!(
+            "\\href{{{}}}{{\\underline{{{}}}}}",
+            latex_url(trimmed),
+            text
+        )
     } else {
-        format!("\\href{{{}}}{{{}}}", latex_url(url), text)
+        format!("\\href{{{}}}{{{}}}", latex_url(trimmed), text)
     }
 }
 
@@ -942,6 +956,27 @@ fn render_plushcv(plan: &ResumePlan) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn href_links_only_safe_schemes() {
+        assert_eq!(
+            latex_href("https://github.com/j", "github.com/j", true),
+            "\\href{https://github.com/j}{\\underline{github.com/j}}"
+        );
+        assert_eq!(
+            latex_href("mailto:a@b.co", "a@b.co", false),
+            "\\href{mailto:a@b.co}{a@b.co}"
+        );
+        // Manipulated schemes must degrade to plain text, never a hyperlink.
+        for evil in [
+            "file:///C:/Windows/System32/calc.exe",
+            "ms-msdt:PowerShell",
+            "run:calc",
+            "javascript:alert(1)",
+        ] {
+            assert_eq!(latex_href(evil, "click", false), "click", "{evil}");
+        }
+    }
 
     #[test]
     fn escapes_all_specials() {
