@@ -335,9 +335,10 @@ fn open_with_os(path: &std::path::Path) -> Result<(), String> {
 fn reveal_with_os(path: &std::path::Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
+        // "/select," must be part of the SAME argument as the path — separate
+        // arguments make Explorer open a wrong folder instead of selecting.
         std::process::Command::new("explorer")
-            .arg("/select,")
-            .arg(path)
+            .arg(format!("/select,{}", path.display()))
             .spawn()
             .map_err(|e| e.to_string())?;
     }
