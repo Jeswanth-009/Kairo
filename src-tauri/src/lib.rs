@@ -40,6 +40,7 @@ pub fn run() {
     }));
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let conn = db::open_and_migrate(&data_dir.join("kairo.db"), &data_dir)?;
