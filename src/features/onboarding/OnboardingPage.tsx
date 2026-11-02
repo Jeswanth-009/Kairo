@@ -521,8 +521,14 @@ function ReviewGroups({
 
   // Capture every edit before navigation can unmount this step. The parent
   // serializes writes, preserving the latest snapshot even on a quick exit.
+  // The callback lives in a ref (its identity changes every parent render;
+  // putting it in the deps would re-fire on each keystroke's re-render).
+  const onReviewChangeRef = useRef(onReviewChange);
   useEffect(() => {
-    onReviewChange({
+    onReviewChangeRef.current = onReviewChange;
+  });
+  useEffect(() => {
+    onReviewChangeRef.current({
         contact: serializeEditable(contact),
         experiences: experiences.map(serializeEditable),
         projects: projects.map(serializeEditable),
@@ -1526,7 +1532,7 @@ function DraftStep({
           </p>
         </Card>
         <Card className="overflow-hidden p-4">
-          <PdfViewer jobId={jobId ?? 0} className="min-h-[500px]" />
+          <PdfViewer key={jobId ?? 0} jobId={jobId ?? 0} className="min-h-[500px]" />
         </Card>
         <Card className="p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">

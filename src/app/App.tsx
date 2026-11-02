@@ -78,7 +78,6 @@ export default function App() {
   // stale breadcrumb/action never bleeds into the next page.
   useEffect(() => {
     useTopBarStore.getState().clear();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const needsOnboarding = status !== null && !status.hasAnyContent && location.pathname === "/";

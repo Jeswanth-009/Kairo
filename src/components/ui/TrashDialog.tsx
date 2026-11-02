@@ -14,26 +14,34 @@ import { toast } from "../../stores/toastStore";
 /**
  * "Recently deleted" — everything soft-deleted in the last 30 days. Restore
  * brings a record back with all its evidence and links; Delete forever is the
- * only irreversible removal.
+ * only irreversible removal. The content only mounts while the dialog is
+ * open, so every open fetches a fresh list.
  */
 export function TrashDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return <TrashDialogContent onClose={onClose} />;
+}
+
+function TrashDialogContent({ onClose }: { onClose: () => void }) {
   const [items, setItems] = useState<TrashItem[] | null>(null);
   const [purging, setPurging] = useState<TrashItem | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const reload = async () => {
-    try {
-      setItems(await ipc.trashList());
-    } catch (e) {
-      toast.error(String(e));
-      setItems([]);
-    }
-  };
-
   useEffect(() => {
-    if (open) void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    let alive = true;
+    ipc.trashList().then(
+      (rows) => {
+        if (alive) setItems(rows);
+      },
+      (e) => {
+        toast.error(String(e));
+        if (alive) setItems([]);
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const restore = async (item: TrashItem) => {
     const key = `${item.entityType}:${item.entityId}`;
@@ -67,7 +75,7 @@ export function TrashDialog({ open, onClose }: { open: boolean; onClose: () => v
   return (
     <>
       <Dialog
-        open={open}
+        open
         onClose={onClose}
         title="Recently deleted"
         maxWidth="max-w-lg"

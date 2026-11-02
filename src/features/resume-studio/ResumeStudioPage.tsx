@@ -416,7 +416,7 @@ export default function ResumeStudioPage() {
         setLoaded(true);
       }
     })();
-  }, [routeJobId]);
+  }, [routeJobId, navigate]);
 
   // Stale-response guard: rapidly switching jobs must never interleave
   // plan/artifact/version state from two different workspaces.
@@ -425,16 +425,23 @@ export default function ResumeStudioPage() {
   // switches so a mutation can never write the old job's plan into the new
   // job while its own plan is still loading.
   const planRef = useRef<ResumePlan | null>(null);
+  // Everything session-scoped belongs to the job, not the page: undo history
+  // and export state must never leak across workspaces. The React-state part
+  // of the reset happens during render when the job changes (before any
+  // effect can observe the previous job's state); the refs reset in the
+  // effect below.
+  const [resetForJob, setResetForJob] = useState<number | null>(null);
+  if (jobId !== resetForJob) {
+    setResetForJob(jobId);
+    setCanUndo(false);
+    setExportFailed(false);
+    setAiWritingOpen(false);
+  }
   useEffect(() => {
     if (jobId === null) return;
     const seq = ++loadSeq.current;
     planRef.current = null;
-    // Everything session-scoped belongs to the job, not the page: undo
-    // history and export state must never leak across workspaces.
     historyRef.current = [];
-    setCanUndo(false);
-    setExportFailed(false);
-    setAiWritingOpen(false);
     void (async () => {
       try {
         const stored = await ipc.getPlan(jobId);
@@ -1697,7 +1704,7 @@ export default function ResumeStudioPage() {
             </div>
           ) : previewMode === "pdf" && artifact && jobId !== null ? (
             <PdfViewer
-              key={artifact.pdfHash ?? artifact.compiledAt ?? artifact.pdfPath}
+              key={`${jobId}-${artifact.pdfHash ?? artifact.compiledAt ?? artifact.pdfPath}`}
               jobId={jobId}
               candidateName={plan.header.fullName}
               className="min-h-0 flex-1"

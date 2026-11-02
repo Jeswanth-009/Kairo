@@ -44,11 +44,19 @@ const NAV_ACTIONS: { to: string; label: string; icon: ComponentType<SVGProps<SVG
  * Global quick-finder (Ctrl/Cmd+K). Searches everything already in memory —
  * vault records, jobs, plus navigation and quick actions — entirely on the
  * frontend, so it works identically in the desktop app and the browser demo.
+ *
+ * The panel only mounts while open, so query and selection start fresh every
+ * time it opens — no reset effect needed.
  */
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return <CommandPalettePanel onClose={onClose} />;
+}
+
+function CommandPalettePanel({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [rawIndex, setRawIndex] = useState(0);
   const listRef = useRef<HTMLUListElement | null>(null);
 
   const projects = useVaultStore((s) => s.projects);
@@ -60,13 +68,6 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const jobs = useJobsStore((s) => s.jobs);
   const focusVaultRecord = useUiStore((s) => s.focusVaultRecord);
   const requestVaultAction = useUiStore((s) => s.requestVaultAction);
-
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setActiveIndex(0);
-    }
-  }, [open]);
 
   const items = useMemo<PaletteItem[]>(() => {
     const all: PaletteItem[] = [];
@@ -222,9 +223,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   // Flatten for keyboard navigation (group headers are not focusable).
   const flat = useMemo(() => grouped.flatMap(([, list]) => list), [grouped]);
 
-  useEffect(() => {
-    setActiveIndex((prev) => Math.min(prev, Math.max(0, flat.length - 1)));
-  }, [flat.length]);
+  // Selection is clamped during render, so a shrinking result list can never
+  // leave the highlight out of bounds.
+  const activeIndex = Math.min(rawIndex, Math.max(0, flat.length - 1));
 
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
@@ -232,18 +233,24 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     el?.scrollIntoView?.({ block: "nearest" });
   }, [activeIndex]);
 
-  if (!open) return null;
-
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
       onClose();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((i) => (flat.length === 0 ? 0 : (i + 1) % flat.length));
+      setRawIndex((i) => {
+        if (flat.length === 0) return 0;
+        const cur = Math.min(i, flat.length - 1);
+        return (cur + 1) % flat.length;
+      });
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIndex((i) => (flat.length === 0 ? 0 : (i - 1 + flat.length) % flat.length));
+      setRawIndex((i) => {
+        if (flat.length === 0) return 0;
+        const cur = Math.min(i, flat.length - 1);
+        return (cur - 1 + flat.length) % flat.length;
+      });
     } else if (e.key === "Enter") {
       e.preventDefault();
       const item = flat[activeIndex];
@@ -306,7 +313,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                         <button
                           type="button"
                           data-index={idx}
-                          onMouseEnter={() => setActiveIndex(idx)}
+                          onMouseEnter={() => setRawIndex(idx)}
                           onClick={() => {
                             item.run();
                             onClose();

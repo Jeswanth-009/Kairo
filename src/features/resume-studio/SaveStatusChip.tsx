@@ -21,13 +21,12 @@ const LABELS: Record<PlanSaveStatus, string> = {
  * doubles as the retry button.
  */
 export function SaveStatusChip({ jobId }: { jobId: number | null }) {
+  // Status starts "idle" and only changes through the subscription — with no
+  // job selected the chip renders null anyway.
   const [status, setStatus] = useState<PlanSaveStatus>(() => planSaveStatus(jobId));
 
   useEffect(() => {
-    if (jobId === null) {
-      setStatus("idle");
-      return;
-    }
+    if (jobId === null) return undefined;
     return subscribePlanSaveStatus(jobId, setStatus);
   }, [jobId]);
 

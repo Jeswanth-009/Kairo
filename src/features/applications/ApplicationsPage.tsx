@@ -56,6 +56,31 @@ function ApplicationDialog({
   onClose: () => void;
   onSaved: (app: Application, isNew: boolean) => void;
 }) {
+  // The form only mounts while the dialog is open, so every open starts from
+  // the current `initial` snapshot — no re-sync effect needed.
+  if (!open) return null;
+  return (
+    <ApplicationDialogForm
+      key={initial?.id ?? "new"}
+      initial={initial}
+      jobs={jobs}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
+  );
+}
+
+function ApplicationDialogForm({
+  initial,
+  jobs,
+  onClose,
+  onSaved,
+}: {
+  initial: Application | null;
+  jobs: Job[];
+  onClose: () => void;
+  onSaved: (app: Application, isNew: boolean) => void;
+}) {
   const empty: Application = {
     id: 0,
     jobId: null,
@@ -73,19 +98,6 @@ function ApplicationDialog({
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof Application>(name: K, value: Application[K]) =>
     setValues((prev) => ({ ...prev, [name]: value }));
-
-  // The dialog stays mounted in its parent — re-sync the form every time it
-  // opens so "Edit" never starts from a stale first-mount snapshot.
-  useEffect(() => {
-    if (open) {
-      setValues(initial ?? empty);
-      setError(null);
-    }
-    // `initial` is captured when the parent opens the dialog.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial]);
-
-  if (!open) return null;
 
   const save = async () => {
     if (!values.company.trim() || !values.role.trim()) {
@@ -106,7 +118,7 @@ function ApplicationDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title={initial ? "Edit application" : "New application"}>
+    <Dialog open onClose={onClose} title={initial ? "Edit application" : "New application"}>
       <form
         className="space-y-4"
         onSubmit={(e) => {

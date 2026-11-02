@@ -82,28 +82,35 @@ export default function VaultPage() {
     [projects, experiences, education, certifications, achievements, skills],
   );
 
-  useEffect(() => {
-    if (!vaultAction) return;
-    setImportOpen(true);
+  // Palette "import" intent derives the dialog's open state — no effect, and
+  // closing clears both the local flag and the consumed intent.
+  const showImport = importOpen || vaultAction !== null;
+  const closeImport = () => {
+    setImportOpen(false);
     clearVaultAction();
-  }, [vaultAction, clearVaultAction]);
+  };
+
+  // Palette focus intent: deep-open the targeted record. Handled during
+  // render when the intent (or the data behind it) arrives; the store intent
+  // itself is cleared from the effect below, which is a store write only.
+  const [handledFocus, setHandledFocus] = useState<{ key: TabKey; id: number } | null>(null);
+  if (vaultFocus && loaded && vaultFocus !== handledFocus) {
+    setHandledFocus(vaultFocus);
+    if (vaultFocus.key === "skills") {
+      navigate("/skills");
+    } else {
+      const list = records[vaultFocus.key] ?? [];
+      const target = list.find((r) => r.id === vaultFocus.id);
+      if (target) {
+        setTab(vaultFocus.key);
+        setDetail({ key: vaultFocus.key, record: target });
+      }
+    }
+  }
 
   useEffect(() => {
-    if (!vaultFocus || !loaded) return;
-    if (vaultFocus.key === "skills") {
-      clearVaultFocus();
-      navigate("/skills");
-      return;
-    }
-    const list = records[vaultFocus.key] ?? [];
-    const target = list.find((r) => r.id === vaultFocus.id);
-    if (target) {
-      setTab(vaultFocus.key);
-      setDetail({ key: vaultFocus.key, record: target });
-    }
-    clearVaultFocus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vaultFocus, loaded, clearVaultFocus]);
+    if (vaultFocus) clearVaultFocus();
+  }, [vaultFocus, clearVaultFocus]);
 
   const totalCount = TABS.reduce((sum, t) => sum + records[t.key].length, 0);
   const config = tab === "skills" ? null : ENTITY_CONFIGS[tab];
@@ -128,9 +135,13 @@ export default function VaultPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
 
-  useEffect(() => {
+  // Selection belongs to the active tab — cleared during render when the tab
+  // changes, instead of in an effect after paint.
+  const [lastTab, setLastTab] = useState<TabKey>(tab);
+  if (tab !== lastTab) {
+    setLastTab(tab);
     setSelectedIds(new Set());
-  }, [tab]);
+  }
 
   const toggleSelect = (id: number, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -351,7 +362,7 @@ export default function VaultPage() {
       {tab !== "skills" && creating ? (
         <RecordDialog open onClose={() => setCreating(false)} entityKey={tab} record={null} />
       ) : null}
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportDialog open={showImport} onClose={closeImport} />
       {tab !== "skills" && editing ? (
         <RecordDialog open onClose={() => setEditing(null)} entityKey={tab} record={editing} />
       ) : null}

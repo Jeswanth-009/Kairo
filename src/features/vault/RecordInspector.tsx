@@ -395,6 +395,34 @@ function EvidenceDialog({
   onClose: () => void;
   onSave: (data: Evidence) => Promise<void>;
 }) {
+  // The form only mounts while the dialog is open, so every open starts from
+  // a fresh snapshot — no re-sync effect needed.
+  if (!open) return null;
+  return (
+    <EvidenceDialogForm
+      key={evidence?.id ?? "new"}
+      evidence={evidence}
+      entityType={entityType}
+      entityId={entityId}
+      onClose={onClose}
+      onSave={onSave}
+    />
+  );
+}
+
+function EvidenceDialogForm({
+  evidence,
+  entityType,
+  entityId,
+  onClose,
+  onSave,
+}: {
+  evidence: Evidence | null;
+  entityType: TrustEntityType;
+  entityId: number;
+  onClose: () => void;
+  onSave: (data: Evidence) => Promise<void>;
+}) {
   const [values, setValues] = useState<Evidence>(
     evidence ?? {
       id: 0,
@@ -409,27 +437,6 @@ function EvidenceDialog({
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  // Re-sync the form on every open — the dialog stays mounted inside its tab.
-  useEffect(() => {
-    if (open) {
-      setValues(
-        evidence ?? {
-          id: 0,
-          entityType,
-          entityId,
-          kind: "repository",
-          title: "",
-          reference: "",
-          note: "",
-          verified: false,
-        },
-      );
-      setError(null);
-    }
-  }, [open, evidence, entityType, entityId]);
-
-  if (!open) return null;
 
   const set = <K extends keyof Evidence>(name: K, value: Evidence[K]) =>
     setValues((prev) => ({ ...prev, [name]: value }));
@@ -450,7 +457,7 @@ function EvidenceDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title={evidence ? "Edit proof" : "Add proof"} maxWidth="max-w-md">
+    <Dialog open onClose={onClose} title={evidence ? "Edit proof" : "Add proof"} maxWidth="max-w-md">
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -660,6 +667,36 @@ function BulletDialog({
   onClose: () => void;
   onSave: (data: CanonicalBullet, isNew: boolean) => Promise<void>;
 }) {
+  // Mount-only form: every open starts from the bullet's current snapshot.
+  if (!open) return null;
+  return (
+    <BulletDialogForm
+      key={bullet?.id ?? "new"}
+      bullet={bullet}
+      entityType={entityType}
+      entityId={entityId}
+      evidence={evidence}
+      onClose={onClose}
+      onSave={onSave}
+    />
+  );
+}
+
+function BulletDialogForm({
+  bullet,
+  entityType,
+  entityId,
+  evidence,
+  onClose,
+  onSave,
+}: {
+  bullet: CanonicalBullet | null;
+  entityType: TrustEntityType;
+  entityId: number;
+  evidence: Evidence[];
+  onClose: () => void;
+  onSave: (data: CanonicalBullet, isNew: boolean) => Promise<void>;
+}) {
   const isNew = !bullet;
   const [text, setText] = useState(bullet?.text ?? "");
   const [approved, setApproved] = useState(bullet?.approved ?? false);
@@ -668,18 +705,6 @@ function BulletDialog({
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  // Re-sync the form on every open — the dialog stays mounted inside its tab.
-  useEffect(() => {
-    if (open) {
-      setText(bullet?.text ?? "");
-      setApproved(bullet?.approved ?? false);
-      setEvidenceIds(bullet?.evidence.map((r) => r.id) ?? []);
-      setError(null);
-    }
-  }, [open, bullet]);
-
-  if (!open) return null;
 
   const toggle = (id: number) =>
     setEvidenceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -722,7 +747,7 @@ function BulletDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title={isNew ? "Add resume point" : "Edit resume point"} maxWidth="max-w-md">
+    <Dialog open onClose={onClose} title={isNew ? "Add resume point" : "Edit resume point"} maxWidth="max-w-md">
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -944,6 +969,33 @@ function RuleDialog({
   onClose: () => void;
   onSave: (data: ClaimRule) => Promise<void>;
 }) {
+  // Mount-only form: every open starts from the rule's current snapshot.
+  if (!open) return null;
+  return (
+    <RuleDialogForm
+      key={rule?.id ?? "new"}
+      rule={rule}
+      entityType={entityType}
+      entityId={entityId}
+      onClose={onClose}
+      onSave={onSave}
+    />
+  );
+}
+
+function RuleDialogForm({
+  rule,
+  entityType,
+  entityId,
+  onClose,
+  onSave,
+}: {
+  rule: ClaimRule | null;
+  entityType: TrustEntityType;
+  entityId: number;
+  onClose: () => void;
+  onSave: (data: ClaimRule) => Promise<void>;
+}) {
   const [values, setValues] = useState<ClaimRule>(
     rule ?? {
       id: 0,
@@ -956,25 +1008,6 @@ function RuleDialog({
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  // Re-sync the form on every open — the dialog stays mounted inside its tab.
-  useEffect(() => {
-    if (open) {
-      setValues(
-        rule ?? {
-          id: 0,
-          entityType,
-          entityId,
-          ruleType: "forbidden_claim",
-          pattern: "",
-          note: "",
-        },
-      );
-      setError(null);
-    }
-  }, [open, rule, entityType, entityId]);
-
-  if (!open) return null;
 
   const save = async () => {
     if (!values.pattern.trim()) {
@@ -992,7 +1025,7 @@ function RuleDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title={rule ? "Edit guardrail" : "Add guardrail"} maxWidth="max-w-md">
+    <Dialog open onClose={onClose} title={rule ? "Edit guardrail" : "Add guardrail"} maxWidth="max-w-md">
       <form
         className="space-y-4"
         onSubmit={(e) => {

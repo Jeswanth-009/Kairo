@@ -172,7 +172,15 @@ function BackupsCard() {
   };
 
   useEffect(() => {
-    void refresh();
+    void (async () => {
+      try {
+        setBackups(await ipc.listBackups());
+      } catch (e) {
+        toast.error(String(e));
+      } finally {
+        setLoaded(true);
+      }
+    })();
   }, []);
 
   const create = async () => {

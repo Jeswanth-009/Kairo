@@ -90,17 +90,14 @@ export function PdfViewer({ jobId, candidateName, className }: PdfViewerProps) {
     ? `${candidateName.replace(/\s+/g, "_")}_Resume.pdf`
     : "Resume.pdf";
 
-  // Load the document bytes via Tauri IPC.
+  // Load the document bytes via Tauri IPC. The parent mounts this viewer per
+  // job (key={jobId}), so the initial states ARE the per-job reset — only the
+  // async load runs here.
   useEffect(() => {
     let cancelled = false;
     // In pdfjs v6 the loading task owns the document; destroying it on job
     // switch and unmount releases the parsed document and its worker memory.
     let task: pdfjsLib.PDFDocumentLoadingTask | null = null;
-    setLoading(true);
-    setError(null);
-    setPdfDoc(null);
-    setScale(null);
-    setFitWidth(true);
 
     async function loadPdf() {
       try {

@@ -256,7 +256,7 @@ export default function JobWorkspacePage() {
         <>
           <ApplicationTab job={job} />
           <div className="mt-6">
-            <InterviewTab jobId={job.id} />
+            <InterviewTab key={job.id} jobId={job.id} />
           </div>
         </>
       ) : null}

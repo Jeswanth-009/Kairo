@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Textarea } from "../../components/ui/inputs";
@@ -16,6 +16,9 @@ const URL_FIELDS: { name: keyof Profile; label: string }[] = [
  * Shared profile editor (Vault + Resume Studio). Saves through the vault
  * store; `onSaved` lets callers react — the Studio merges the new contact
  * header into the plan snapshot so the next export picks it up immediately.
+ *
+ * The form only mounts while the dialog is open, so every open starts from a
+ * fresh snapshot (`useState(profile)`) — no re-sync effect needed.
  */
 export function ProfileDialog({
   open,
@@ -28,21 +31,24 @@ export function ProfileDialog({
   onClose: () => void;
   onSaved?: (profile: Profile) => void;
 }) {
+  if (!open) return null;
+  return <ProfileDialogForm profile={profile} onClose={onClose} onSaved={onSaved} />;
+}
+
+function ProfileDialogForm({
+  profile,
+  onClose,
+  onSaved,
+}: {
+  profile: Profile;
+  onClose: () => void;
+  onSaved?: (profile: Profile) => void;
+}) {
   const saveProfile = useVaultStore((s) => s.saveProfile);
   const [values, setValues] = useState<Profile>(profile);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  // The dialog stays mounted in its parent — re-sync the form every time it
-  // opens so edits never start from a stale/blank snapshot.
-  useEffect(() => {
-    if (open) {
-      setValues(profile);
-      setErrors({});
-      setServerError(null);
-    }
-  }, [open, profile]);
 
   const set = (name: keyof Profile, value: string) => {
     setValues((prev) => ({ ...prev, [name]: value }));
@@ -92,7 +98,7 @@ export function ProfileDialog({
   );
 
   return (
-    <Dialog open={open} onClose={onClose} title="Edit profile">
+    <Dialog open onClose={onClose} title="Edit profile">
       <form
         className="space-y-4"
         onSubmit={(e) => {

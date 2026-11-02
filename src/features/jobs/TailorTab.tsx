@@ -72,10 +72,10 @@ export function TailorTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
-  // Live elapsed timer while a tailor run is in flight.
+  // Live elapsed timer while a tailor run is in flight. The reset happens in
+  // the event handler that starts the run, not here.
   useEffect(() => {
     if (!runningAll) return;
-    setElapsedMs(0);
     const timer = window.setInterval(() => setElapsedMs((e) => e + 1000), 1000);
     return () => window.clearInterval(timer);
   }, [runningAll]);
@@ -114,6 +114,7 @@ export function TailorTab({
       return;
     }
     setRunningAll(true);
+    setElapsedMs(0);
     setReport(null);
     try {
       const result = await ipc.tailorPlanBatch(jobId);

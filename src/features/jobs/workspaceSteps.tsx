@@ -243,7 +243,7 @@ export function ReviewStage({ jobId }: { jobId: number }) {
 
       {hasArtifact ? (
         <Card className="overflow-hidden p-0">
-          <PdfViewer jobId={jobId} className="min-h-[500px]" />
+          <PdfViewer key={jobId} jobId={jobId} className="min-h-[500px]" />
         </Card>
       ) : (
         <Card className="p-8 text-center text-sm text-muted">
@@ -271,10 +271,10 @@ export function InterviewTab({ jobId }: { jobId: number }) {
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
+  // The parent mounts this tab per job (key={job.id}), so the null/false
+  // initial states ARE the per-job reset — no sync resets needed here.
   useEffect(() => {
     let cancelled = false;
-    setPrep(null);
-    setLoaded(false);
     void (async () => {
       try {
         // A stored prep comes back immediately; regenerating is explicit.
