@@ -58,7 +58,11 @@ export default function App() {
   const location = useLocation();
   const loadDiagnostics = useAppStore((s) => s.loadDiagnostics);
   const { open: paletteOpen, openPalette, closePalette } = useCommandPalette();
-  const topBar = useTopBarStore();
+  // Slice subscriptions: the shell must not re-render (taking every mounted
+  // page with it) on unrelated top-bar updates like autosave ticks.
+  const topBarCrumbs = useTopBarStore((s) => s.crumbs);
+  const topBarSaveState = useTopBarStore((s) => s.saveState);
+  const topBarPrimaryAction = useTopBarStore((s) => s.primaryAction);
   // First run: a blank slate goes straight to the guided flow.
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
 
@@ -73,7 +77,7 @@ export default function App() {
   // The shell clears page-published top-bar state on every navigation so a
   // stale breadcrumb/action never bleeds into the next page.
   useEffect(() => {
-    topBar.clear();
+    useTopBarStore.getState().clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
@@ -85,9 +89,9 @@ export default function App() {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
-          crumbs={topBar.crumbs ?? crumbsFor(location.pathname)}
-          saveState={topBar.saveState ?? undefined}
-          primaryAction={topBar.primaryAction ?? undefined}
+          crumbs={topBarCrumbs ?? crumbsFor(location.pathname)}
+          saveState={topBarSaveState ?? undefined}
+          primaryAction={topBarPrimaryAction ?? undefined}
           onSearchClick={openPalette}
         />
         <main id="app-main" className="flex-1 overflow-y-auto">
