@@ -20,6 +20,8 @@ Kairo is a free, open-source desktop workspace for turning your real experience 
 
 The [latest release](https://github.com/Jeswanth-009/Kairo/releases/latest) provides a **Windows 10/11, 64-bit installer**. It includes the Tectonic PDF engine. No account or AI provider is required to make a resume.
 
+Every release ships a `SHA256SUMS.txt` next to the installer. To verify a download, compare its hash against that file: `sha256sum Kairo_5.0.1_x64-setup.exe` (or `Get-FileHash` in PowerShell).
+
 1. **Bring your history.** Import a text-based PDF or DOCX resume, paste text, or add records manually. Review the extracted facts before saving them. Kairo keeps imported passages with their records so you can check the source later.
 2. **Choose a direction.** Create a role workspace from a job description or start a general resume. Review the requirements Kairo extracts. Reopening the same posting returns to its existing workspace.
 3. **Choose the evidence.** See which requirements have clear, partial, or missing support from your saved experience. Select records and skills deliberately; edit anything inaccurate.

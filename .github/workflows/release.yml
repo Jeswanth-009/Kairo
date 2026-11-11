@@ -48,6 +48,14 @@ jobs:
       - name: Build Tauri release bundle
         run: npm run tauri build
 
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          cd src-tauri/target/release/bundle/nsis
+          # GNU sha256sum is available in the GitHub-hosted Windows runner's bash.
+          sha256sum *.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - name: Extract release notes for this version
         shell: bash
         run: |
@@ -73,3 +81,4 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
