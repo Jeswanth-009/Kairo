@@ -64,7 +64,7 @@ npm run tauri dev
 
 `npm run tauri dev` launches the full desktop app. For a browser preview with sample data, run `npm run dev` and open **`http://localhost:5173/mock.html`**. Opening the normal app route in a browser produces a Tauri bridge error because desktop commands are unavailable there.
 
-To build a Windows installer, run `npm run tauri build`; the build script fetches the Tectonic sidecar if needed.
+To build a Windows installer, run `npm run tauri build`; the build script fetches the Tectonic sidecar if needed. Bundling updater artifacts requires the updater signing key — see [docs/RELEASING.md](docs/RELEASING.md).
 
 ### Checks
 

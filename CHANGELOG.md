@@ -4,6 +4,20 @@ All notable changes to Kairo are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- In-app updates: Settings → Software update checks the GitHub release feed,
+  downloads and installs a newer version, and restarts the app. Update
+  artifacts are signed with a minisign key whose public half is pinned in the
+  app config, so the updater refuses anything unsigned or tampered with.
+- Release workflow signs update artifacts (via the `TAURI_SIGNING_PRIVATE_KEY`
+  secret), publishes the updater manifest (`latest.json`), and attaches
+  `SHA256SUMS.txt` so downloads can be verified manually.
+- `docs/RELEASING.md` documents key handling, release steps, and the
+  verification story. Authenticode signing of the installer itself remains
+  open — it needs a purchased certificate.
+
 ## [5.0.1] — 2026-10-11
 
 ### Fixed

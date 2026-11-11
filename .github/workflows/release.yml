@@ -45,7 +45,31 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
+      # The updater plugin verifies update signatures against the pubkey in
+      # tauri.conf.json, so the bundle step needs the matching private key. A
+      # missing secret must never break the release: fall back to an ephemeral
+      # key and skip the updater manifest so the app offers no update (its
+      # check endpoint simply has no latest.json to fetch).
+      - name: Restore updater signing key
+        id: signkey
+        shell: bash
+        env:
+          TAURI_SIGNING_SECRET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$TAURI_SIGNING_SECRET" ]; then
+            printf '%s' "$TAURI_SIGNING_SECRET" > "$RUNNER_TEMP/updater.key"
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+            echo "key_file=$RUNNER_TEMP/updater.key" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set — this release ships without a trusted updater manifest. Set the secret (see docs/RELEASING.md) before tagging a release users should auto-update to."
+            npx tauri signer generate -w "$RUNNER_TEMP/updater.key" --password "" --ci
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
+            echo "key_file=$RUNNER_TEMP/updater.key" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build Tauri release bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY_PATH: ${{ steps.signkey.outputs.key_file }}
         run: npm run tauri build
 
       - name: Generate SHA-256 checksums
@@ -72,6 +96,19 @@ jobs:
           fi
           cat release_notes.md
 
+      # latest.json is the manifest the in-app updater polls. Only generated
+      # when the real signing key is present — an ephemeral-key manifest would
+      # point users at an update their app refuses to install.
+      - name: Build updater manifest
+        if: steps.signkey.outputs.trusted == 'true'
+        shell: bash
+        run: |
+          node scripts/make-updater-manifest.mjs \
+            src-tauri/target/release/bundle/nsis \
+            "${GITHUB_REF_NAME#v}" \
+            release_notes.md
+          cat src-tauri/target/release/bundle/nsis/latest.json
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -82,3 +119,4 @@ jobs:
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
+            src-tauri/target/release/bundle/nsis/latest.json

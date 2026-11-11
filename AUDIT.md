@@ -144,6 +144,7 @@ Schema gaps (low): `evidence_selections.entity_type` has no CHECK constraint (va
 - **S2. API key attachable to an arbitrary URL** — `ai_commands.rs:73-84` (`ai_list_models`) loads the real key from the keyring and sends it to any IPC-supplied `base_url`; `ai_save_config` (`:36-54`) accepts any URL, and all subsequent tailor traffic (key + resume content) goes there. `ureq` only speaks http/https so this is not a full SSRF, but any script running in the webview (XSS or a compromised dependency) has a one-call primitive to exfiltrate the credential and redirect all AI traffic. Fix: restrict to `https://` plus localhost, and validate list-models against the saved config.
 - **S3. No security scanning in CI** — no `cargo audit`/`cargo-deny`, no `npm audit`/osv-scanner, no CodeQL in any workflow. Meanwhile rusqlite is locked at 0.32.1 (8 minors behind), ureq at 2.12 (one major behind), and 17 Dependabot branches sit unmerged. Known-CVE gating does not exist.
 - **S4. Unsigned, checksum-less distribution** — `release.yml` uploads the bare NSIS exe; no Authenticode signing, no SHA256 sidecar assets, no Tauri updater artifacts. Users have no way to verify the installer and no update path.
+  *Partially addressed:* releases now attach `SHA256SUMS.txt`, and the Tauri updater signs update artifacts with a minisign key (pubkey pinned in `tauri.conf.json`; private key held as the `TAURI_SIGNING_PRIVATE_KEY` GitHub secret — see `docs/RELEASING.md`). Authenticode signing still requires a purchased certificate and remains open.
 - **S5. Asset-protocol scope too wide** — `tauri.conf.json:26-29` grants the webview `$APPDATA/**`, which includes the SQLite DB, logs, and the entire backups directory. The PDF viewer only needs `pdf/**`. Narrow it to shrink the XSS blast radius (CSP `connect-src 'self'` currently mitigates bulk exfiltration).
 
 ### LOW
@@ -165,6 +166,7 @@ Schema gaps (low): `evidence_selections.entity_type` has no CHECK constraint (va
 
 - **F1. macOS/Linux installers** — the core already compiles and tests on all three OSes in CI, but `bundle.targets` is `["nsis"]` and `release.yml` ships Windows only. README:96 admits the limit; the work is mostly release config.
 - **F2. Signed releases + auto-updater** — no Authenticode certificate, no Tauri updater configured. Users have no in-app update path and no way to verify downloads.
+  *Done (except Authenticode):* the Tauri updater plugin now checks `latest.json` from the GitHub release feed, verifies the minisign signature against the pinned pubkey, and installs from Settings → Software update. Release artifacts are signed in CI via the `TAURI_SIGNING_PRIVATE_KEY` secret; `SHA256SUMS.txt` accompanies every release for manual verification.
 - **F3. OCR path for scanned PDFs** — import requires a text layer (README:97); scanned resumes currently dead-end with manual entry. Even a clear guided fallback ("your PDF has no text layer, here's what to do") would help.
 
 ### MEDIUM

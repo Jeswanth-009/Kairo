@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Moon, Settings2, Sun } from "lucide-react";
+import { Moon, RefreshCw, Settings2, Sun } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
@@ -7,6 +7,13 @@ import { Field, Input } from "../../components/ui/inputs";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
 import { APP_VERSION } from "../../lib/version";
+import {
+  checkForUpdates,
+  downloadAndInstall,
+  relaunchApp,
+  type DownloadProgress,
+  type UpdateCheck,
+} from "../../lib/updater";
 import type { BackupInfo } from "../../lib/types";
 import { useAppStore } from "../../stores/appStore";
 import { Link } from "react-router-dom";
@@ -65,8 +72,122 @@ export default function SettingsPage() {
         </div>
       </Card>
 
+      <SoftwareUpdateCard version={diagnostics?.appVersion} />
       <AboutCard version={diagnostics?.appVersion} />
     </div>
+  );
+}
+
+/**
+ * Update card — checks the GitHub release feed through the Tauri updater
+ * plugin. Update artifacts are signature-verified against the pubkey pinned
+ * in tauri.conf.json before anything installs; the browser demo cannot check.
+ */
+function SoftwareUpdateCard({ version }: { version?: string }) {
+  const [check, setCheck] = useState<UpdateCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [progress, setProgress] = useState<DownloadProgress | null>(null);
+  const [installed, setInstalled] = useState(false);
+
+  const runCheck = async () => {
+    setChecking(true);
+    setInstalled(false);
+    setProgress(null);
+    try {
+      setCheck(await checkForUpdates());
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const install = async () => {
+    if (check?.kind !== "available") return;
+    setInstalling(true);
+    try {
+      await downloadAndInstall(check.update, setProgress);
+      setInstalled(true);
+    } catch (e) {
+      toast.error(`Update failed — nothing was changed. (${e})`);
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  const pct =
+    progress && progress.total
+      ? Math.min(100, Math.round((progress.downloaded / progress.total) * 100))
+      : null;
+
+  return (
+    <Card className="p-6">
+      <CardTitle>Software update</CardTitle>
+      <p className="mt-1 text-xs leading-relaxed text-muted">
+        Checks the GitHub release feed for a newer installer. Updates are verified against a
+        signature published with the release before they install — nothing is applied from an
+        unverified source.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button size="sm" onClick={() => void runCheck()} disabled={checking || installing}>
+          {checking ? (
+            "Checking…"
+          ) : (
+            <>
+              <RefreshCw className="mr-1.5 size-3.5" /> Check for updates
+            </>
+          )}
+        </Button>
+        <span className="text-xs text-muted">Current version: v{version ?? APP_VERSION}</span>
+      </div>
+      {check?.kind === "unavailable" ? (
+        <p className="mt-3 rounded-lg bg-accent-soft px-3 py-2 text-xs text-muted">
+          Updates install in the desktop app — the browser demo cannot check.
+        </p>
+      ) : null}
+      {check?.kind === "up-to-date" ? (
+        <p className="mt-3 rounded-lg bg-ok-soft px-3 py-2 text-xs text-ok">
+          You are on the latest version (v{check.currentVersion}).
+        </p>
+      ) : null}
+      {check?.kind === "error" ? (
+        <p className="mt-3 rounded-lg bg-bad-soft px-3 py-2 text-xs text-bad">{check.message}</p>
+      ) : null}
+      {check?.kind === "available" ? (
+        <div className="mt-3 space-y-3">
+          <div className="rounded-lg bg-accent-soft px-3 py-2.5 text-xs">
+            <p className="font-medium text-ink">
+              Kairo v{check.version} is available — you have v{check.currentVersion}.
+            </p>
+            {check.notes ? (
+              <p className="mt-1 leading-relaxed text-muted">{check.notes}</p>
+            ) : null}
+          </div>
+          {installed ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button size="sm" onClick={() => void relaunchApp().catch((e) => toast.error(String(e)))}>
+                Restart now
+              </Button>
+              <span className="text-xs text-muted">
+                Update installed — restart to finish switching to v{check.version}.
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button size="sm" onClick={() => void install()} disabled={installing}>
+                {installing ? "Installing…" : `Download and install v${check.version}`}
+              </Button>
+              {progress ? (
+                <span className="text-xs text-muted">
+                  {pct !== null
+                    ? `${pct}% · ${fmtBytes(progress.downloaded)} / ${fmtBytes(progress.total ?? 0)}`
+                    : `${fmtBytes(progress.downloaded)} downloaded`}
+                </span>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </Card>
   );
 }
 
