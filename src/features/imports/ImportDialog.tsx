@@ -4,7 +4,8 @@ import { Card } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
 import { Field, Input, Textarea } from "../../components/ui/inputs";
 import { ipc } from "../../lib/ipc";
-import { extractTextFromFile } from "./extractFile";
+import { extractTextFromFile, ScannedPdfError } from "./extractFile";
+import { ocrPdfText, type OcrProgress } from "./ocr";
 import type {
   Achievement,
   AchievementDraft,
@@ -207,19 +208,52 @@ function ResumeImportTab({ onDone }: { onDone: () => void }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileBusy, setFileBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Scanned-PDF fallback: set when a picked PDF has no text layer. Keeps the
+  // file around so "Try OCR here" can run without re-picking it.
+  const [scanNotice, setScanNotice] = useState<{ pages: number; fileName: string } | null>(null);
+  const scannedFileRef = useRef<File | null>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null);
 
   const takeFile = async (file: File) => {
     setFileBusy(true);
     setError(null);
+    setScanNotice(null);
+    scannedFileRef.current = null;
     try {
       const extracted = await extractTextFromFile(file);
       setText(extracted.slice(0, MAX_IMPORT_CHARS));
       setFileName(file.name);
     } catch (e) {
       setFileName(null);
-      setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof ScannedPdfError) {
+        scannedFileRef.current = file;
+        setScanNotice({ pages: e.pages, fileName: file.name });
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setFileBusy(false);
+    }
+  };
+
+  const runOcr = async () => {
+    const file = scannedFileRef.current;
+    if (!file) return;
+    setOcrBusy(true);
+    setOcrProgress(null);
+    setError(null);
+    try {
+      const extracted = await ocrPdfText(await file.arrayBuffer(), setOcrProgress);
+      setText(extracted.slice(0, MAX_IMPORT_CHARS));
+      setFileName(`${file.name} (OCR)`);
+      setScanNotice(null);
+      scannedFileRef.current = null;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOcrBusy(false);
+      setOcrProgress(null);
     }
   };
 
@@ -292,6 +326,46 @@ function ResumeImportTab({ onDone }: { onDone: () => void }) {
           <span className="text-xs text-warn">{text.length.toLocaleString()} characters — large documents may take a moment</span>
         ) : null}
       </div>
+
+      {scanNotice && !ocrBusy ? (
+        <div className="rounded-xl border border-warn/40 bg-warn-soft px-4 py-3" role="status">
+          <p className="text-xs font-semibold text-warn">
+            “{scanNotice.fileName}” has no text layer — it is probably a scan or image export.
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            Import reads text, not pixels, so there is nothing to analyze yet ({scanNotice.pages}{" "}
+            page{scanNotice.pages === 1 ? "" : "s"}). You can recognize the scan here, paste the
+            text yourself, or skip import entirely.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => void runOcr()}>
+              Try OCR here (English)
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setScanNotice(null)}>
+              Paste the text instead
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onDone}>
+              Add records manually
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            Tip: if you control the original document, re-export it as a searchable (text-based)
+            PDF and import will read it directly.
+          </p>
+        </div>
+      ) : null}
+      {ocrBusy ? (
+        <div className="rounded-xl border border-line bg-accent-soft px-4 py-3" role="status">
+          <p className="text-xs font-medium text-ink">
+            {ocrProgress
+              ? `Recognizing page ${ocrProgress.page} of ${ocrProgress.total}…`
+              : "Starting OCR…"}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            This runs entirely on your machine and can take a few seconds per page.
+          </p>
+        </div>
+      ) : null}
 
       {result ? <ResumeCandidates result={result} show={show} dismiss={dismiss} onDone={onDone} /> : null}
     </div>

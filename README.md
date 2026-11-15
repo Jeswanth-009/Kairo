@@ -114,7 +114,7 @@ Where to find it (per OS, under the Tauri app-data directory):
 ## Current limits
 
 - The official installer is Windows-only. The core is tested on macOS and Linux, but those platforms do not have packaged releases yet.
-- PDF import needs a text layer. Scanned PDFs need OCR elsewhere or manual entry.
+- PDF import needs a text layer. Scanned PDFs can be recognized in place from the import dialog's OCR button (English, runs entirely on your machine), or you can paste the text or add records manually.
 - Matching shows support from your stored records; it does not predict hiring outcomes.
 - Automated claim checks cannot establish that your source records or accepted wording are true.
 

@@ -9,7 +9,7 @@ import { Field, Input, Textarea } from "../../components/ui/inputs";
 import { cn } from "../../lib/cn";
 import { ipc } from "../../lib/ipc";
 import { enqueuePlanSave, flushPlanSave } from "../../lib/planAutosave";
-import { extractTextFromFile } from "../imports/extractFile";
+import { extractTextFromFile, ScannedPdfError } from "../imports/extractFile";
 import { PdfViewer } from "../resume-studio/PdfViewer";
 import { originBadge, utcNow } from "../../lib/origin";
 import type {
@@ -313,7 +313,13 @@ function ImportStep({ onParsed }: { onParsed: (r: ResumeImport) => void }) {
       setFileName(file.name);
     } catch (e) {
       setFileName(null);
-      setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof ScannedPdfError) {
+        setError(
+          `${e.message} Import reads text, not pixels. Run OCR from the Vault's import dialog, paste the text here instead, or use Start manually below.`,
+        );
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setFileBusy(false);
     }

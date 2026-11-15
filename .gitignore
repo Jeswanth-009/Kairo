@@ -24,3 +24,5 @@ src-tauri/gen/
 site-dist/
 dist-demo/
 .tmp-*
+# OCR runtime assets (staged by scripts/ensure-ocr-assets.mjs)
+public/ocr/

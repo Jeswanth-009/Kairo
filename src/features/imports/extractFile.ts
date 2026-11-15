@@ -5,7 +5,8 @@ import { unzipSync } from "fflate";
  * text extraction runs client-side through pdfjs-dist (lazy-imported so the
  * worker code is only fetched when a PDF is picked); DOCX is a zip — we read
  * word/document.xml and pull paragraph text. Scanned/image-only PDFs yield no
- * text; callers surface a clear error.
+ * text; callers catch `ScannedPdfError` to offer the OCR / paste / manual
+ * fallbacks instead of a dead end.
  *
  * PDF extraction rebuilds reading order: pdfjs emits positioned fragments, so
  * fragments are clustered into visual lines by baseline (with tolerance —
@@ -16,6 +17,23 @@ import { unzipSync } from "fflate";
  * repeating gutter (two-column layouts) is split into columns instead, so
  * left/right content no longer interleaves.
  */
+
+/** Thrown when a PDF has no text layer — i.e. it is a scan or image export. */
+export class ScannedPdfError extends Error {
+  readonly pages: number;
+  readonly fileName: string;
+
+  constructor(pages: number, fileName?: string) {
+    super(
+      fileName
+        ? `"${fileName}" has no text layer — it is probably a scan or image export (${pages} page${pages === 1 ? "" : "s"}).`
+        : "This PDF has no text layer — it is probably a scan or image export.",
+    );
+    this.name = "ScannedPdfError";
+    this.pages = pages;
+    this.fileName = fileName ?? "";
+  }
+}
 
 interface PdfTextItem {
   str: string;
@@ -33,7 +51,7 @@ interface PdfLine {
 export async function extractTextFromFile(file: File): Promise<string> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf") || file.type === "application/pdf") {
-    return extractPdfText(await file.arrayBuffer());
+    return extractPdfText(await file.arrayBuffer(), file.name);
   }
   if (name.endsWith(".docx") || file.type.includes("wordprocessingml")) {
     return extractDocxText(await file.arrayBuffer());
@@ -194,7 +212,7 @@ function dropRepeatingFurniture(pages: string[][]): string[][] {
   );
 }
 
-async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
+async function extractPdfText(buffer: ArrayBuffer, fileName?: string): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -224,9 +242,7 @@ async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
   const cleaned = dropRepeatingFurniture(pages);
   const text = cleaned.map((p) => p.join("\n")).join("\n\n");
   if (!text.trim()) {
-    throw new Error(
-      "No readable text in this PDF — it is probably a scan or image export. Paste the text instead.",
-    );
+    throw new ScannedPdfError(doc.numPages, fileName);
   }
   return text;
 }

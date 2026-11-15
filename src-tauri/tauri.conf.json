@@ -4,9 +4,9 @@
   "version": "5.0.1",
   "identifier": "com.kairo.app",
   "build": {
-    "beforeDevCommand": "npm run ensure-tectonic && npm run dev",
+    "beforeDevCommand": "npm run ensure-tectonic && npm run ensure-ocr && npm run dev",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "npm run ensure-tectonic && npm run build",
+    "beforeBuildCommand": "npm run ensure-tectonic && npm run ensure-ocr && npm run build",
     "frontendDist": "../dist"
   },
   "app": {

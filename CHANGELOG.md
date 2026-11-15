@@ -7,6 +7,10 @@ All notable changes to Kairo are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Scanned-PDF import no longer dead-ends: when a PDF has no text layer the
+  import dialog explains the problem and offers OCR on the spot (English,
+  runs entirely on your machine — no cloud), pasting the text instead, or
+  adding records manually. Onboarding points to the same paths.
 - In-app updates: Settings → Software update checks the GitHub release feed,
   downloads and installs a newer version, and restarts the app. Update
   artifacts are signed with a minisign key whose public half is pinned in the

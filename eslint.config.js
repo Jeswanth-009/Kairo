@@ -13,6 +13,9 @@ export default tseslint.config(
       "coverage/",
       "src-tauri/",
       "scripts/",
+      // Runtime assets staged by scripts/ensure-ocr-assets.mjs — minified
+      // third-party code, never edited by hand.
+      "public/ocr/",
     ],
   },
   js.configs.recommended,
