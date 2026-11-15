@@ -328,6 +328,26 @@ const handlers: Record<string, Handler> = {
   delete_certification: (a) => removeById(mockCertifications, a.id),
   delete_achievement: (a) => removeById(mockAchievements, a.id),
   delete_skill: () => ({ ok: true }),
+  vault_delete_batch: (a) => {
+    const lists: Record<string, { id: number }[]> = {
+      project: mockProjects,
+      experience: mockExperiences,
+      education: educations,
+      certification: mockCertifications,
+      achievement: mockAchievements,
+      skill: skills,
+    };
+    const list = lists[String(a.entityType)] ?? [];
+    const ids = new Set<number>(((a.ids as number[]) ?? []).map(Number));
+    let deleted = 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (ids.has(list[i].id)) {
+        list.splice(i, 1);
+        deleted++;
+      }
+    }
+    return { deleted };
+  },
   list_evidence: (a) =>
     mockEvidence.filter((e) => e.entityType === a.entityType && e.entityId === Number(a.entityId)),
   list_bullets: (a) =>

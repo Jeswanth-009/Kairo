@@ -60,6 +60,10 @@ export const ipc = {
     invoke<Project>("update_project", { project }),
   deleteProject: (id: number): Promise<void> => invoke("delete_project", { id }),
 
+  // Batch operations — one transaction, all-or-nothing
+  vaultDeleteBatch: (entityType: string, ids: number[]): Promise<{ deleted: number }> =>
+    invoke<{ deleted: number }>("vault_delete_batch", { entityType, ids }),
+
   // Experience
   listExperiences: (): Promise<Experience[]> => invoke<Experience[]>("list_experiences"),
   createExperience: (experience: Experience): Promise<Experience> =>

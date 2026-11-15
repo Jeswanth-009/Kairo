@@ -7,6 +7,10 @@ All notable changes to Kairo are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Vault multi-delete now runs as one backend transaction instead of a loop
+  of single deletes: every selected record moves to Recently deleted
+  together, a failure deletes nothing, and the toolbar shows a Deleting…
+  state while it runs (fixes #12).
 - Scanned-PDF import no longer dead-ends: when a PDF has no text layer the
   import dialog explains the problem and offers OCR on the spot (English,
   runs entirely on your machine — no cloud), pasting the text instead, or

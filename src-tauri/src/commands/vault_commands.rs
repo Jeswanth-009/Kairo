@@ -14,6 +14,12 @@ pub struct MutationOk {
     pub ok: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchDeleteOk {
+    pub deleted: usize,
+}
+
 /// Generates a CRUD command module. Fn names are explicit because the command
 /// name (and therefore the invoke name) must be unique across the app.
 macro_rules! vault_commands {
@@ -111,6 +117,19 @@ vault_commands!(
     update update_skill,
     delete delete_skill
 );
+
+/// Multi-delete in one transaction (Fixes #12): the frontend no longer loops
+/// single deletes, and a failure moves nothing to the trash.
+#[tauri::command]
+pub fn vault_delete_batch(
+    state: State<'_, DbState>,
+    entity_type: String,
+    ids: Vec<i64>,
+) -> Result<BatchDeleteOk, String> {
+    let conn = state.0.lock().map_err(|_| DB_LOCK)?;
+    let deleted = vault::vault_delete_batch(&conn, &entity_type, &ids)?;
+    Ok(BatchDeleteOk { deleted })
+}
 
 #[tauri::command]
 pub fn get_profile(state: State<'_, DbState>) -> Result<Option<vault::Profile>, String> {

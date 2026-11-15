@@ -96,6 +96,7 @@ pub fn run() {
             commands::vault_commands::skill_commands::create_skill,
             commands::vault_commands::skill_commands::update_skill,
             commands::vault_commands::skill_commands::delete_skill,
+            commands::vault_commands::vault_delete_batch,
             commands::vault_commands::get_profile,
             commands::vault_commands::upsert_profile,
             commands::vault_commands::add_skill_alias,

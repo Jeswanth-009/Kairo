@@ -132,8 +132,10 @@ export default function VaultPage() {
   }, [records, tab, query]);
 
   const deleteRecord = useVaultStore((s) => s.deleteRecord);
+  const batchDelete = useVaultStore((s) => s.batchDelete);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
 
   // Selection belongs to the active tab — cleared during render when the tab
   // changes, instead of in an effect after paint.
@@ -179,17 +181,22 @@ export default function VaultPage() {
   };
 
   const handleBatchDelete = async () => {
-    if (selectedIds.size === 0 || tab === "skills") return;
+    if (selectedIds.size === 0 || tab === "skills" || batchDeleting) return;
+    setBatchDeleting(true);
+    const ids = Array.from(selectedIds);
     try {
-      const ids = Array.from(selectedIds);
-      for (const id of ids) {
-        await deleteRecord(tab, id);
-      }
-      toast.ok(`Deleted ${ids.length} ${ids.length === 1 ? config?.singular.toLowerCase() : config?.label.toLowerCase()}`);
+      // One backend transaction: every record moves to Recently deleted
+      // together, or a failure deletes nothing at all.
+      const deleted = await batchDelete(tab, ids);
+      toast.ok(
+        `Moved ${deleted} ${deleted === 1 ? config?.singular.toLowerCase() : config?.label.toLowerCase()} to Recently deleted`,
+      );
       setSelectedIds(new Set());
-      setConfirmBatchDelete(false);
     } catch (e) {
-      toast.error(String(e));
+      toast.error(`Nothing was deleted — ${e}`);
+    } finally {
+      setBatchDeleting(false);
+      setConfirmBatchDelete(false);
     }
   };
 
@@ -320,8 +327,9 @@ export default function VaultPage() {
                         size="sm"
                         variant="danger"
                         onClick={() => setConfirmBatchDelete(true)}
+                        disabled={batchDeleting}
                       >
-                        Delete {selectedIds.size} selected
+                        {batchDeleting ? "Deleting…" : `Delete ${selectedIds.size} selected`}
                       </Button>
                     </div>
                   ) : null}

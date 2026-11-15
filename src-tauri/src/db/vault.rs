@@ -190,6 +190,40 @@ pub fn vault_delete<E: VaultEntity>(conn: &Connection, id: i64) -> Result<(), St
     Ok(())
 }
 
+/// Soft-deletes many records of one entity type in a single transaction —
+/// either every delete lands in the trash together or none does. Ids that are
+/// missing or already trashed contribute nothing instead of failing the batch
+/// (stale selections keep working); the return value is how many live rows
+/// actually moved. The entity type is whitelisted through `EntityKind`.
+pub fn vault_delete_batch(
+    conn: &Connection,
+    entity_type: &str,
+    ids: &[i64],
+) -> Result<usize, String> {
+    if ids.len() > 500 {
+        return Err(format!(
+            "Batch delete is capped at 500 records per call (got {})",
+            ids.len()
+        ));
+    }
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let table = crate::db::trust::EntityKind::parse(entity_type)?.table();
+    let tx = sql_err(conn.unchecked_transaction())?;
+    let sql =
+        format!("UPDATE {table} SET deleted_at = datetime('now') WHERE id = ?1 AND {LIVE_WHERE}");
+    let mut deleted = 0usize;
+    {
+        let mut stmt = sql_err(tx.prepare(&sql))?;
+        for id in ids {
+            deleted += sql_err(stmt.execute([id]))?;
+        }
+    }
+    sql_err(tx.commit())?;
+    Ok(deleted)
+}
+
 /// Brings a trashed row back into the live set.
 pub fn vault_restore<E: VaultEntity>(conn: &Connection, id: i64) -> Result<(), String> {
     let sql = format!("UPDATE {} SET deleted_at = NULL WHERE id = ?1", E::TABLE);
@@ -1390,5 +1424,68 @@ mod tests {
         let list = vault_list::<Education>(&conn).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, edu.id);
+    }
+
+    #[test]
+    fn batch_delete_soft_deletes_in_one_transaction() {
+        let conn = mem_db();
+        let a = vault_create(
+            &conn,
+            &Project {
+                id: 0,
+                title: "A".to_string(),
+                description: String::new(),
+                start_date: None,
+                end_date: None,
+                is_current: false,
+                url: String::new(),
+                repo_url: String::new(),
+                origin: "manual".to_string(),
+                edited_at: None,
+                verified_at: None,
+                skills: vec![],
+                evidence_count: 0,
+            },
+        )
+        .unwrap();
+        let b = vault_create(
+            &conn,
+            &Project {
+                id: 0,
+                title: "B".to_string(),
+                description: String::new(),
+                start_date: None,
+                end_date: None,
+                is_current: false,
+                url: String::new(),
+                repo_url: String::new(),
+                origin: "manual".to_string(),
+                edited_at: None,
+                verified_at: None,
+                skills: vec![],
+                evidence_count: 0,
+            },
+        )
+        .unwrap();
+
+        // A stale id mixed in is tolerated — it deletes nothing.
+        let deleted = vault_delete_batch(&conn, "project", &[a.id, b.id, a.id + 10_000]).unwrap();
+        assert_eq!(deleted, 2);
+        assert!(vault_list::<Project>(&conn).unwrap().is_empty());
+
+        // Re-deleting the same ids reports zero, not an error.
+        let again = vault_delete_batch(&conn, "project", &[a.id, b.id]).unwrap();
+        assert_eq!(again, 0);
+
+        // Unknown entity types are rejected outright.
+        assert!(vault_delete_batch(&conn, "experiences!", &[a.id]).is_err());
+    }
+
+    #[test]
+    fn batch_delete_caps_batch_size() {
+        let conn = mem_db();
+        let ids: Vec<i64> = (0..501).collect();
+        let err = vault_delete_batch(&conn, "project", &ids).unwrap_err();
+        assert!(err.contains("capped"), "unexpected error: {err}");
     }
 }

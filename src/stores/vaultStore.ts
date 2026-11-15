@@ -15,6 +15,16 @@ const api: Record<keyof VaultRecords, { create: (x: any) => Promise<any>; update
   skills: { create: ipc.createSkill, update: ipc.updateSkill, remove: ipc.deleteSkill },
 };
 
+/** Store key → backend EntityKind spelling (see db/trust.rs EntityKind::parse). */
+const ENTITY_TYPE: Record<keyof VaultRecords, string> = {
+  projects: "project",
+  experiences: "experience",
+  education: "education",
+  certifications: "certification",
+  achievements: "achievement",
+  skills: "skill",
+};
+
 function upsert<T extends AnyRecord>(list: T[], item: T): T[] {
   const index = list.findIndex((r) => r.id === item.id);
   if (index === -1) return [item, ...list];
@@ -34,6 +44,8 @@ interface VaultStore extends VaultRecords {
   saveProfile: (profile: Profile) => Promise<void>;
   saveRecord: <K extends keyof VaultRecords>(key: K, data: VaultRecords[K][number]) => Promise<VaultRecords[K][number]>;
   deleteRecord: (key: keyof VaultRecords, id: number) => Promise<void>;
+  /** Soft-deletes many records in one backend transaction; returns how many moved. */
+  batchDelete: (key: keyof VaultRecords, ids: number[]) => Promise<number>;
   addAlias: (skillId: number, alias: string) => Promise<void>;
   deleteAlias: (aliasId: number) => Promise<void>;
 
@@ -105,6 +117,13 @@ export const useVaultStore = create<VaultStore>()((set, get) => ({
   deleteRecord: async (key, id) => {
     await api[key].remove(id);
     set((state) => ({ [key]: (state[key] as AnyRecord[]).filter((r) => r.id !== id) } as any));
+  },
+
+  batchDelete: async (key, ids) => {
+    const { deleted } = await ipc.vaultDeleteBatch(ENTITY_TYPE[key], ids);
+    const removed = new Set(ids);
+    set((state) => ({ [key]: (state[key] as AnyRecord[]).filter((r) => !removed.has(r.id)) } as any));
+    return deleted;
   },
 
   addAlias: async (skillId, alias) => {
